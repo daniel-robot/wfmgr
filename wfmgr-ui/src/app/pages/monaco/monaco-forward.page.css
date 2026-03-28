@@ -1,0 +1,41 @@
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.8rem;
+}
+
+input {
+  border: 1px solid #d0d8e5;
+  border-radius: 8px;
+  padding: 0.55rem;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.55rem 0.9rem;
+  background: #155eef;
+  color: #fff;
+  cursor: pointer;
+}
+
+.ok {
+  color: #085d3a;
+}
+
+.error {
+  color: #b42318;
+}

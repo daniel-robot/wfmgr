@@ -1,0 +1,186 @@
+BEGIN;
+
+DROP TABLE IF EXISTS "AuditLog" CASCADE;
+DROP TABLE IF EXISTS "WorkflowRule" CASCADE;
+DROP TABLE IF EXISTS "WorkflowProfile" CASCADE;
+DROP TABLE IF EXISTS "OutboxMessage" CASCADE;
+DROP TABLE IF EXISTS "ExternalEvent" CASCADE;
+DROP TABLE IF EXISTS "WorkItem" CASCADE;
+DROP TABLE IF EXISTS "Case" CASCADE;
+
+CREATE TABLE "Case"
+(
+    "CaseId" uuid PRIMARY KEY,
+    "HospitalId" varchar(32) NOT NULL,
+    "SiteId" varchar(32) NOT NULL,
+    "DepartmentId" varchar(32) NOT NULL,
+    "PatientId" varchar(64) NULL,
+    "AccessionNumber" varchar(64) NOT NULL,
+    "CurrentStatus" integer NOT NULL,
+    "StatusVersion" integer NOT NULL DEFAULT 0,
+    "CtStudyInstanceUid" varchar(128) NULL,
+    "CtWadoRsUrl" varchar(512) NULL,
+    "PvMedJobId" varchar(128) NULL,
+    "RtStructSeriesInstanceUid" varchar(128) NULL,
+    "CreatedAt" timestamptz NOT NULL,
+    "UpdatedAt" timestamptz NOT NULL
+);
+
+CREATE UNIQUE INDEX "UX_Case_Hospital_Site_Department_Accession"
+    ON "Case" ("HospitalId", "SiteId", "DepartmentId", "AccessionNumber");
+
+CREATE INDEX "IX_Case_CurrentStatus"
+    ON "Case" ("CurrentStatus");
+
+CREATE TABLE "WorkItem"
+(
+    "WorkItemId" uuid PRIMARY KEY,
+    "CaseId" uuid NOT NULL,
+    "Type" varchar(64) NOT NULL,
+    "Status" integer NOT NULL,
+    "AssignedRole" varchar(64) NOT NULL,
+    "AssignedUserId" varchar(128) NULL,
+    "DueAt" timestamptz NULL,
+    "SlaMinutes" integer NULL,
+    "ExternalCorrelationId" varchar(128) NULL,
+    "PayloadJson" text NULL,
+    "CreatedAt" timestamptz NOT NULL,
+    "UpdatedAt" timestamptz NOT NULL,
+    CONSTRAINT "FK_WorkItem_Case_CaseId" FOREIGN KEY ("CaseId") REFERENCES "Case"("CaseId") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_WorkItem_CaseId"
+    ON "WorkItem" ("CaseId");
+
+CREATE INDEX "IX_WorkItem_AssignedRole_Status"
+    ON "WorkItem" ("AssignedRole", "Status");
+
+CREATE INDEX "IX_WorkItem_Status"
+    ON "WorkItem" ("Status");
+
+CREATE TABLE "ExternalEvent"
+(
+    "EventId" uuid PRIMARY KEY,
+    "Source" varchar(64) NOT NULL,
+    "Type" varchar(64) NOT NULL,
+    "ExternalId" varchar(128) NOT NULL,
+    "CaseCorrelationKey" varchar(128) NULL,
+    "CaseId" uuid NULL,
+    "PayloadJson" text NOT NULL,
+    "ReceivedAt" timestamptz NOT NULL,
+    "ProcessedAt" timestamptz NULL,
+    "ProcessStatus" varchar(32) NOT NULL,
+    "Error" varchar(2048) NULL,
+    CONSTRAINT "FK_ExternalEvent_Case_CaseId" FOREIGN KEY ("CaseId") REFERENCES "Case"("CaseId") ON DELETE SET NULL
+);
+
+CREATE UNIQUE INDEX "UX_ExternalEvent_Source_Type_ExternalId"
+    ON "ExternalEvent" ("Source", "Type", "ExternalId");
+
+CREATE INDEX "IX_ExternalEvent_CaseId"
+    ON "ExternalEvent" ("CaseId");
+
+CREATE TABLE "OutboxMessage"
+(
+    "MessageId" uuid PRIMARY KEY,
+    "CaseId" uuid NULL,
+    "TargetSystem" varchar(64) NOT NULL,
+    "Action" varchar(64) NOT NULL,
+    "PayloadJson" text NOT NULL,
+    "Status" integer NOT NULL,
+    "RetryCount" integer NOT NULL,
+    "NextRetryAt" timestamptz NULL,
+    "CreatedAt" timestamptz NOT NULL,
+    "LastTriedAt" timestamptz NULL,
+    CONSTRAINT "FK_OutboxMessage_Case_CaseId" FOREIGN KEY ("CaseId") REFERENCES "Case"("CaseId") ON DELETE SET NULL
+);
+
+CREATE INDEX "IX_OutboxMessage_Status_NextRetryAt"
+    ON "OutboxMessage" ("Status", "NextRetryAt");
+
+CREATE TABLE "WorkflowProfile"
+(
+    "ProfileId" uuid PRIMARY KEY,
+    "HospitalId" varchar(32) NULL,
+    "SiteId" varchar(32) NULL,
+    "DepartmentId" varchar(32) NULL,
+    "Name" varchar(128) NOT NULL,
+    "Version" integer NOT NULL,
+    "IsActive" boolean NOT NULL,
+    "CreatedAt" timestamptz NOT NULL
+);
+
+CREATE UNIQUE INDEX "UX_WorkflowProfile_Hospital_Site_Department_Version"
+    ON "WorkflowProfile" ("HospitalId", "SiteId", "DepartmentId", "Version");
+
+CREATE TABLE "WorkflowRule"
+(
+    "RuleId" uuid PRIMARY KEY,
+    "ProfileId" uuid NOT NULL,
+    "SlotCode" varchar(64) NOT NULL,
+    "Priority" integer NOT NULL,
+    "ConditionJson" text NULL,
+    "ConfigJson" text NOT NULL,
+    "IsEnabled" boolean NOT NULL,
+    "EffectiveFrom" timestamptz NULL,
+    "EffectiveTo" timestamptz NULL,
+    CONSTRAINT "FK_WorkflowRule_WorkflowProfile_ProfileId" FOREIGN KEY ("ProfileId") REFERENCES "WorkflowProfile"("ProfileId") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_WorkflowRule_ProfileId_SlotCode_IsEnabled"
+    ON "WorkflowRule" ("ProfileId", "SlotCode", "IsEnabled");
+
+CREATE INDEX "IX_WorkflowRule_ProfileId_SlotCode_Priority"
+    ON "WorkflowRule" ("ProfileId", "SlotCode", "Priority");
+
+CREATE TABLE "AuditLog"
+(
+    "AuditId" uuid PRIMARY KEY,
+    "CaseId" uuid NOT NULL,
+    "ActorType" varchar(32) NOT NULL,
+    "ActorId" varchar(128) NULL,
+    "Action" varchar(64) NOT NULL,
+    "FromStatus" integer NULL,
+    "ToStatus" integer NULL,
+    "SnapshotJson" text NOT NULL,
+    "CreatedAt" timestamptz NOT NULL,
+    CONSTRAINT "FK_AuditLog_Case_CaseId" FOREIGN KEY ("CaseId") REFERENCES "Case"("CaseId") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_AuditLog_CaseId_CreatedAt"
+    ON "AuditLog" ("CaseId", "CreatedAt");
+
+WITH seed AS (
+    SELECT
+        '11111111-1111-1111-1111-111111111111'::uuid AS global_profile_id,
+        '22222222-2222-2222-2222-222222222222'::uuid AS department_profile_id,
+        '33333333-3333-3333-3333-333333333333'::uuid AS rule_id,
+        now() AS created_at
+)
+INSERT INTO "WorkflowProfile"
+(
+    "ProfileId", "HospitalId", "SiteId", "DepartmentId", "Name", "Version", "IsActive", "CreatedAt"
+)
+SELECT global_profile_id, NULL, NULL, NULL, 'Global Default Workflow', 1, true, created_at
+FROM seed
+UNION ALL
+SELECT department_profile_id, 'HOSP001', 'SITE_A', 'RT', 'RT Department Workflow', 1, true, created_at
+FROM seed;
+
+INSERT INTO "WorkflowRule"
+(
+    "RuleId", "ProfileId", "SlotCode", "Priority", "ConditionJson", "ConfigJson", "IsEnabled", "EffectiveFrom", "EffectiveTo"
+)
+SELECT
+    seed.rule_id,
+    seed.department_profile_id,
+    'S1_CONTOURING_STRATEGY',
+    1,
+    NULL,
+    '{"slotCode":"S1_CONTOURING_STRATEGY","mode":"AutoAssign","roles":["Dosimetrist","Physician"],"slaMinutes":240}',
+    true,
+    seed.created_at,
+    NULL
+FROM seed;
+
+COMMIT;

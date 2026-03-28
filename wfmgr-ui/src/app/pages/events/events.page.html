@@ -1,0 +1,48 @@
+<section class="page">
+  <h1>Integration Event Simulator</h1>
+
+  @if (ok) {
+    <p class="state ok">{{ ok }}</p>
+  }
+  @if (error) {
+    <p class="state error">{{ error }}</p>
+  }
+
+  <div class="grid two-col">
+    <div class="card">
+      <h2>CT Image Stored</h2>
+      <form [formGroup]="ctForm" (ngSubmit)="sendCt()">
+        <label>ExternalEventId <input formControlName="externalEventId" /></label>
+        <label>AccessionNumber <input formControlName="accessionNumber" /></label>
+        <label>StudyInstanceUid <input formControlName="studyInstanceUid" /></label>
+        <label>SeriesInstanceUids (comma separated) <input formControlName="seriesInstanceUids" /></label>
+        <label>Modality <input formControlName="modality" /></label>
+        <label>WadoRsUrl <input formControlName="wadoRsUrl" /></label>
+        <label>OccurredAt <input type="datetime-local" [value]="ctForm.value.occurredAt?.slice(0,16)" (input)="ctForm.patchValue({ occurredAt: $any($event.target).value + ':00.000Z' })" /></label>
+        <button type="submit" [disabled]="busy">Send CT Event</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>PvMed Event Callback</h2>
+      <form [formGroup]="pvmedForm" (ngSubmit)="sendPvMed()">
+        <label>ExternalEventId <input formControlName="externalEventId" /></label>
+        <label>CaseId <input formControlName="caseId" /></label>
+        <label>Type <input formControlName="type" /></label>
+        <label>JobId <input formControlName="jobId" /></label>
+        <label>Status <input formControlName="status" /></label>
+        <label>Progress <input type="number" formControlName="progress" /></label>
+        <label>StudyInstanceUid <input formControlName="studyInstanceUid" /></label>
+        <label>SeriesInstanceUid <input formControlName="seriesInstanceUid" /></label>
+        <label>OccurredAt <input type="datetime-local" [value]="pvmedForm.value.occurredAt?.slice(0,16)" (input)="pvmedForm.patchValue({ occurredAt: $any($event.target).value + ':00.000Z' })" /></label>
+
+        <div class="actions">
+          <button type="submit" [disabled]="busy">Send Custom Event</button>
+          <button type="button" [disabled]="busy" (click)="sendPvMed('PROGRESS')">Progress</button>
+          <button type="button" [disabled]="busy" (click)="sendPvMed('PVMED_AUTOCONTOUR_COMPLETED')">Completed</button>
+          <button type="button" [disabled]="busy" (click)="sendPvMed('PVMED_AUTOCONTOUR_FAILED')">Failed</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>

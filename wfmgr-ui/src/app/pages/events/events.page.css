@@ -1,0 +1,69 @@
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+input {
+  border: 1px solid #d0d8e5;
+  border-radius: 8px;
+  padding: 0.55rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  background: #155eef;
+  color: #fff;
+  cursor: pointer;
+}
+
+.state {
+  padding: 0.6rem;
+  border-radius: 10px;
+}
+
+.ok {
+  background: #e8f8ee;
+  color: #085d3a;
+}
+
+.error {
+  background: #ffe8e8;
+  color: #7a1818;
+}
+
+@media (max-width: 980px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+}

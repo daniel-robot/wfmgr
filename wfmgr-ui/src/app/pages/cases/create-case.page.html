@@ -1,0 +1,59 @@
+<section class="page">
+  <h1>Create Case</h1>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="form-grid">
+    <label>
+      Hospital ID
+      <input formControlName="hospitalId" placeholder="e.g. HOSP001"
+        [class.invalid]="form.get('hospitalId')?.invalid && form.get('hospitalId')?.touched" />
+      @if (form.get('hospitalId')?.invalid && form.get('hospitalId')?.touched) {
+        <span class="field-error">Hospital ID is required.</span>
+      }
+    </label>
+
+    <label>
+      Site ID
+      <input formControlName="siteId" placeholder="e.g. SITE_A"
+        [class.invalid]="form.get('siteId')?.invalid && form.get('siteId')?.touched" />
+      @if (form.get('siteId')?.invalid && form.get('siteId')?.touched) {
+        <span class="field-error">Site ID is required.</span>
+      }
+    </label>
+
+    <label>
+      Department ID
+      <input formControlName="departmentId" placeholder="e.g. RT"
+        [class.invalid]="form.get('departmentId')?.invalid && form.get('departmentId')?.touched" />
+      @if (form.get('departmentId')?.invalid && form.get('departmentId')?.touched) {
+        <span class="field-error">Department ID is required.</span>
+      }
+    </label>
+
+    <label>
+      Accession Number
+      <input formControlName="accessionNumber" placeholder="e.g. ACC-2024-001"
+        [class.invalid]="form.get('accessionNumber')?.invalid && form.get('accessionNumber')?.touched" />
+      @if (form.get('accessionNumber')?.invalid && form.get('accessionNumber')?.touched) {
+        <span class="field-error">Accession number is required.</span>
+      }
+    </label>
+
+    <label>
+      Patient ID <span class="optional">(optional)</span>
+      <input formControlName="patientId" placeholder="e.g. PAT-001" />
+    </label>
+
+    <label class="full">
+      Notes <span class="optional">(optional)</span>
+      <textarea rows="4" formControlName="notes" placeholder="Any clinical or workflow notes…"></textarea>
+    </label>
+
+    <div class="actions full">
+      <button type="submit" [disabled]="submitting">{{ submitting ? 'Submitting…' : 'Create Case' }}</button>
+    </div>
+
+    @if (error) {
+      <p class="error full">{{ error }}</p>
+    }
+  </form>
+</section>

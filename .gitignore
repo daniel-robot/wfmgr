@@ -1,0 +1,50 @@
+# Build output (all subfolders)
+**/bin/
+**/obj/
+
+# User-specific files
+*.rsuser
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio / Rider (all subfolders)
+**/.vs/
+**/.idea/
+
+# VS Code local settings (all subfolders)
+**/.vscode/
+!**/.vscode/extensions.json
+!**/.vscode/settings.json
+!**/.vscode/tasks.json
+!**/.vscode/launch.json
+
+# Test and coverage outputs (all subfolders)
+**/TestResults/
+*.coverage
+*.coveragexml
+**/coverage/
+
+# Logs
+*.log
+**/logs/
+
+# NuGet
+*.nupkg
+*.snupkg
+**/packages/
+
+# Publish output (all subfolders)
+**/publish/
+
+# Environment and secrets
+.env
+.env.*
+secrets.json
+appsettings.Local.json
+**/appsettings.Local.json
+
+# OS files
+.DS_Store
+Thumbs.db

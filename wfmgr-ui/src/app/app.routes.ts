@@ -1,0 +1,19 @@
+import { Routes } from '@angular/router';
+import { AuditLogPageComponent } from './pages/audit/audit-log.page';
+import { CaseDetailsPageComponent } from './pages/cases/case-details.page';
+import { CaseListPageComponent } from './pages/cases/case-list.page';
+import { CreateCasePageComponent } from './pages/cases/create-case.page';
+import { DashboardPageComponent } from './pages/dashboard/dashboard.page';
+import { EventsPageComponent } from './pages/events/events.page';
+import { MonacoForwardPageComponent } from './pages/monaco/monaco-forward.page';
+
+export const routes: Routes = [
+	{ path: '', component: DashboardPageComponent },
+	{ path: 'cases', component: CaseListPageComponent },
+	{ path: 'cases/new', component: CreateCasePageComponent },
+	{ path: 'cases/:caseId', component: CaseDetailsPageComponent },
+	{ path: 'events', component: EventsPageComponent },
+	{ path: 'audit-logs', component: AuditLogPageComponent },
+	{ path: 'monaco-forward', component: MonacoForwardPageComponent },
+	{ path: '**', redirectTo: '' }
+];

@@ -1,0 +1,19 @@
+<div class="app-shell">
+  <header class="topbar">
+    <div class="title">wfmgr-ui</div>
+    <div class="subtitle">Radiotherapy Workflow Testing Console</div>
+  </header>
+
+  <nav class="nav">
+    <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
+    <a routerLink="/cases" routerLinkActive="active">Cases</a>
+    <a routerLink="/cases/new" routerLinkActive="active">Create Case</a>
+    <a routerLink="/events" routerLinkActive="active">Events</a>
+    <a routerLink="/audit-logs" routerLinkActive="active">Audit Logs</a>
+    <a routerLink="/monaco-forward" routerLinkActive="active">Monaco Forward</a>
+  </nav>
+
+  <main class="content">
+    <router-outlet />
+  </main>
+</div>

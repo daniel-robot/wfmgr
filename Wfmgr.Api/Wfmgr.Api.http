@@ -1,0 +1,6 @@
+@Wfmgr.Api_HostAddress = http://localhost:5223
+
+GET {{Wfmgr.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

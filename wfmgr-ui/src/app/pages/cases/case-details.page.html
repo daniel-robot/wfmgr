@@ -1,0 +1,116 @@
+<section class="page">
+  @if (loading) {
+    <p class="state">Loading case details...</p>
+  }
+
+  @if (error) {
+    <p class="state error">{{ error }}</p>
+  }
+
+  @if (actionMessage) {
+    <p class="state ok">{{ actionMessage }}</p>
+  }
+
+  @if (infoMessage) {
+    <p class="state info">{{ infoMessage }}</p>
+  }
+
+  @if (details) {
+    <div class="card">
+      <div class="header-row">
+        <h1>Case {{ details.accessionNumber }}</h1>
+        <button class="secondary" (click)="loadCase()" [disabled]="loading || busy">Refresh</button>
+      </div>
+      <p><strong>Status:</strong> <span class="status-badge" [class]="'status-badge ' + getStatusClass(details.currentStatus)">{{ details.currentStatus }}</span></p>
+      <p><strong>Hospital/Site/Dept:</strong> {{ details.hospitalId }} / {{ details.siteId }} / {{ details.departmentId }}</p>
+      <p><strong>Patient:</strong> {{ details.patientId || '-' }}</p>
+      <p><strong>Created:</strong> {{ details.createdAt | date: 'yyyy-MM-dd HH:mm' }}</p>
+    </div>
+
+    <div class="grid two-col">
+      <div class="card">
+        <h2>Submit Sim Record</h2>
+        <form [formGroup]="simForm" (ngSubmit)="submitSimRecord()">
+          <label>CtMachineId <input formControlName="ctMachineId" /></label>
+          <label>SimulatedAt <input type="datetime-local" [value]="simForm.value.simulatedAt?.slice(0,16)" (input)="simForm.patchValue({ simulatedAt: $any($event.target).value + ':00.000Z' })" /></label>
+          <label>RecordFormJson <textarea rows="4" formControlName="recordFormJson"></textarea></label>
+          <button type="submit" [disabled]="busy">Submit Sim Record</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Simulate CT Image Stored</h2>
+        <form [formGroup]="ctEventForm" (ngSubmit)="simulateCtImageStored()">
+          <label>ExternalEventId <input formControlName="externalEventId" /></label>
+          <label>AccessionNumber <input formControlName="accessionNumber" /></label>
+          <label>StudyInstanceUid <input formControlName="studyInstanceUid" /></label>
+          <label>SeriesInstanceUids (comma separated) <input formControlName="seriesInstanceUids" /></label>
+          <label>Modality <input formControlName="modality" /></label>
+          <label>WadoRsUrl <input formControlName="wadoRsUrl" /></label>
+          <label>OccurredAt <input type="datetime-local" [value]="ctEventForm.value.occurredAt?.slice(0,16)" (input)="ctEventForm.patchValue({ occurredAt: $any($event.target).value + ':00.000Z' })" /></label>
+          <button type="submit" [disabled]="busy">Send CT Event</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Simulate PvMed Event</h2>
+      <form [formGroup]="pvMedForm" class="grid three-col">
+        <label>ExternalEventId <input formControlName="externalEventId" /></label>
+        <label>JobId <input formControlName="jobId" /></label>
+        <label>Status <input formControlName="status" /></label>
+        <label>Progress <input type="number" formControlName="progress" /></label>
+        <label>StudyInstanceUid <input formControlName="studyInstanceUid" /></label>
+        <label>SeriesInstanceUid <input formControlName="seriesInstanceUid" /></label>
+        <label>OccurredAt <input type="datetime-local" [value]="pvMedForm.value.occurredAt?.slice(0,16)" (input)="pvMedForm.patchValue({ occurredAt: $any($event.target).value + ':00.000Z' })" /></label>
+      </form>
+      <div class="actions">
+        <button [disabled]="busy" (click)="simulatePvMedEvent('STARTED')">PvMed STARTED</button>
+        <button [disabled]="busy" (click)="simulatePvMedEvent('PROGRESS')">PvMed PROGRESS</button>
+        <button [disabled]="busy" (click)="simulatePvMedEvent('PVMED_AUTOCONTOUR_COMPLETED')">PvMed COMPLETED</button>
+        <button [disabled]="busy" (click)="simulatePvMedEvent('PVMED_AUTOCONTOUR_FAILED')">PvMed FAILED</button>
+        <button [disabled]="busy" class="secondary" (click)="forwardToMonaco()">Manual Forward to Monaco</button>
+      </div>
+    </div>
+
+    <div class="grid two-col">
+      <div class="card">
+        <div class="header-row">
+          <h2>Work Items</h2>
+          <button class="secondary" (click)="loadCase()" [disabled]="loading || busy">Refresh</button>
+        </div>
+        @if (workItems.length === 0) {
+          <p>No work items.</p>
+        }
+        @for (item of workItems; track item.workItemId) {
+          <div class="timeline-item">
+            <div class="title">{{ item.type }} - <span class="status-badge" [class]="'status-badge ' + getStatusClass(item.status)">{{ item.status }}</span></div>
+            <div class="meta">Role: {{ item.assignedRole }} | User: {{ item.assignedUserId || '-' }}</div>
+            <div class="meta">Created: {{ item.createdAt | date: 'yyyy-MM-dd HH:mm' }}</div>
+          </div>
+        }
+      </div>
+
+      <div class="card">
+        <div class="header-row">
+          <h2>Audit Timeline</h2>
+          <button class="secondary" (click)="loadCase()" [disabled]="loading || busy">Refresh</button>
+        </div>
+        @if (auditLogs.length === 0) {
+          <p>No audit logs.</p>
+        }
+        @for (item of auditLogs; track item.auditId) {
+          <div class="timeline-item">
+            <div class="title">{{ item.action }}</div>
+            <div class="meta">{{ item.fromStatus || '-' }} -> {{ item.toStatus || '-' }}</div>
+            <div class="meta">{{ item.createdAt | date: 'yyyy-MM-dd HH:mm:ss' }}</div>
+            <details class="json-block">
+              <summary>Snapshot</summary>
+              <pre>{{ formatJson(item.snapshotJson) }}</pre>
+            </details>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</section>

@@ -1,0 +1,27 @@
+<section class="page">
+  <h1>Audit Logs</h1>
+
+  @if (loading) {
+    <p class="state">Loading...</p>
+  }
+
+  @if (error) {
+    <p class="state error">{{ error }}</p>
+  }
+
+  @if (!loading && !error && logs.length === 0) {
+    <p class="state">No audit records.</p>
+  }
+
+  @for (item of logs; track item.auditId) {
+    <article class="timeline-item">
+      <header>
+        <strong>{{ item.action }}</strong>
+        <span>{{ item.createdAt | date: 'yyyy-MM-dd HH:mm:ss' }}</span>
+      </header>
+      <p>Case: {{ item.caseId }}</p>
+      <p>Status: {{ item.fromStatus || '-' }} -> {{ item.toStatus || '-' }}</p>
+      <p>Actor: {{ item.actorType }} {{ item.actorId || '' }}</p>
+    </article>
+  }
+</section>

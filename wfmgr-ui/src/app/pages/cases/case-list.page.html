@@ -1,0 +1,53 @@
+<section class="page">
+  <div class="header-row">
+    <h1>Cases</h1>
+    <div class="header-actions">
+      <button class="btn secondary" (click)="loadCases()" [disabled]="loading">Refresh</button>
+      <a class="btn" routerLink="/cases/new">Create Case</a>
+    </div>
+  </div>
+
+  @if (info) {
+    <p class="state ok">{{ info }}</p>
+  }
+
+  @if (loading) {
+    <p class="state">Loading cases...</p>
+  }
+
+  @if (error) {
+    <p class="state error">{{ error }}</p>
+  }
+
+  @if (!loading && !error && cases.length === 0) {
+    <div class="empty-state">
+      <p>No cases found.</p>
+      <a class="btn" routerLink="/cases/new">Create your first case</a>
+    </div>
+  }
+
+  @if (cases.length > 0) {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Accession</th>
+            <th>Hospital/Site/Dept</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of cases; track item.caseId) {
+            <tr (click)="openCase(item.caseId)">
+              <td><span class="status-badge" [class]="'status-badge ' + getStatusClass(item.currentStatus)">{{ item.currentStatus }}</span></td>
+              <td>{{ item.accessionNumber }}</td>
+              <td>{{ item.hospitalId }} / {{ item.siteId }} / {{ item.departmentId }}</td>
+              <td>{{ item.createdAt | date: 'yyyy-MM-dd HH:mm' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
