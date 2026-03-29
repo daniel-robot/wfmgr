@@ -97,6 +97,101 @@ export interface AuditLogItem {
   createdAt: string;
 }
 
+export interface TransitionHistoryItem {
+  transitionId: string;
+  caseId: string;
+  fromStatus: string | null;
+  toStatus: string;
+  triggerType: string;
+  triggerName: string;
+  triggeredBy: string | null;
+  reason: string | null;
+  metadataJson: string | null;
+  createdAt: string;
+}
+
+export interface CaseFormItem {
+  formId: string;
+  caseId: string;
+  formType: string;
+  formVersion: number;
+  status: string;
+  payloadJson: string;
+  submittedBy: string | null;
+  submittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CaseAttachmentItem {
+  attachmentId: string;
+  caseId: string;
+  category: string;
+  fileName: string;
+  storagePath: string;
+  sourceSystem: string | null;
+  uploadedBy: string | null;
+  uploadedAt: string;
+}
+
+export interface ExternalEventItem {
+  eventId: string;
+  caseId: string;
+  source: string;
+  type: string;
+  externalId: string | null;
+  caseCorrelationKey: string | null;
+  processStatus: string;
+  error: string | null;
+  receivedAt: string;
+  processedAt: string | null;
+  payloadJson: string;
+}
+
+export interface IntegrationReferenceItem {
+  id: string;
+  caseId: string;
+  systemName: string;
+  externalEntityType: string;
+  externalId: string;
+  externalStatus: string | null;
+  metadataJson: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlanVersionItem {
+  planVersionId: string;
+  caseId: string;
+  versionNo: number;
+  sourceSystem: string | null;
+  status: string;
+  summaryJson: string | null;
+  createdAt: string;
+}
+
+export interface WorkflowOption {
+  value: string;
+  label: string;
+}
+
+export interface CreateCaseFormDraftRequest {
+  formType: string;
+  payloadJson: string;
+  formVersion?: number | null;
+}
+
+export interface SubmitCaseFormRequest {
+  payloadJson?: string | null;
+  submittedBy: string;
+  reason?: string | null;
+}
+
+export interface WorkflowActionRequest {
+  triggeredBy: string;
+  reason?: string | null;
+}
+
 export interface ApiError {
   message: string;
 }

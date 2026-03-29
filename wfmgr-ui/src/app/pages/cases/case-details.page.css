@@ -59,14 +59,44 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 button.secondary {
   background: #344054;
+}
+
+button.danger {
+  background: #b42318;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  display: inline-block;
+  border-radius: 999px;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 0.8rem;
+  padding: 0.18rem 0.55rem;
+  font-weight: 600;
 }
 
 .state {
@@ -103,6 +133,10 @@ button.secondary {
 .meta {
   color: #667085;
   font-size: 0.9rem;
+}
+
+.error-text {
+  color: #991b1b;
 }
 
 .status-badge {

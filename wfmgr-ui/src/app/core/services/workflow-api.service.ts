@@ -4,12 +4,22 @@ import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   AuditLogItem,
+  CaseAttachmentItem,
   CaseDetails,
+  CaseFormItem,
   CaseSummary,
+  CreateCaseFormDraftRequest,
   CreateCaseRequest,
   CtImageStoredRequest,
+  ExternalEventItem,
+  IntegrationReferenceItem,
+  PlanVersionItem,
   PvMedEventRequest,
+  SubmitCaseFormRequest,
   SubmitSimRecordRequest,
+  TransitionHistoryItem,
+  WorkflowActionRequest,
+  WorkflowOption,
   WorkItem
 } from '../models/workflow.models';
 
@@ -56,8 +66,112 @@ export class WorkflowApiService {
     return this.http.get<AuditLogItem[]>(`${this.baseUrl}/api/cases/${caseId}/audit-logs`);
   }
 
+  getCaseTransitionHistory(caseId: string): Observable<TransitionHistoryItem[]> {
+    return this.http.get<TransitionHistoryItem[]>(`${this.baseUrl}/api/cases/${caseId}/transition-history`);
+  }
+
+  getCaseForms(caseId: string): Observable<CaseFormItem[]> {
+    return this.http.get<CaseFormItem[]>(`${this.baseUrl}/api/cases/${caseId}/forms`);
+  }
+
+  getCaseAttachments(caseId: string): Observable<CaseAttachmentItem[]> {
+    return this.http.get<CaseAttachmentItem[]>(`${this.baseUrl}/api/cases/${caseId}/attachments`);
+  }
+
+  getCaseExternalEvents(caseId: string): Observable<ExternalEventItem[]> {
+    return this.http.get<ExternalEventItem[]>(`${this.baseUrl}/api/cases/${caseId}/external-events`);
+  }
+
+  getCaseIntegrationReferences(caseId: string): Observable<IntegrationReferenceItem[]> {
+    return this.http.get<IntegrationReferenceItem[]>(`${this.baseUrl}/api/cases/${caseId}/integration-references`);
+  }
+
+  getCasePlanVersions(caseId: string): Observable<PlanVersionItem[]> {
+    return this.http.get<PlanVersionItem[]>(`${this.baseUrl}/api/cases/${caseId}/plan-versions`);
+  }
+
+  getWorkflowStatuses(): Observable<WorkflowOption[]> {
+    return this.http.get<WorkflowOption[]>(`${this.baseUrl}/api/workflow/statuses`);
+  }
+
+  getWorkflowWorkItemTypes(): Observable<WorkflowOption[]> {
+    return this.http.get<WorkflowOption[]>(`${this.baseUrl}/api/workflow/work-item-types`);
+  }
+
+  createCaseFormDraft(caseId: string, request: CreateCaseFormDraftRequest): Observable<CaseFormItem> {
+    return this.http.post<CaseFormItem>(`${this.baseUrl}/api/cases/${caseId}/forms/draft`, request);
+  }
+
+  submitCaseForm(caseId: string, formId: string, request: SubmitCaseFormRequest): Observable<CaseFormItem> {
+    return this.http.post<CaseFormItem>(`${this.baseUrl}/api/cases/${caseId}/forms/${formId}/submit`, request);
+  }
+
+  getLatestCaseFormByType(caseId: string, formType: string): Observable<CaseFormItem> {
+    return this.http.get<CaseFormItem>(`${this.baseUrl}/api/cases/${caseId}/forms/latest/${encodeURIComponent(formType)}`);
+  }
+
+  restartContouring(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'restart-contouring', request);
+  }
+
+  rejectContourReview(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'reject-contour-review', request);
+  }
+
+  rejectPlanReview(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'reject-plan-review', request);
+  }
+
+  rejectPlanReReview(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'reject-plan-rereview', request);
+  }
+
+  markPrescriptionSyncFailed(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'prescription-sync-failed', request);
+  }
+
+  retryPrescriptionSync(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'retry-prescription-sync', request);
+  }
+
+  resolvePrescriptionSync(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'resolve-prescription-sync', request);
+  }
+
+  failQa(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'fail-qa', request);
+  }
+
+  markSchedulingFailed(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'scheduling-failed', request);
+  }
+
+  retryScheduling(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'retry-scheduling', request);
+  }
+
+  pauseTreatment(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'pause-treatment', request);
+  }
+
+  interruptTreatment(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'interrupt-treatment', request);
+  }
+
+  resumeTreatment(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'resume-treatment', request);
+  }
+
+  cancelCase(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.postCaseAction(caseId, 'cancel', request);
+  }
+
   getAuditLogs(): Observable<AuditLogItem[]> {
     return this.http.get<AuditLogItem[]>(`${this.baseUrl}/api/audit-logs`);
+  }
+
+  private postCaseAction(caseId: string, action: string, request: WorkflowActionRequest): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/api/cases/${caseId}/actions/${action}`, request);
   }
 
   private extractArray(value: unknown): Record<string, unknown>[] {

@@ -46,6 +46,7 @@ td {
   text-align: left;
   padding: 0.75rem;
   border-bottom: 1px solid #edf1f6;
+  vertical-align: top;
 }
 
 tbody tr {
@@ -100,6 +101,53 @@ tbody tr:hover {
   color: #92400e;
 }
 
+.workflow-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.35rem;
+  min-width: 360px;
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  color: #344054;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.step-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.workflow-step.completed {
+  border-color: #2f855a;
+  background: #ecfdf3;
+  color: #166534;
+}
+
+.workflow-step.current {
+  border-color: #155eef;
+  background: #eef4ff;
+  color: #155eef;
+}
+
+.workflow-step.upcoming {
+  border-color: #d0d5dd;
+  background: #f9fafb;
+  color: #667085;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -114,4 +162,11 @@ tbody tr:hover {
 .empty-state p {
   margin: 0;
   color: #475467;
+}
+
+@media (max-width: 960px) {
+  .workflow-steps {
+    min-width: 280px;
+    flex-wrap: wrap;
+  }
 }

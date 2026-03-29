@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Wfmgr.Application.Abstractions.Persistence;
 using Wfmgr.Application.Integrations;
+using Wfmgr.Application.Integrations.Dtos;
 using Wfmgr.Application.Workflows.V1;
 using Wfmgr.Infrastructure.Integrations;
 using Wfmgr.Infrastructure.Persistence;
@@ -22,9 +23,18 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowCaseRepository, WorkflowCaseRepository>();
         services.AddScoped<IWorkflowDataAccess, WorkflowDataAccess>();
         services.AddScoped<IWorkflowProfileResolver, WorkflowProfileResolver>();
+        services.AddScoped<IExternalEventDispatcher, ExternalEventDispatcher>();
         services.AddHttpClient<IPvMedClient, PvMedClient>(client =>
         {
             var baseUrl = configuration["PvMed:BaseUrl"];
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+            {
+                client.BaseAddress = new Uri(baseUrl);
+            }
+        });
+        services.AddHttpClient<IMsqClient, MsqClient>(client =>
+        {
+            var baseUrl = configuration["Msq:BaseUrl"];
             if (!string.IsNullOrWhiteSpace(baseUrl))
             {
                 client.BaseAddress = new Uri(baseUrl);

@@ -40,15 +40,16 @@
 
       <div class="card">
         <h2>Simulate CT Image Stored</h2>
+        <p class="meta">{{ getCtEventHint() }}</p>
         <form [formGroup]="ctEventForm" (ngSubmit)="simulateCtImageStored()">
           <label>ExternalEventId <input formControlName="externalEventId" /></label>
-          <label>AccessionNumber <input formControlName="accessionNumber" /></label>
+          <label>AccessionNumber <input formControlName="accessionNumber" readonly /></label>
           <label>StudyInstanceUid <input formControlName="studyInstanceUid" /></label>
           <label>SeriesInstanceUids (comma separated) <input formControlName="seriesInstanceUids" /></label>
           <label>Modality <input formControlName="modality" /></label>
           <label>WadoRsUrl <input formControlName="wadoRsUrl" /></label>
           <label>OccurredAt <input type="datetime-local" [value]="ctEventForm.value.occurredAt?.slice(0,16)" (input)="ctEventForm.patchValue({ occurredAt: $any($event.target).value + ':00.000Z' })" /></label>
-          <button type="submit" [disabled]="busy">Send CT Event</button>
+          <button type="submit" [disabled]="busy || !isCtEventEnabled()">Send CT Event</button>
         </form>
       </div>
     </div>
@@ -70,6 +71,70 @@
         <button [disabled]="busy" (click)="simulatePvMedEvent('PVMED_AUTOCONTOUR_COMPLETED')">PvMed COMPLETED</button>
         <button [disabled]="busy" (click)="simulatePvMedEvent('PVMED_AUTOCONTOUR_FAILED')">PvMed FAILED</button>
         <button [disabled]="busy" class="secondary" (click)="forwardToMonaco()">Manual Forward to Monaco</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Form Action Tester</h2>
+      <p class="meta">Create a draft form and immediately submit it to exercise form-driven workflow transitions.</p>
+      <form [formGroup]="caseFormActionForm" class="grid three-col" (ngSubmit)="createAndSubmitForm()">
+        <label>FormType <input formControlName="formType" /></label>
+        <label>SubmittedBy <input formControlName="submittedBy" /></label>
+        <label>Reason <input formControlName="reason" /></label>
+        <label class="full-width">PayloadJson <textarea rows="4" formControlName="payloadJson"></textarea></label>
+        <button type="submit" [disabled]="busy">Create + Submit Form</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Advanced Workflow Actions</h2>
+      <p class="meta">Trigger failure, retry, rework, pause/resume, and cancellation pathways from the UI.</p>
+      <p class="meta">Current Status: <strong>{{ details.currentStatus }}</strong></p>
+      <form [formGroup]="advancedActionForm" class="grid three-col">
+        <label>TriggeredBy <input formControlName="triggeredBy" /></label>
+        <label class="full-width">Reason <input formControlName="reason" /></label>
+      </form>
+      <div class="actions">
+        <button [disabled]="busy || !isActionEnabled('restart-contouring')" [title]="'Allowed: ' + getAllowedStatusesText('restart-contouring')" (click)="runAdvancedAction('restart-contouring')">Restart Contouring</button>
+        <button [disabled]="busy || !isActionEnabled('reject-contour-review')" [title]="'Allowed: ' + getAllowedStatusesText('reject-contour-review')" (click)="runAdvancedAction('reject-contour-review')">Reject Contour Review</button>
+        <button [disabled]="busy || !isActionEnabled('reject-plan-review')" [title]="'Allowed: ' + getAllowedStatusesText('reject-plan-review')" (click)="runAdvancedAction('reject-plan-review')">Reject Plan Review</button>
+        <button [disabled]="busy || !isActionEnabled('reject-plan-rereview')" [title]="'Allowed: ' + getAllowedStatusesText('reject-plan-rereview')" (click)="runAdvancedAction('reject-plan-rereview')">Reject Plan Re-review</button>
+        <button [disabled]="busy || !isActionEnabled('prescription-sync-failed')" [title]="'Allowed: ' + getAllowedStatusesText('prescription-sync-failed')" (click)="runAdvancedAction('prescription-sync-failed')">Mark Prescription Sync Failed</button>
+        <button [disabled]="busy || !isActionEnabled('retry-prescription-sync')" [title]="'Allowed: ' + getAllowedStatusesText('retry-prescription-sync')" (click)="runAdvancedAction('retry-prescription-sync')">Retry Prescription Sync</button>
+        <button [disabled]="busy || !isActionEnabled('resolve-prescription-sync')" [title]="'Allowed: ' + getAllowedStatusesText('resolve-prescription-sync')" (click)="runAdvancedAction('resolve-prescription-sync')">Resolve Prescription Sync</button>
+        <button [disabled]="busy || !isActionEnabled('fail-qa')" [title]="'Allowed: ' + getAllowedStatusesText('fail-qa')" (click)="runAdvancedAction('fail-qa')">Fail QA</button>
+        <button [disabled]="busy || !isActionEnabled('scheduling-failed')" [title]="'Allowed: ' + getAllowedStatusesText('scheduling-failed')" (click)="runAdvancedAction('scheduling-failed')">Mark Scheduling Failed</button>
+        <button [disabled]="busy || !isActionEnabled('retry-scheduling')" [title]="'Allowed: ' + getAllowedStatusesText('retry-scheduling')" (click)="runAdvancedAction('retry-scheduling')">Retry Scheduling</button>
+        <button [disabled]="busy || !isActionEnabled('pause-treatment')" [title]="'Allowed: ' + getAllowedStatusesText('pause-treatment')" (click)="runAdvancedAction('pause-treatment')">Pause Treatment</button>
+        <button [disabled]="busy || !isActionEnabled('interrupt-treatment')" [title]="'Allowed: ' + getAllowedStatusesText('interrupt-treatment')" (click)="runAdvancedAction('interrupt-treatment')">Interrupt Treatment</button>
+        <button [disabled]="busy || !isActionEnabled('resume-treatment')" [title]="'Allowed: ' + getAllowedStatusesText('resume-treatment')" (click)="runAdvancedAction('resume-treatment')">Resume Treatment</button>
+        <button [disabled]="busy || !isActionEnabled('cancel')" [title]="'Allowed: ' + getAllowedStatusesText('cancel')" class="danger" (click)="runAdvancedAction('cancel')">Cancel Case</button>
+      </div>
+    </div>
+
+    <div class="grid two-col">
+      <div class="card">
+        <h2>Workflow Status Catalog</h2>
+        @if (workflowStatuses.length === 0) {
+          <p>No statuses returned.</p>
+        }
+        <div class="chip-list">
+          @for (status of workflowStatuses; track status.value) {
+            <span class="status-badge" [class]="'status-badge ' + getStatusClass(status.value)">{{ status.label }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Work Item Type Catalog</h2>
+        @if (workflowWorkItemTypes.length === 0) {
+          <p>No work item types returned.</p>
+        }
+        <div class="chip-list">
+          @for (itemType of workflowWorkItemTypes; track itemType.value) {
+            <span class="chip">{{ itemType.label }}</span>
+          }
+        </div>
       </div>
     </div>
 
@@ -108,6 +173,125 @@
               <summary>Snapshot</summary>
               <pre>{{ formatJson(item.snapshotJson) }}</pre>
             </details>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="grid two-col">
+      <div class="card">
+        <h2>Transition History</h2>
+        @if (transitionHistory.length === 0) {
+          <p>No transitions recorded.</p>
+        }
+        @for (item of transitionHistory; track item.transitionId) {
+          <div class="timeline-item">
+            <div class="title">{{ item.triggerName }} ({{ item.triggerType }})</div>
+            <div class="meta">{{ item.fromStatus || '-' }} -> {{ item.toStatus }}</div>
+            <div class="meta">By: {{ item.triggeredBy || '-' }} | {{ item.createdAt | date: 'yyyy-MM-dd HH:mm:ss' }}</div>
+            @if (item.reason) {
+              <div class="meta">Reason: {{ item.reason }}</div>
+            }
+            <details class="json-block">
+              <summary>Metadata</summary>
+              <pre>{{ formatJson(item.metadataJson) }}</pre>
+            </details>
+          </div>
+        }
+      </div>
+
+      <div class="card">
+        <h2>Forms</h2>
+        @if (forms.length === 0) {
+          <p>No forms.</p>
+        }
+        @for (item of forms; track item.formId) {
+          <div class="timeline-item">
+            <div class="title">{{ item.formType }} v{{ item.formVersion }} - <span class="status-badge" [class]="'status-badge ' + getStatusClass(item.status)">{{ item.status }}</span></div>
+            <div class="meta">SubmittedBy: {{ item.submittedBy || '-' }} | SubmittedAt: {{ item.submittedAt ? (item.submittedAt | date: 'yyyy-MM-dd HH:mm:ss') : '-' }}</div>
+            <div class="meta">Updated: {{ item.updatedAt | date: 'yyyy-MM-dd HH:mm:ss' }}</div>
+            <details class="json-block">
+              <summary>Payload</summary>
+              <pre>{{ formatJson(item.payloadJson) }}</pre>
+            </details>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="grid two-col">
+      <div class="card">
+        <h2>External Events</h2>
+        @if (externalEvents.length === 0) {
+          <p>No external events.</p>
+        }
+        @for (item of externalEvents; track item.eventId) {
+          <div class="timeline-item">
+            <div class="title">{{ item.source }} :: {{ item.type }}</div>
+            <div class="meta">Status: <span class="status-badge" [class]="'status-badge ' + getStatusClass(item.processStatus)">{{ item.processStatus }}</span></div>
+            <div class="meta">ExternalId: {{ item.externalId || '-' }} | Correlation: {{ item.caseCorrelationKey || '-' }}</div>
+            <div class="meta">Received: {{ item.receivedAt | date: 'yyyy-MM-dd HH:mm:ss' }} | Processed: {{ item.processedAt ? (item.processedAt | date: 'yyyy-MM-dd HH:mm:ss') : '-' }}</div>
+            @if (item.error) {
+              <div class="meta error-text">Error: {{ item.error }}</div>
+            }
+            <details class="json-block">
+              <summary>Payload</summary>
+              <pre>{{ formatJson(item.payloadJson) }}</pre>
+            </details>
+          </div>
+        }
+      </div>
+
+      <div class="card">
+        <h2>Integration References</h2>
+        @if (integrationReferences.length === 0) {
+          <p>No integration references.</p>
+        }
+        @for (item of integrationReferences; track item.id) {
+          <div class="timeline-item">
+            <div class="title">{{ item.systemName }} :: {{ item.externalEntityType }}</div>
+            <div class="meta">ExternalId: {{ item.externalId }}</div>
+            <div class="meta">Status: {{ item.externalStatus || '-' }}</div>
+            <div class="meta">Updated: {{ item.updatedAt | date: 'yyyy-MM-dd HH:mm:ss' }}</div>
+            <details class="json-block">
+              <summary>Metadata</summary>
+              <pre>{{ formatJson(item.metadataJson) }}</pre>
+            </details>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="grid two-col">
+      <div class="card">
+        <h2>Plan Versions</h2>
+        @if (planVersions.length === 0) {
+          <p>No plan versions.</p>
+        }
+        @for (item of planVersions; track item.planVersionId) {
+          <div class="timeline-item">
+            <div class="title">Version {{ item.versionNo }} - <span class="status-badge" [class]="'status-badge ' + getStatusClass(item.status)">{{ item.status }}</span></div>
+            <div class="meta">Source: {{ item.sourceSystem || '-' }}</div>
+            <div class="meta">Created: {{ item.createdAt | date: 'yyyy-MM-dd HH:mm:ss' }}</div>
+            <details class="json-block">
+              <summary>Summary</summary>
+              <pre>{{ formatJson(item.summaryJson) }}</pre>
+            </details>
+          </div>
+        }
+      </div>
+
+      <div class="card">
+        <h2>Attachments</h2>
+        @if (attachments.length === 0) {
+          <p>No attachments.</p>
+        }
+        @for (item of attachments; track item.attachmentId) {
+          <div class="timeline-item">
+            <div class="title">{{ item.fileName }}</div>
+            <div class="meta">Category: {{ item.category }} | Source: {{ item.sourceSystem || '-' }}</div>
+            <div class="meta">UploadedBy: {{ item.uploadedBy || '-' }} | {{ item.uploadedAt | date: 'yyyy-MM-dd HH:mm:ss' }}</div>
+            <div class="meta">Path: {{ item.storagePath }}</div>
           </div>
         }
       </div>

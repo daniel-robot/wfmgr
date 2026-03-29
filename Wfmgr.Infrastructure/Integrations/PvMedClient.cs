@@ -17,4 +17,10 @@ public class PvMedClient : IPvMedClient
         using var response = await _httpClient.PostAsJsonAsync("/api/autocontour/jobs", new { payloadJson }, ct);
         response.EnsureSuccessStatusCode();
     }
+
+    public async Task QueryContourStatusAsync(string payloadJson, CancellationToken ct)
+    {
+        using var response = await _httpClient.PostAsJsonAsync("/api/autocontour/jobs/status", new { payloadJson }, ct);
+        response.EnsureSuccessStatusCode();
+    }
 }

@@ -29,6 +29,14 @@ database/
 | `POST` | `/api/cases/{caseId}/forward/monaco` | Manually forward to Monaco |
 | `GET`  | `/api/cases/{caseId}/work-items` | Get work items for a case |
 | `GET`  | `/api/cases/{caseId}/audit-logs` | Get audit log for a case |
+| `GET`  | `/api/cases/{caseId}/transition-history` | Get case transition history |
+| `GET`  | `/api/cases/{caseId}/forms` | Get all forms for a case |
+| `GET`  | `/api/cases/{caseId}/attachments` | Get case attachments |
+| `GET`  | `/api/cases/{caseId}/external-events` | Get case external/inbox events |
+| `GET`  | `/api/cases/{caseId}/integration-references` | Get integration references by case |
+| `GET`  | `/api/cases/{caseId}/plan-versions` | Get plan versions by case |
+| `GET`  | `/api/workflow/statuses` | Get available workflow statuses |
+| `GET`  | `/api/workflow/work-item-types` | Get available workflow work item types |
 | `POST` | `/api/integration/ct/image-stored` | Receive CT image stored event |
 | `POST` | `/api/integration/pvmed/events` | Receive PvMed autocontour event |
 | `GET`  | `/api/audit-logs` | Get all audit logs |
@@ -36,8 +44,31 @@ database/
 ### Case Status Flow
 
 ```
-Submitted → SimCompleted → ImageStored → ContouringInProgress → ContoursReady → MonacoForwarded
+Draft → Submitted
+  → SimScheduled → SimInProgress → SimCompleted
+  → ImageStored → ImageForwarding
+  → ContouringInProgress → ContoursReady → ContoursUnderReview
+      ↳ ContoursRejected → ContourReworkRequired (loop back)
+  → PlanningPending → PlanningAssigned → PlanningInProgress → PlanReady
+  → PlanUnderReview → PlanReviewed → [PlanReReviewOptional]
+  → PrescriptionGenerating → PrescriptionReady → [PrescriptionSyncFailed]
+  → PlanQAInProgress → PlanQAApproved → [PlanDoubleCheckOptional]
+  → ReadyForScheduling → SchedulingInProgress → Scheduled
+  → OrderPending → OrderSubmitted → QueuePending
+  → Treating → [TreatmentPaused | TreatmentInterrupted] → TreatmentCompleted
+  → PostTreatmentReviewPending → PostTreatmentReviewed
+  → Archived
+      ↳ Cancelled (from any status)
 ```
+
+> **Developer note — expanded lifecycle (March 2026):** The domain was extended from
+> the original 6-status partial workflow to the full 40-status radiotherapy lifecycle.
+> The former `MonacoForwarded` status has been replaced by `PlanningPending` — all
+> existing "forward to Monaco" code transitions now target `PlanningPending`.
+> The `GetActiveAsync` repository query now excludes both `Archived` and `Cancelled`
+> instead of the old `MonacoForwarded` terminal state.
+> Workflow logic for the new statuses beyond `PlanningPending` is not yet implemented;
+> add handlers in `CaseWorkflowService` as each phase is built out.
 
 ---
 
@@ -254,7 +285,7 @@ curl -s -X POST http://localhost:5223/api/integration/pvmed/events \
 ```
 
 **Response:** `202 Accepted`  
-**Case status:** `ContoursReady` → `MonacoForwarded` (if the workflow profile has `autoForwardToMonaco: true`), or a `MANUAL_FORWARD_TO_MONACO` work item is created.
+**Case status:** `ContoursReady` → `PlanningPending` (if the workflow profile has `autoForwardToMonaco: true`), or a `MANUAL_FORWARD_TO_MONACO` work item is created.
 
 ---
 
@@ -269,7 +300,52 @@ curl -s http://localhost:5223/api/cases/$CASE_ID/work-items | jq .
 
 # Inspect audit trail
 curl -s http://localhost:5223/api/cases/$CASE_ID/audit-logs | jq .
+
+# Inspect transition history
+curl -s http://localhost:5223/api/cases/$CASE_ID/transition-history | jq .
+
+# Inspect forms and integration metadata
+curl -s http://localhost:5223/api/cases/$CASE_ID/forms | jq .
+curl -s http://localhost:5223/api/cases/$CASE_ID/external-events | jq .
+curl -s http://localhost:5223/api/cases/$CASE_ID/integration-references | jq .
+
+# Inspect plan versions / attachments
+curl -s http://localhost:5223/api/cases/$CASE_ID/plan-versions | jq .
+curl -s http://localhost:5223/api/cases/$CASE_ID/attachments | jq .
+
+# Inspect workflow helper catalogs
+curl -s http://localhost:5223/api/workflow/statuses | jq .
+curl -s http://localhost:5223/api/workflow/work-item-types | jq .
 ```
+
+### Step 6 — Validate in Angular Workflow Console
+
+Open `http://localhost:4200/cases/$CASE_ID` and verify the following UI sections refresh with data:
+
+- Work Items
+- Audit Timeline
+- Transition History
+- Forms
+- External Events
+- Integration References
+- Plan Versions
+- Attachments
+- Workflow Status Catalog
+- Work Item Type Catalog
+
+Use **Form Action Tester** in the same page to create+submit a form and confirm new entries appear in Forms and Transition History after refresh.
+
+Use **Advanced Workflow Actions** to test failure/retry/rework/cancel behavior from the same screen:
+
+- Restart Contouring
+- Reject Contour Review
+- Reject Plan Review
+- Reject Plan Re-review
+- Mark/Retry/Resolve Prescription Sync
+- Fail QA
+- Mark/Retry Scheduling Failure
+- Pause/Interrupt/Resume Treatment
+- Cancel Case
 
 ---
 
@@ -281,7 +357,7 @@ If the workflow profile does not auto-forward, trigger it manually:
 curl -s -X POST http://localhost:5223/api/cases/$CASE_ID/forward/monaco
 ```
 
-**Case status:** `MonacoForwarded`
+**Case status:** `PlanningPending`
 
 ---
 

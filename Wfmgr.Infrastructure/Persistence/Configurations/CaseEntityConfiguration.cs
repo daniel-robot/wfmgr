@@ -23,6 +23,9 @@ public class CaseEntityConfiguration : IEntityTypeConfiguration<CaseEntity>
         builder.Property(x => x.CtWadoRsUrl).HasMaxLength(512);
         builder.Property(x => x.PvMedJobId).HasMaxLength(128);
         builder.Property(x => x.RtStructSeriesInstanceUid).HasMaxLength(128);
+        builder.Property(x => x.Notes).HasColumnType("text");
+        builder.Property(x => x.CurrentPlannerUserId).HasMaxLength(128);
+        builder.Property(x => x.CurrentReviewerUserId).HasMaxLength(128);
         builder.Property(x => x.CreatedAt).IsRequired();
         builder.Property(x => x.UpdatedAt).IsRequired();
 

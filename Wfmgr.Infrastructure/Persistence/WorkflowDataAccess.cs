@@ -26,6 +26,36 @@ public class WorkflowDataAccess : IWorkflowDataAccess
         return entity is null ? null : Map(entity);
     }
 
+    public async Task<CaseFormData?> GetCaseFormByIdAsync(Guid formId, CancellationToken ct)
+    {
+        var entity = await _dbContext.CaseForms.AsNoTracking().FirstOrDefaultAsync(x => x.FormId == formId, ct);
+        return entity is null ? null : Map(entity);
+    }
+
+    public async Task<IReadOnlyList<CaseFormData>> GetCaseFormsByCaseIdAsync(Guid caseId, CancellationToken ct)
+    {
+        var entities = await _dbContext.CaseForms
+            .AsNoTracking()
+            .Where(x => x.CaseId == caseId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.FormVersion)
+            .ToListAsync(ct);
+
+        return entities.Select(Map).ToList();
+    }
+
+    public async Task<CaseFormData?> GetLatestCaseFormByCaseAndTypeAsync(Guid caseId, string formType, CancellationToken ct)
+    {
+        var entity = await _dbContext.CaseForms
+            .AsNoTracking()
+            .Where(x => x.CaseId == caseId && x.FormType == formType)
+            .OrderByDescending(x => x.FormVersion)
+            .ThenByDescending(x => x.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+
+        return entity is null ? null : Map(entity);
+    }
+
     public async Task<IReadOnlyList<CaseData>> GetCasesAsync(CancellationToken ct)
     {
         var items = await _dbContext.Cases
@@ -48,6 +78,10 @@ public class WorkflowDataAccess : IWorkflowDataAccess
                 CtWadoRsUrl = x.CtWadoRsUrl,
                 PvMedJobId = x.PvMedJobId,
                 RtStructSeriesInstanceUid = x.RtStructSeriesInstanceUid,
+                Notes = x.Notes,
+                CurrentPlannerUserId = x.CurrentPlannerUserId,
+                CurrentReviewerUserId = x.CurrentReviewerUserId,
+                CurrentPlanVersionNo = x.CurrentPlanVersionNo,
                 CreatedAt = x.CreatedAt,
                 UpdatedAt = x.UpdatedAt
             })
@@ -67,18 +101,34 @@ public class WorkflowDataAccess : IWorkflowDataAccess
             {
                 WorkItemId = x.WorkItemId,
                 CaseId = x.CaseId,
+                SequenceNo = x.SequenceNo,
+                ParentWorkItemId = x.ParentWorkItemId,
                 Type = x.Type,
                 Status = x.Status,
+                WorkItemGroup = x.WorkItemGroup,
                 AssignedRole = x.AssignedRole,
                 AssignedUserId = x.AssignedUserId,
                 DueAt = x.DueAt,
                 SlaMinutes = x.SlaMinutes,
                 ExternalCorrelationId = x.ExternalCorrelationId,
+                ResultCode = x.ResultCode,
+                CompletedAt = x.CompletedAt,
+                CompletedBy = x.CompletedBy,
+                FormId = x.FormId,
+                RequiresDifferentUserFrom = x.RequiresDifferentUserFrom,
+                RetryCount = x.RetryCount,
+                Remarks = x.Remarks,
                 PayloadJson = x.PayloadJson,
                 CreatedAt = x.CreatedAt,
                 UpdatedAt = x.UpdatedAt
             })
             .ToList();
+    }
+
+    public async Task<WorkItemData?> GetWorkItemByIdAsync(Guid workItemId, CancellationToken ct)
+    {
+        var entity = await _dbContext.WorkItems.FirstOrDefaultAsync(x => x.WorkItemId == workItemId, ct);
+        return entity is null ? null : Map(entity);
     }
 
     public async Task<IReadOnlyList<AuditLogData>> GetAuditLogsByCaseIdAsync(Guid caseId, CancellationToken ct)
@@ -128,6 +178,117 @@ public class WorkflowDataAccess : IWorkflowDataAccess
             .ToList();
     }
 
+    public async Task<IReadOnlyList<CaseTransitionHistoryData>> GetCaseTransitionHistoryByCaseIdAsync(Guid caseId, CancellationToken ct)
+    {
+        var items = await _dbContext.CaseTransitionHistories
+            .AsNoTracking()
+            .Where(x => x.CaseId == caseId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync(ct);
+
+        return items.Select(x => new CaseTransitionHistoryData
+        {
+            TransitionId = x.TransitionId,
+            CaseId = x.CaseId,
+            FromStatus = x.FromStatus,
+            ToStatus = x.ToStatus,
+            TriggerType = x.TriggerType,
+            TriggerName = x.TriggerName,
+            TriggeredBy = x.TriggeredBy,
+            Reason = x.Reason,
+            MetadataJson = x.MetadataJson,
+            CreatedAt = x.CreatedAt
+        }).ToList();
+    }
+
+    public async Task<IReadOnlyList<CaseAttachmentData>> GetCaseAttachmentsByCaseIdAsync(Guid caseId, CancellationToken ct)
+    {
+        var items = await _dbContext.CaseAttachments
+            .AsNoTracking()
+            .Where(x => x.CaseId == caseId)
+            .OrderByDescending(x => x.UploadedAt)
+            .ToListAsync(ct);
+
+        return items.Select(x => new CaseAttachmentData
+        {
+            AttachmentId = x.AttachmentId,
+            CaseId = x.CaseId,
+            Category = x.Category,
+            FileName = x.FileName,
+            StoragePath = x.StoragePath,
+            SourceSystem = x.SourceSystem,
+            UploadedBy = x.UploadedBy,
+            UploadedAt = x.UploadedAt
+        }).ToList();
+    }
+
+    public async Task<IReadOnlyList<ExternalEventData>> GetExternalEventsByCaseIdAsync(Guid caseId, CancellationToken ct)
+    {
+        var items = await _dbContext.ExternalEvents
+            .AsNoTracking()
+            .Where(x => x.CaseId == caseId)
+            .OrderByDescending(x => x.ReceivedAt)
+            .ToListAsync(ct);
+
+        return items.Select(x => new ExternalEventData
+        {
+            EventId = x.EventId,
+            Source = x.Source,
+            Type = x.Type,
+            ExternalId = x.ExternalId,
+            CaseCorrelationKey = x.CaseCorrelationKey,
+            CaseId = x.CaseId,
+            PayloadJson = x.PayloadJson,
+            ReceivedAt = x.ReceivedAt,
+            ProcessedAt = x.ProcessedAt,
+            ProcessStatus = x.ProcessStatus,
+            Error = x.Error
+        }).ToList();
+    }
+
+    public async Task<IReadOnlyList<IntegrationReferenceData>> GetIntegrationReferencesByCaseIdAsync(Guid caseId, CancellationToken ct)
+    {
+        var items = await _dbContext.IntegrationReferences
+            .AsNoTracking()
+            .Where(x => x.CaseId == caseId)
+            .OrderByDescending(x => x.UpdatedAt)
+            .ToListAsync(ct);
+
+        return items.Select(x => new IntegrationReferenceData
+        {
+            Id = x.Id,
+            CaseId = x.CaseId,
+            SystemName = x.SystemName,
+            ExternalEntityType = x.ExternalEntityType,
+            ExternalId = x.ExternalId,
+            ExternalStatus = x.ExternalStatus,
+            MetadataJson = x.MetadataJson,
+            CreatedAt = x.CreatedAt,
+            UpdatedAt = x.UpdatedAt
+        }).ToList();
+    }
+
+    public async Task<IReadOnlyList<PlanVersionData>> GetPlanVersionsByCaseIdAsync(Guid caseId, CancellationToken ct)
+    {
+        var items = await _dbContext.PlanVersions
+            .AsNoTracking()
+            .Where(x => x.CaseId == caseId)
+            .OrderByDescending(x => x.VersionNo)
+            .ThenByDescending(x => x.CreatedAt)
+            .ToListAsync(ct);
+
+        return items.Select(x => new PlanVersionData
+        {
+            PlanVersionId = x.PlanVersionId,
+            CaseId = x.CaseId,
+            VersionNo = x.VersionNo,
+            SourceSystem = x.SourceSystem,
+            Status = x.Status,
+            SummaryJson = x.SummaryJson,
+            CreatedAt = x.CreatedAt
+        }).ToList();
+    }
+
     public Task<bool> ExternalEventExistsAsync(string source, string type, string externalId, CancellationToken ct)
     {
         return _dbContext.ExternalEvents.AnyAsync(
@@ -138,9 +299,57 @@ public class WorkflowDataAccess : IWorkflowDataAccess
     public async Task<WorkItemData?> GetOpenWorkItemAsync(Guid caseId, string type, CancellationToken ct)
     {
         var entity = await _dbContext.WorkItems
-            .FirstOrDefaultAsync(x => x.CaseId == caseId && x.Type == type && x.Status != Domain.Enums.WorkItemStatus.Done, ct);
+            .FirstOrDefaultAsync(x =>
+                x.CaseId == caseId
+                && x.Type == type
+                && x.Status != Domain.Enums.WorkItemStatus.Done
+                && x.Status != Domain.Enums.WorkItemStatus.Rejected
+                && x.Status != Domain.Enums.WorkItemStatus.Cancelled
+                && x.Status != Domain.Enums.WorkItemStatus.Skipped,
+                ct);
 
         return entity is null ? null : Map(entity);
+    }
+
+    public async Task<IReadOnlyList<WorkItemData>> GetMutableWorkItemsByCaseIdAsync(Guid caseId, CancellationToken ct)
+    {
+        var entities = await _dbContext.WorkItems
+            .Where(x => x.CaseId == caseId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync(ct);
+
+        return entities.Select(Map).ToList();
+    }
+
+    public Task<bool> WorkItemExistsAsync(Guid caseId, string type, string? requiredResultCode, CancellationToken ct)
+    {
+        var query = _dbContext.WorkItems.AsQueryable()
+            .Where(x => x.CaseId == caseId && x.Type == type);
+
+        if (!string.IsNullOrWhiteSpace(requiredResultCode))
+        {
+            query = query.Where(x => x.ResultCode == requiredResultCode);
+        }
+
+        return query.AnyAsync(ct);
+    }
+
+    public Task<bool> CaseFormExistsAsync(Guid caseId, string formType, string? requiredStatus, CancellationToken ct)
+    {
+        var query = _dbContext.CaseForms.AsQueryable()
+            .Where(x => x.CaseId == caseId && x.FormType == formType);
+
+        if (!string.IsNullOrWhiteSpace(requiredStatus))
+        {
+            query = query.Where(x => x.Status == requiredStatus);
+        }
+
+        return query.AnyAsync(ct);
+    }
+
+    public Task<bool> PlanVersionExistsAsync(Guid caseId, CancellationToken ct)
+    {
+        return _dbContext.PlanVersions.AnyAsync(x => x.CaseId == caseId, ct);
     }
 
     public async Task AddCaseAsync(CaseData item, CancellationToken ct)
@@ -159,9 +368,42 @@ public class WorkflowDataAccess : IWorkflowDataAccess
             CtWadoRsUrl = item.CtWadoRsUrl,
             PvMedJobId = item.PvMedJobId,
             RtStructSeriesInstanceUid = item.RtStructSeriesInstanceUid,
+            Notes = item.Notes,
+            CurrentPlannerUserId = item.CurrentPlannerUserId,
+            CurrentReviewerUserId = item.CurrentReviewerUserId,
+            CurrentPlanVersionNo = item.CurrentPlanVersionNo,
             CreatedAt = item.CreatedAt,
             UpdatedAt = item.UpdatedAt
         }, ct);
+    }
+
+    public async Task AddCaseFormAsync(CaseFormData item, CancellationToken ct)
+    {
+        await _dbContext.CaseForms.AddAsync(new CaseFormEntity
+        {
+            FormId = item.FormId,
+            CaseId = item.CaseId,
+            FormType = item.FormType,
+            FormVersion = item.FormVersion,
+            Status = item.Status,
+            PayloadJson = item.PayloadJson,
+            SubmittedBy = item.SubmittedBy,
+            SubmittedAt = item.SubmittedAt,
+            CreatedAt = item.CreatedAt,
+            UpdatedAt = item.UpdatedAt
+        }, ct);
+    }
+
+    public async Task UpdateCaseFormAsync(CaseFormData item, CancellationToken ct)
+    {
+        var entity = await _dbContext.CaseForms.FirstOrDefaultAsync(x => x.FormId == item.FormId, ct)
+            ?? throw new InvalidOperationException($"Case form '{item.FormId}' not found.");
+
+        entity.PayloadJson = item.PayloadJson;
+        entity.Status = item.Status;
+        entity.SubmittedBy = item.SubmittedBy;
+        entity.SubmittedAt = item.SubmittedAt;
+        entity.UpdatedAt = item.UpdatedAt;
     }
 
     public async Task AddWorkItemAsync(WorkItemData item, CancellationToken ct)
@@ -170,13 +412,23 @@ public class WorkflowDataAccess : IWorkflowDataAccess
         {
             WorkItemId = item.WorkItemId,
             CaseId = item.CaseId,
+            SequenceNo = item.SequenceNo,
+            ParentWorkItemId = item.ParentWorkItemId,
             Type = item.Type,
             Status = item.Status,
+            WorkItemGroup = item.WorkItemGroup,
             AssignedRole = item.AssignedRole,
             AssignedUserId = item.AssignedUserId,
             DueAt = item.DueAt,
             SlaMinutes = item.SlaMinutes,
             ExternalCorrelationId = item.ExternalCorrelationId,
+            ResultCode = item.ResultCode,
+            CompletedAt = item.CompletedAt,
+            CompletedBy = item.CompletedBy,
+            FormId = item.FormId,
+            RequiresDifferentUserFrom = item.RequiresDifferentUserFrom,
+            RetryCount = item.RetryCount,
+            Remarks = item.Remarks,
             PayloadJson = item.PayloadJson,
             CreatedAt = item.CreatedAt,
             UpdatedAt = item.UpdatedAt
@@ -218,6 +470,21 @@ public class WorkflowDataAccess : IWorkflowDataAccess
         }, ct);
     }
 
+    public async Task EnqueueOutboxAsync(Guid? caseId, string targetSystem, string action, string payloadJson, CancellationToken ct)
+    {
+        await AddOutboxMessageAsync(new OutboxMessageData
+        {
+            MessageId = Guid.NewGuid(),
+            CaseId = caseId,
+            TargetSystem = targetSystem,
+            Action = action,
+            PayloadJson = payloadJson,
+            Status = Domain.Enums.OutboxStatus.New,
+            RetryCount = 0,
+            CreatedAt = DateTimeOffset.UtcNow
+        }, ct);
+    }
+
     public async Task AddAuditLogAsync(AuditLogData item, CancellationToken ct)
     {
         await _dbContext.AuditLogs.AddAsync(new AuditLogEntity
@@ -232,6 +499,63 @@ public class WorkflowDataAccess : IWorkflowDataAccess
             SnapshotJson = item.SnapshotJson,
             CreatedAt = item.CreatedAt
         }, ct);
+    }
+
+    public async Task AddCaseTransitionHistoryAsync(CaseTransitionHistoryData item, CancellationToken ct)
+    {
+        await _dbContext.CaseTransitionHistories.AddAsync(new CaseTransitionHistoryEntity
+        {
+            TransitionId = item.TransitionId,
+            CaseId = item.CaseId,
+            FromStatus = item.FromStatus,
+            ToStatus = item.ToStatus,
+            TriggerType = item.TriggerType,
+            TriggerName = item.TriggerName,
+            TriggeredBy = item.TriggeredBy,
+            Reason = item.Reason,
+            MetadataJson = item.MetadataJson,
+            CreatedAt = item.CreatedAt
+        }, ct);
+    }
+
+    public async Task UpsertIntegrationReferenceAsync(
+        Guid caseId,
+        string systemName,
+        string externalEntityType,
+        string externalId,
+        string? externalStatus,
+        string? metadataJson,
+        CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var entity = await _dbContext.IntegrationReferences.FirstOrDefaultAsync(
+            x => x.CaseId == caseId
+                && x.SystemName == systemName
+                && x.ExternalEntityType == externalEntityType
+                && x.ExternalId == externalId,
+            ct);
+
+        if (entity is null)
+        {
+            await _dbContext.IntegrationReferences.AddAsync(new IntegrationReferenceEntity
+            {
+                Id = Guid.NewGuid(),
+                CaseId = caseId,
+                SystemName = systemName,
+                ExternalEntityType = externalEntityType,
+                ExternalId = externalId,
+                ExternalStatus = externalStatus,
+                MetadataJson = metadataJson,
+                CreatedAt = now,
+                UpdatedAt = now
+            }, ct);
+
+            return;
+        }
+
+        entity.ExternalStatus = externalStatus;
+        entity.MetadataJson = metadataJson;
+        entity.UpdatedAt = now;
     }
 
     public async Task SaveChangesAsync(CancellationToken ct)
@@ -265,6 +589,10 @@ public class WorkflowDataAccess : IWorkflowDataAccess
             CtWadoRsUrl = entity.CtWadoRsUrl,
             PvMedJobId = entity.PvMedJobId,
             RtStructSeriesInstanceUid = entity.RtStructSeriesInstanceUid,
+            Notes = entity.Notes,
+            CurrentPlannerUserId = entity.CurrentPlannerUserId,
+            CurrentReviewerUserId = entity.CurrentReviewerUserId,
+            CurrentPlanVersionNo = entity.CurrentPlanVersionNo,
             CreatedAt = entity.CreatedAt,
             UpdatedAt = entity.UpdatedAt
         };
@@ -284,13 +612,23 @@ public class WorkflowDataAccess : IWorkflowDataAccess
         {
             WorkItemId = entity.WorkItemId,
             CaseId = entity.CaseId,
+            SequenceNo = entity.SequenceNo,
+            ParentWorkItemId = entity.ParentWorkItemId,
             Type = entity.Type,
             Status = entity.Status,
+            WorkItemGroup = entity.WorkItemGroup,
             AssignedRole = entity.AssignedRole,
             AssignedUserId = entity.AssignedUserId,
             DueAt = entity.DueAt,
             SlaMinutes = entity.SlaMinutes,
             ExternalCorrelationId = entity.ExternalCorrelationId,
+            ResultCode = entity.ResultCode,
+            CompletedAt = entity.CompletedAt,
+            CompletedBy = entity.CompletedBy,
+            FormId = entity.FormId,
+            RequiresDifferentUserFrom = entity.RequiresDifferentUserFrom,
+            RetryCount = entity.RetryCount,
+            Remarks = entity.Remarks,
             PayloadJson = entity.PayloadJson,
             CreatedAt = entity.CreatedAt,
             UpdatedAt = entity.UpdatedAt
@@ -298,6 +636,23 @@ public class WorkflowDataAccess : IWorkflowDataAccess
 
         _trackedWorkItems[entity.WorkItemId] = mapped;
         return mapped;
+    }
+
+    private static CaseFormData Map(CaseFormEntity entity)
+    {
+        return new CaseFormData
+        {
+            FormId = entity.FormId,
+            CaseId = entity.CaseId,
+            FormType = entity.FormType,
+            FormVersion = entity.FormVersion,
+            Status = entity.Status,
+            PayloadJson = entity.PayloadJson,
+            SubmittedBy = entity.SubmittedBy,
+            SubmittedAt = entity.SubmittedAt,
+            CreatedAt = entity.CreatedAt,
+            UpdatedAt = entity.UpdatedAt
+        };
     }
 
     private async Task SyncCaseUpdatesAsync(CancellationToken ct)
@@ -320,6 +675,10 @@ public class WorkflowDataAccess : IWorkflowDataAccess
             entity.CtWadoRsUrl = tracked.CtWadoRsUrl;
             entity.PvMedJobId = tracked.PvMedJobId;
             entity.RtStructSeriesInstanceUid = tracked.RtStructSeriesInstanceUid;
+            entity.Notes = tracked.Notes;
+            entity.CurrentPlannerUserId = tracked.CurrentPlannerUserId;
+            entity.CurrentReviewerUserId = tracked.CurrentReviewerUserId;
+            entity.CurrentPlanVersionNo = tracked.CurrentPlanVersionNo;
             entity.UpdatedAt = tracked.UpdatedAt;
         }
     }
@@ -337,11 +696,22 @@ public class WorkflowDataAccess : IWorkflowDataAccess
         foreach (var entity in entities)
         {
             var tracked = _trackedWorkItems[entity.WorkItemId];
+            entity.SequenceNo = tracked.SequenceNo;
+            entity.ParentWorkItemId = tracked.ParentWorkItemId;
             entity.Status = tracked.Status;
+            entity.WorkItemGroup = tracked.WorkItemGroup;
+            entity.AssignedRole = tracked.AssignedRole;
             entity.AssignedUserId = tracked.AssignedUserId;
             entity.DueAt = tracked.DueAt;
             entity.SlaMinutes = tracked.SlaMinutes;
             entity.ExternalCorrelationId = tracked.ExternalCorrelationId;
+            entity.ResultCode = tracked.ResultCode;
+            entity.CompletedAt = tracked.CompletedAt;
+            entity.CompletedBy = tracked.CompletedBy;
+            entity.FormId = tracked.FormId;
+            entity.RequiresDifferentUserFrom = tracked.RequiresDifferentUserFrom;
+            entity.RetryCount = tracked.RetryCount;
+            entity.Remarks = tracked.Remarks;
             entity.PayloadJson = tracked.PayloadJson;
             entity.UpdatedAt = tracked.UpdatedAt;
         }

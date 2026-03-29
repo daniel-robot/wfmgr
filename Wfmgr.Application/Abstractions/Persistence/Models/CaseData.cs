@@ -16,6 +16,10 @@ public class CaseData
     public string? CtWadoRsUrl { get; set; }
     public string? PvMedJobId { get; set; }
     public string? RtStructSeriesInstanceUid { get; set; }
+    public string? Notes { get; set; }
+    public string? CurrentPlannerUserId { get; set; }
+    public string? CurrentReviewerUserId { get; set; }
+    public int? CurrentPlanVersionNo { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

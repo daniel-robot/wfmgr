@@ -1,5 +1,10 @@
 BEGIN;
 
+DROP TABLE IF EXISTS "PlanVersion" CASCADE;
+DROP TABLE IF EXISTS "IntegrationReference" CASCADE;
+DROP TABLE IF EXISTS "CaseAttachment" CASCADE;
+DROP TABLE IF EXISTS "CaseTransitionHistory" CASCADE;
+DROP TABLE IF EXISTS "CaseForm" CASCADE;
 DROP TABLE IF EXISTS "AuditLog" CASCADE;
 DROP TABLE IF EXISTS "WorkflowRule" CASCADE;
 DROP TABLE IF EXISTS "WorkflowProfile" CASCADE;
@@ -22,6 +27,10 @@ CREATE TABLE "Case"
     "CtWadoRsUrl" varchar(512) NULL,
     "PvMedJobId" varchar(128) NULL,
     "RtStructSeriesInstanceUid" varchar(128) NULL,
+    "Notes" text NULL,
+    "CurrentPlannerUserId" varchar(128) NULL,
+    "CurrentReviewerUserId" varchar(128) NULL,
+    "CurrentPlanVersionNo" integer NULL,
     "CreatedAt" timestamptz NOT NULL,
     "UpdatedAt" timestamptz NOT NULL
 );
@@ -32,25 +41,61 @@ CREATE UNIQUE INDEX "UX_Case_Hospital_Site_Department_Accession"
 CREATE INDEX "IX_Case_CurrentStatus"
     ON "Case" ("CurrentStatus");
 
+CREATE TABLE "CaseForm"
+(
+    "FormId" uuid PRIMARY KEY,
+    "CaseId" uuid NOT NULL,
+    "FormType" varchar(64) NOT NULL,
+    "FormVersion" integer NOT NULL,
+    "Status" varchar(32) NOT NULL,
+    "PayloadJson" text NOT NULL,
+    "SubmittedBy" varchar(128) NULL,
+    "SubmittedAt" timestamptz NULL,
+    "CreatedAt" timestamptz NOT NULL,
+    "UpdatedAt" timestamptz NOT NULL,
+    CONSTRAINT "FK_CaseForm_Case_CaseId" FOREIGN KEY ("CaseId") REFERENCES "Case"("CaseId") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_CaseForm_CaseId_FormType"
+    ON "CaseForm" ("CaseId", "FormType");
+
 CREATE TABLE "WorkItem"
 (
     "WorkItemId" uuid PRIMARY KEY,
     "CaseId" uuid NOT NULL,
+    "SequenceNo" integer NULL,
+    "ParentWorkItemId" uuid NULL,
     "Type" varchar(64) NOT NULL,
     "Status" integer NOT NULL,
+    "WorkItemGroup" varchar(64) NULL,
     "AssignedRole" varchar(64) NOT NULL,
     "AssignedUserId" varchar(128) NULL,
     "DueAt" timestamptz NULL,
     "SlaMinutes" integer NULL,
     "ExternalCorrelationId" varchar(128) NULL,
+    "ResultCode" varchar(64) NULL,
+    "CompletedAt" timestamptz NULL,
+    "CompletedBy" varchar(128) NULL,
+    "FormId" uuid NULL,
+    "RequiresDifferentUserFrom" uuid NULL,
+    "RetryCount" integer NOT NULL DEFAULT 0,
+    "Remarks" text NULL,
     "PayloadJson" text NULL,
     "CreatedAt" timestamptz NOT NULL,
     "UpdatedAt" timestamptz NOT NULL,
-    CONSTRAINT "FK_WorkItem_Case_CaseId" FOREIGN KEY ("CaseId") REFERENCES "Case"("CaseId") ON DELETE CASCADE
+    CONSTRAINT "FK_WorkItem_Case_CaseId" FOREIGN KEY ("CaseId") REFERENCES "Case"("CaseId") ON DELETE CASCADE,
+    CONSTRAINT "FK_WorkItem_WorkItem_ParentWorkItemId" FOREIGN KEY ("ParentWorkItemId") REFERENCES "WorkItem"("WorkItemId") ON DELETE SET NULL,
+    CONSTRAINT "FK_WorkItem_CaseForm_FormId" FOREIGN KEY ("FormId") REFERENCES "CaseForm"("FormId") ON DELETE SET NULL
 );
 
 CREATE INDEX "IX_WorkItem_CaseId"
     ON "WorkItem" ("CaseId");
+
+CREATE INDEX "IX_WorkItem_ParentWorkItemId"
+    ON "WorkItem" ("ParentWorkItemId");
+
+CREATE INDEX "IX_WorkItem_FormId"
+    ON "WorkItem" ("FormId");
 
 CREATE INDEX "IX_WorkItem_AssignedRole_Status"
     ON "WorkItem" ("AssignedRole", "Status");
@@ -149,6 +194,72 @@ CREATE TABLE "AuditLog"
 
 CREATE INDEX "IX_AuditLog_CaseId_CreatedAt"
     ON "AuditLog" ("CaseId", "CreatedAt");
+
+CREATE TABLE "CaseTransitionHistory"
+(
+    "TransitionId" uuid PRIMARY KEY,
+    "CaseId" uuid NOT NULL,
+    "FromStatus" varchar(64) NOT NULL,
+    "ToStatus" varchar(64) NOT NULL,
+    "TriggerType" varchar(64) NOT NULL,
+    "TriggerName" varchar(128) NOT NULL,
+    "TriggeredBy" varchar(128) NULL,
+    "Reason" varchar(1024) NULL,
+    "MetadataJson" text NULL,
+    "CreatedAt" timestamptz NOT NULL,
+    CONSTRAINT "FK_CaseTransitionHistory_Case_CaseId" FOREIGN KEY ("CaseId") REFERENCES "Case"("CaseId") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_CaseTransitionHistory_CaseId_CreatedAt"
+    ON "CaseTransitionHistory" ("CaseId", "CreatedAt");
+
+CREATE TABLE "CaseAttachment"
+(
+    "AttachmentId" uuid PRIMARY KEY,
+    "CaseId" uuid NOT NULL,
+    "Category" varchar(64) NOT NULL,
+    "FileName" varchar(256) NOT NULL,
+    "StoragePath" varchar(1024) NOT NULL,
+    "SourceSystem" varchar(64) NULL,
+    "UploadedBy" varchar(128) NULL,
+    "UploadedAt" timestamptz NOT NULL,
+    CONSTRAINT "FK_CaseAttachment_Case_CaseId" FOREIGN KEY ("CaseId") REFERENCES "Case"("CaseId") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_CaseAttachment_CaseId"
+    ON "CaseAttachment" ("CaseId");
+
+CREATE TABLE "IntegrationReference"
+(
+    "Id" uuid PRIMARY KEY,
+    "CaseId" uuid NOT NULL,
+    "SystemName" varchar(64) NOT NULL,
+    "ExternalEntityType" varchar(64) NOT NULL,
+    "ExternalId" varchar(128) NOT NULL,
+    "ExternalStatus" varchar(64) NULL,
+    "MetadataJson" text NULL,
+    "CreatedAt" timestamptz NOT NULL,
+    "UpdatedAt" timestamptz NOT NULL,
+    CONSTRAINT "FK_IntegrationReference_Case_CaseId" FOREIGN KEY ("CaseId") REFERENCES "Case"("CaseId") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_IntegrationReference_CaseId_SystemName"
+    ON "IntegrationReference" ("CaseId", "SystemName");
+
+CREATE TABLE "PlanVersion"
+(
+    "PlanVersionId" uuid PRIMARY KEY,
+    "CaseId" uuid NOT NULL,
+    "VersionNo" integer NOT NULL,
+    "SourceSystem" varchar(64) NOT NULL,
+    "Status" varchar(32) NOT NULL,
+    "SummaryJson" text NULL,
+    "CreatedAt" timestamptz NOT NULL,
+    CONSTRAINT "FK_PlanVersion_Case_CaseId" FOREIGN KEY ("CaseId") REFERENCES "Case"("CaseId") ON DELETE CASCADE
+);
+
+CREATE INDEX "IX_PlanVersion_CaseId_VersionNo"
+    ON "PlanVersion" ("CaseId", "VersionNo");
 
 WITH seed AS (
     SELECT

@@ -16,6 +16,10 @@ public class CaseEntity
     public string? CtWadoRsUrl { get; set; }
     public string? PvMedJobId { get; set; }
     public string? RtStructSeriesInstanceUid { get; set; }
+    public string? Notes { get; set; }
+    public string? CurrentPlannerUserId { get; set; }
+    public string? CurrentReviewerUserId { get; set; }
+    public int? CurrentPlanVersionNo { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 
@@ -23,4 +27,9 @@ public class CaseEntity
     public ICollection<ExternalEventEntity> ExternalEvents { get; set; } = new List<ExternalEventEntity>();
     public ICollection<OutboxMessageEntity> OutboxMessages { get; set; } = new List<OutboxMessageEntity>();
     public ICollection<AuditLogEntity> AuditLogs { get; set; } = new List<AuditLogEntity>();
+    public ICollection<CaseTransitionHistoryEntity> TransitionHistories { get; set; } = new List<CaseTransitionHistoryEntity>();
+    public ICollection<CaseFormEntity> Forms { get; set; } = new List<CaseFormEntity>();
+    public ICollection<CaseAttachmentEntity> Attachments { get; set; } = new List<CaseAttachmentEntity>();
+    public ICollection<IntegrationReferenceEntity> IntegrationReferences { get; set; } = new List<IntegrationReferenceEntity>();
+    public ICollection<PlanVersionEntity> PlanVersions { get; set; } = new List<PlanVersionEntity>();
 }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Wfmgr.Application.Integrations;
 using Wfmgr.Domain.Enums;
+using Wfmgr.Domain.Integrations;
 using Wfmgr.Infrastructure.Persistence;
 
 namespace Wfmgr.Api.Workers;
@@ -39,6 +40,7 @@ public class OutboxWorker : BackgroundService
         var dbContext = scope.ServiceProvider.GetRequiredService<WfmgrDbContext>();
         var pvMedClient = scope.ServiceProvider.GetRequiredService<IPvMedClient>();
         var monacoAdapter = scope.ServiceProvider.GetRequiredService<IMonacoAdapter>();
+        var msqClient = scope.ServiceProvider.GetRequiredService<IMsqClient>();
 
         var now = DateTimeOffset.UtcNow;
         var messages = await dbContext.OutboxMessages
@@ -53,18 +55,38 @@ public class OutboxWorker : BackgroundService
         {
             try
             {
-                if (message.Action == "SEND_TO_PVMED_AUTOCONTOUR")
+                if (message.Action == OutboxActions.SendImagesToContourTool || message.Action == "SEND_TO_PVMED_AUTOCONTOUR")
                 {
                     await pvMedClient.SendAutoContourAsync(message.PayloadJson, ct);
                 }
-                else if (message.Action == "SEND_TO_MONACO_IMPORT")
+                else if (message.Action == OutboxActions.SendToMonacoImport || message.Action == "SEND_TO_MONACO_IMPORT")
                 {
                     if (message.CaseId is null)
                     {
                         throw new InvalidOperationException("Outbox message CaseId is required for Monaco import.");
                     }
 
-                    await monacoAdapter.DropImportAsync(message.CaseId.Value, message.PayloadJson, ct);
+                    await monacoAdapter.SendToMonacoImportAsync(message.CaseId.Value, message.PayloadJson, ct);
+                }
+                else if (message.Action == OutboxActions.QueryContourStatus)
+                {
+                    await pvMedClient.QueryContourStatusAsync(message.PayloadJson, ct);
+                }
+                else if (message.Action == OutboxActions.GeneratePrescription)
+                {
+                    await msqClient.GeneratePrescriptionAsync(message.PayloadJson, ct);
+                }
+                else if (message.Action == OutboxActions.SyncSchedule)
+                {
+                    await msqClient.SyncScheduleAsync(message.PayloadJson, ct);
+                }
+                else if (message.Action == OutboxActions.QueryTreatmentProgress)
+                {
+                    await msqClient.QueryTreatmentProgressAsync(message.PayloadJson, ct);
+                }
+                else
+                {
+                    throw new InvalidOperationException($"Unknown outbox action '{message.Action}'.");
                 }
 
                 message.Status = OutboxStatus.Sent;

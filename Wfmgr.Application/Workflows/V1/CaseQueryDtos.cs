@@ -51,3 +51,72 @@ public sealed record AuditLogViewDto(
     string? ToStatus,
     string SnapshotJson,
     DateTimeOffset CreatedAt);
+
+public sealed record TransitionHistoryViewDto(
+    Guid TransitionId,
+    Guid CaseId,
+    string FromStatus,
+    string ToStatus,
+    string TriggerType,
+    string TriggerName,
+    string? TriggeredBy,
+    string? Reason,
+    string? MetadataJson,
+    DateTimeOffset CreatedAt);
+
+public sealed record CaseFormViewDto(
+    Guid FormId,
+    Guid CaseId,
+    string FormType,
+    int FormVersion,
+    string Status,
+    string PayloadJson,
+    string? SubmittedBy,
+    DateTimeOffset? SubmittedAt,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record CaseAttachmentViewDto(
+    Guid AttachmentId,
+    Guid CaseId,
+    string Category,
+    string FileName,
+    string StoragePath,
+    string? SourceSystem,
+    string? UploadedBy,
+    DateTimeOffset UploadedAt);
+
+public sealed record ExternalEventViewDto(
+    Guid EventId,
+    Guid? CaseId,
+    string Source,
+    string Type,
+    string ExternalId,
+    string? CaseCorrelationKey,
+    string ProcessStatus,
+    string? Error,
+    DateTimeOffset ReceivedAt,
+    DateTimeOffset? ProcessedAt,
+    string PayloadJson);
+
+public sealed record IntegrationReferenceViewDto(
+    Guid Id,
+    Guid CaseId,
+    string SystemName,
+    string ExternalEntityType,
+    string ExternalId,
+    string? ExternalStatus,
+    string? MetadataJson,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record PlanVersionViewDto(
+    Guid PlanVersionId,
+    Guid CaseId,
+    int VersionNo,
+    string SourceSystem,
+    string Status,
+    string? SummaryJson,
+    DateTimeOffset CreatedAt);
+
+public sealed record WorkflowOptionDto(string Value, string Label);

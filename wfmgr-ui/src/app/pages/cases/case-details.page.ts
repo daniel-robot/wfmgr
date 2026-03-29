@@ -2,12 +2,19 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { forkJoin, finalize } from 'rxjs';
+import { catchError, finalize, forkJoin, of, switchMap } from 'rxjs';
 import {
   AuditLogItem,
+  CaseAttachmentItem,
   CaseDetails,
+  CaseFormItem,
   CtImageStoredRequest,
+  ExternalEventItem,
+  IntegrationReferenceItem,
+  PlanVersionItem,
   PvMedEventRequest,
+  TransitionHistoryItem,
+  WorkflowOption,
   WorkItem
 } from '../../core/models/workflow.models';
 import { WorkflowApiService } from '../../core/services/workflow-api.service';
@@ -28,6 +35,14 @@ export class CaseDetailsPageComponent implements OnInit {
   details: CaseDetails | null = null;
   workItems: WorkItem[] = [];
   auditLogs: AuditLogItem[] = [];
+  transitionHistory: TransitionHistoryItem[] = [];
+  forms: CaseFormItem[] = [];
+  attachments: CaseAttachmentItem[] = [];
+  externalEvents: ExternalEventItem[] = [];
+  integrationReferences: IntegrationReferenceItem[] = [];
+  planVersions: PlanVersionItem[] = [];
+  workflowStatuses: WorkflowOption[] = [];
+  workflowWorkItemTypes: WorkflowOption[] = [];
   loading = false;
   busy = false;
   error = '';
@@ -61,6 +76,68 @@ export class CaseDetailsPageComponent implements OnInit {
     occurredAt: [new Date().toISOString(), Validators.required]
   });
 
+  readonly caseFormActionForm = this.fb.group({
+    formType: ['SimulationRecordForm', Validators.required],
+    payloadJson: ['{"source":"ui-test"}', Validators.required],
+    submittedBy: ['ui-tester', Validators.required],
+    reason: ['UI test submit']
+  });
+
+  readonly advancedActionForm = this.fb.group({
+    triggeredBy: ['ui-tester', Validators.required],
+    reason: ['Manual test action']
+  });
+
+  private readonly advancedActionGuards: Record<string, string[]> = {
+    'restart-contouring': ['ContourReworkRequired', 'ContoursRejected'],
+    'reject-contour-review': ['ContoursUnderReview'],
+    'reject-plan-review': ['PlanUnderReview'],
+    'reject-plan-rereview': ['PlanReReviewOptional'],
+    'prescription-sync-failed': ['PrescriptionGenerating'],
+    'retry-prescription-sync': ['PrescriptionSyncFailed'],
+    'resolve-prescription-sync': ['PrescriptionSyncFailed'],
+    'fail-qa': ['PlanQAInProgress'],
+    'scheduling-failed': ['SchedulingInProgress'],
+    'retry-scheduling': ['SchedulingInProgress'],
+    'pause-treatment': ['Treating'],
+    'interrupt-treatment': ['Treating'],
+    'resume-treatment': ['TreatmentPaused', 'TreatmentInterrupted'],
+    cancel: [
+      'Draft',
+      'Submitted',
+      'SimScheduled',
+      'SimInProgress',
+      'SimCompleted',
+      'ImageStored',
+      'ImageForwarding',
+      'ContouringInProgress',
+      'ContoursReady',
+      'ContoursUnderReview',
+      'ContoursRejected',
+      'ContourReworkRequired',
+      'PlanningPending',
+      'PlanningAssigned',
+      'PlanningInProgress',
+      'PlanReady',
+      'PlanUnderReview',
+      'PlanReviewed',
+      'PlanReReviewOptional',
+      'PrescriptionGenerating',
+      'PrescriptionReady',
+      'PrescriptionSyncFailed',
+      'PlanQAInProgress',
+      'PlanQAApproved',
+      'PlanQAFailed',
+      'PlanDoubleCheckOptional',
+      'ReadyForScheduling',
+      'SchedulingInProgress',
+      'Scheduled',
+      'OrderPending',
+      'OrderSubmitted',
+      'QueuePending'
+    ]
+  };
+
   ngOnInit(): void {
     this.caseId = this.route.snapshot.paramMap.get('caseId') ?? '';
     if (!this.caseId) {
@@ -78,19 +155,45 @@ export class CaseDetailsPageComponent implements OnInit {
 
     forkJoin({
       details: this.api.getCaseById(this.caseId),
-      workItems: this.api.getCaseWorkItems(this.caseId),
-      auditLogs: this.api.getCaseAuditLogs(this.caseId)
+      workItems: this.api.getCaseWorkItems(this.caseId).pipe(catchError(() => of([]))),
+      auditLogs: this.api.getCaseAuditLogs(this.caseId).pipe(catchError(() => of([]))),
+      transitionHistory: this.api.getCaseTransitionHistory(this.caseId).pipe(catchError(() => of([]))),
+      forms: this.api.getCaseForms(this.caseId).pipe(catchError(() => of([]))),
+      attachments: this.api.getCaseAttachments(this.caseId).pipe(catchError(() => of([]))),
+      externalEvents: this.api.getCaseExternalEvents(this.caseId).pipe(catchError(() => of([]))),
+      integrationReferences: this.api.getCaseIntegrationReferences(this.caseId).pipe(catchError(() => of([]))),
+      planVersions: this.api.getCasePlanVersions(this.caseId).pipe(catchError(() => of([]))),
+      workflowStatuses: this.api.getWorkflowStatuses().pipe(catchError(() => of([]))),
+      workflowWorkItemTypes: this.api.getWorkflowWorkItemTypes().pipe(catchError(() => of([])))
     })
       .pipe(finalize(() => (this.loading = false)))
       .subscribe({
-        next: ({ details, workItems, auditLogs }) => {
+        next: ({
+          details,
+          workItems,
+          auditLogs,
+          transitionHistory,
+          forms,
+          attachments,
+          externalEvents,
+          integrationReferences,
+          planVersions,
+          workflowStatuses,
+          workflowWorkItemTypes
+        }) => {
           this.details = details;
           this.workItems = workItems;
           this.auditLogs = auditLogs;
+          this.transitionHistory = transitionHistory;
+          this.forms = forms;
+          this.attachments = attachments;
+          this.externalEvents = externalEvents;
+          this.integrationReferences = integrationReferences;
+          this.planVersions = planVersions;
+          this.workflowStatuses = workflowStatuses;
+          this.workflowWorkItemTypes = workflowWorkItemTypes;
           this.infoMessage = `Refreshed at ${new Date().toLocaleTimeString()}.`;
-          if (!this.ctEventForm.value.accessionNumber) {
-            this.ctEventForm.patchValue({ accessionNumber: details.accessionNumber });
-          }
+          this.ctEventForm.patchValue({ accessionNumber: details.accessionNumber });
         },
         error: (err) => (this.error = err?.error?.message ?? 'Failed to load case details.')
       });
@@ -112,13 +215,21 @@ export class CaseDetailsPageComponent implements OnInit {
   }
 
   simulateCtImageStored(): void {
+    if (!this.isCtEventEnabled()) {
+      this.error = this.getCtEventHint();
+      return;
+    }
+
     if (this.ctEventForm.invalid) {
       this.ctEventForm.markAllAsTouched();
       return;
     }
 
+    const freshEventId = crypto.randomUUID();
+    this.ctEventForm.patchValue({ externalEventId: freshEventId });
+
     const req: CtImageStoredRequest = {
-      externalEventId: this.ctEventForm.value.externalEventId!,
+      externalEventId: freshEventId,
       accessionNumber: this.ctEventForm.value.accessionNumber!,
       dicomRef: {
         studyInstanceUid: this.ctEventForm.value.studyInstanceUid!,
@@ -132,6 +243,37 @@ export class CaseDetailsPageComponent implements OnInit {
     };
 
     this.runAction(() => this.api.simulateCtImageStored(req));
+  }
+
+  isCtEventEnabled(): boolean {
+    return this.details?.currentStatus === 'SimCompleted';
+  }
+
+  getCtEventHint(): string {
+    const status = this.details?.currentStatus;
+
+    if (!status) {
+      return 'Case status is unavailable. Refresh and try again.';
+    }
+
+    if (status === 'SimCompleted') {
+      return 'Ready: sending CT event will move the case into contouring.';
+    }
+
+    if (
+      status === 'ImageStored' ||
+      status === 'ImageForwarding' ||
+      status === 'ContouringInProgress' ||
+      status === 'ContoursReady' ||
+      status === 'ContoursUnderReview' ||
+      status === 'ContoursRejected' ||
+      status === 'ContourReworkRequired' ||
+      status === 'PlanningPending'
+    ) {
+      return `CT image event already processed for this case (current status: ${status}).`;
+    }
+
+    return `CT event can be sent only when status is SimCompleted (current status: ${status}). Submit Sim Record first.`;
   }
 
   simulatePvMedEvent(type: string): void {
@@ -172,6 +314,120 @@ export class CaseDetailsPageComponent implements OnInit {
     }
 
     this.runAction(() => this.api.forwardToMonaco(this.caseId));
+  }
+
+  createAndSubmitForm(): void {
+    if (this.caseFormActionForm.invalid || !this.caseId) {
+      this.caseFormActionForm.markAllAsTouched();
+      return;
+    }
+
+    const formType = this.caseFormActionForm.value.formType!;
+    const payloadJson = this.caseFormActionForm.value.payloadJson!;
+    const submittedBy = this.caseFormActionForm.value.submittedBy!;
+    const reason = this.caseFormActionForm.value.reason || undefined;
+
+    this.runAction(() =>
+      this.api
+        .createCaseFormDraft(this.caseId, {
+          formType,
+          payloadJson,
+          formVersion: 1
+        })
+        .pipe(
+          switchMap((draft) =>
+            this.api.submitCaseForm(this.caseId, draft.formId, {
+              payloadJson,
+              submittedBy,
+              reason
+            })
+          )
+        )
+    );
+  }
+
+  runAdvancedAction(action: string): void {
+    if (this.advancedActionForm.invalid || !this.caseId) {
+      this.advancedActionForm.markAllAsTouched();
+      return;
+    }
+
+    if (!this.isActionEnabled(action)) {
+      this.error = `Action '${action}' is not allowed for status '${this.details?.currentStatus ?? 'Unknown'}'. Allowed: ${this.getAllowedStatusesText(action)}.`;
+      return;
+    }
+
+    const request = {
+      triggeredBy: this.advancedActionForm.value.triggeredBy!,
+      reason: this.advancedActionForm.value.reason || undefined
+    };
+
+    switch (action) {
+      case 'restart-contouring':
+        this.runAction(() => this.api.restartContouring(this.caseId, request));
+        break;
+      case 'reject-contour-review':
+        this.runAction(() => this.api.rejectContourReview(this.caseId, request));
+        break;
+      case 'reject-plan-review':
+        this.runAction(() => this.api.rejectPlanReview(this.caseId, request));
+        break;
+      case 'reject-plan-rereview':
+        this.runAction(() => this.api.rejectPlanReReview(this.caseId, request));
+        break;
+      case 'prescription-sync-failed':
+        this.runAction(() => this.api.markPrescriptionSyncFailed(this.caseId, request));
+        break;
+      case 'retry-prescription-sync':
+        this.runAction(() => this.api.retryPrescriptionSync(this.caseId, request));
+        break;
+      case 'resolve-prescription-sync':
+        this.runAction(() => this.api.resolvePrescriptionSync(this.caseId, request));
+        break;
+      case 'fail-qa':
+        this.runAction(() => this.api.failQa(this.caseId, request));
+        break;
+      case 'scheduling-failed':
+        this.runAction(() => this.api.markSchedulingFailed(this.caseId, request));
+        break;
+      case 'retry-scheduling':
+        this.runAction(() => this.api.retryScheduling(this.caseId, request));
+        break;
+      case 'pause-treatment':
+        this.runAction(() => this.api.pauseTreatment(this.caseId, request));
+        break;
+      case 'interrupt-treatment':
+        this.runAction(() => this.api.interruptTreatment(this.caseId, request));
+        break;
+      case 'resume-treatment':
+        this.runAction(() => this.api.resumeTreatment(this.caseId, request));
+        break;
+      case 'cancel':
+        this.runAction(() => this.api.cancelCase(this.caseId, request));
+        break;
+      default:
+        this.error = `Unknown action '${action}'.`;
+        break;
+    }
+  }
+
+  isActionEnabled(action: string): boolean {
+    const currentStatus = this.details?.currentStatus;
+    if (!currentStatus) {
+      return false;
+    }
+
+    const allowedStatuses = this.advancedActionGuards[action];
+    if (!allowedStatuses || allowedStatuses.length === 0) {
+      return false;
+    }
+
+    return allowedStatuses.includes(currentStatus);
+  }
+
+  getAllowedStatusesText(action: string): string {
+    const allowedStatuses = this.advancedActionGuards[action] ?? [];
+    return allowedStatuses.length > 0 ? allowedStatuses.join(', ') : 'None';
   }
 
   private runAction(work: () => import('rxjs').Observable<unknown>): void {

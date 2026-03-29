@@ -14,6 +14,11 @@ public class MonacoAdapter : IMonacoAdapter
             ?? throw new InvalidOperationException("Configuration key Monaco:DropRoot is required.");
     }
 
+    public Task SendToMonacoImportAsync(Guid caseId, string payloadJson, CancellationToken ct)
+    {
+        return DropImportAsync(caseId, payloadJson, ct);
+    }
+
     public async Task DropImportAsync(Guid caseId, string payloadJson, CancellationToken ct)
     {
         var caseFolder = Path.Combine(_dropRoot, caseId.ToString("N"));

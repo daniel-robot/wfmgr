@@ -32,6 +32,7 @@
         <thead>
           <tr>
             <th>Status</th>
+            <th>Workflow Steps</th>
             <th>Accession</th>
             <th>Hospital/Site/Dept</th>
             <th>Created</th>
@@ -41,6 +42,16 @@
           @for (item of cases; track item.caseId) {
             <tr (click)="openCase(item.caseId)">
               <td><span class="status-badge" [class]="'status-badge ' + getStatusClass(item.currentStatus)">{{ item.currentStatus }}</span></td>
+              <td>
+                <ol class="workflow-steps" aria-label="Workflow progress">
+                  @for (step of workflowSteps; track step.id; let i = $index) {
+                    <li class="workflow-step" [class]="'workflow-step ' + getWorkflowStepState(item.currentStatus, i)">
+                      <span class="step-dot" aria-hidden="true"></span>
+                      <span class="step-label">{{ step.label }}</span>
+                    </li>
+                  }
+                </ol>
+              </td>
               <td>{{ item.accessionNumber }}</td>
               <td>{{ item.hospitalId }} / {{ item.siteId }} / {{ item.departmentId }}</td>
               <td>{{ item.createdAt | date: 'yyyy-MM-dd HH:mm' }}</td>

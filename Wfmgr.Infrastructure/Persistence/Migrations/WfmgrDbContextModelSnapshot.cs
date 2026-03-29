@@ -65,6 +65,48 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.ToTable("AuditLog", (string)null);
                 });
 
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.CaseAttachmentEntity", b =>
+                {
+                    b.Property<Guid>("AttachmentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("SourceSystem")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UploadedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("AttachmentId");
+
+                    b.HasIndex("CaseId");
+
+                    b.ToTable("CaseAttachment", (string)null);
+                });
+
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.CaseEntity", b =>
                 {
                     b.Property<Guid>("CaseId")
@@ -87,6 +129,17 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
+                    b.Property<int?>("CurrentPlanVersionNo")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CurrentPlannerUserId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("CurrentReviewerUserId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<int>("CurrentStatus")
                         .HasColumnType("integer");
 
@@ -99,6 +152,9 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
 
                     b.Property<string>("PatientId")
                         .HasMaxLength(64)
@@ -132,6 +188,102 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Case", (string)null);
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.CaseFormEntity", b =>
+                {
+                    b.Property<Guid>("FormId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FormType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("FormVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("FormId");
+
+                    b.HasIndex("CaseId", "FormType");
+
+                    b.ToTable("CaseForm", (string)null);
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.CaseTransitionHistoryEntity", b =>
+                {
+                    b.Property<Guid>("TransitionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FromStatus")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TriggerName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("TriggerType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TriggeredBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("TransitionId");
+
+                    b.HasIndex("CaseId", "CreatedAt");
+
+                    b.ToTable("CaseTransitionHistory", (string)null);
                 });
 
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.ExternalEventEntity", b =>
@@ -191,6 +343,50 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.ToTable("ExternalEvent", (string)null);
                 });
 
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.IntegrationReferenceEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExternalEntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ExternalStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SystemName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId", "SystemName");
+
+                    b.ToTable("IntegrationReference", (string)null);
+                });
+
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.OutboxMessageEntity", b =>
                 {
                     b.Property<Guid>("MessageId")
@@ -238,6 +434,41 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.ToTable("OutboxMessage", (string)null);
                 });
 
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.PlanVersionEntity", b =>
+                {
+                    b.Property<Guid>("PlanVersionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SourceSystem")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SummaryJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("VersionNo")
+                        .HasColumnType("integer");
+
+                    b.HasKey("PlanVersionId");
+
+                    b.HasIndex("CaseId", "VersionNo");
+
+                    b.ToTable("PlanVersion", (string)null);
+                });
+
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkItemEntity", b =>
                 {
                     b.Property<Guid>("WorkItemId")
@@ -256,6 +487,13 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CaseId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CompletedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -266,8 +504,32 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<Guid?>("FormId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ParentWorkItemId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("PayloadJson")
                         .HasColumnType("text");
+
+                    b.Property<string>("Remarks")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("RequiresDifferentUserFrom")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("RetryCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<int?>("SequenceNo")
+                        .HasColumnType("integer");
 
                     b.Property<int?>("SlaMinutes")
                         .HasColumnType("integer");
@@ -283,9 +545,17 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("WorkItemGroup")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("WorkItemId");
 
                     b.HasIndex("CaseId");
+
+                    b.HasIndex("FormId");
+
+                    b.HasIndex("ParentWorkItemId");
 
                     b.HasIndex("Status");
 
@@ -387,12 +657,56 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.Navigation("Case");
                 });
 
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.CaseAttachmentEntity", b =>
+                {
+                    b.HasOne("Wfmgr.Infrastructure.Persistence.Entities.CaseEntity", "Case")
+                        .WithMany("Attachments")
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Case");
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.CaseFormEntity", b =>
+                {
+                    b.HasOne("Wfmgr.Infrastructure.Persistence.Entities.CaseEntity", "Case")
+                        .WithMany("Forms")
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Case");
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.CaseTransitionHistoryEntity", b =>
+                {
+                    b.HasOne("Wfmgr.Infrastructure.Persistence.Entities.CaseEntity", "Case")
+                        .WithMany("TransitionHistories")
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Case");
+                });
+
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.ExternalEventEntity", b =>
                 {
                     b.HasOne("Wfmgr.Infrastructure.Persistence.Entities.CaseEntity", "Case")
                         .WithMany("ExternalEvents")
                         .HasForeignKey("CaseId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Case");
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.IntegrationReferenceEntity", b =>
+                {
+                    b.HasOne("Wfmgr.Infrastructure.Persistence.Entities.CaseEntity", "Case")
+                        .WithMany("IntegrationReferences")
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Case");
                 });
@@ -407,6 +721,17 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.Navigation("Case");
                 });
 
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.PlanVersionEntity", b =>
+                {
+                    b.HasOne("Wfmgr.Infrastructure.Persistence.Entities.CaseEntity", "Case")
+                        .WithMany("PlanVersions")
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Case");
+                });
+
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkItemEntity", b =>
                 {
                     b.HasOne("Wfmgr.Infrastructure.Persistence.Entities.CaseEntity", "Case")
@@ -415,7 +740,21 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Wfmgr.Infrastructure.Persistence.Entities.CaseFormEntity", "Form")
+                        .WithMany("WorkItems")
+                        .HasForeignKey("FormId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Wfmgr.Infrastructure.Persistence.Entities.WorkItemEntity", "ParentWorkItem")
+                        .WithMany("ChildWorkItems")
+                        .HasForeignKey("ParentWorkItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Case");
+
+                    b.Navigation("Form");
+
+                    b.Navigation("ParentWorkItem");
                 });
 
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowRuleEntity", b =>
@@ -431,13 +770,33 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.CaseEntity", b =>
                 {
+                    b.Navigation("Attachments");
+
                     b.Navigation("AuditLogs");
 
                     b.Navigation("ExternalEvents");
 
+                    b.Navigation("Forms");
+
+                    b.Navigation("IntegrationReferences");
+
                     b.Navigation("OutboxMessages");
 
+                    b.Navigation("PlanVersions");
+
+                    b.Navigation("TransitionHistories");
+
                     b.Navigation("WorkItems");
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.CaseFormEntity", b =>
+                {
+                    b.Navigation("WorkItems");
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkItemEntity", b =>
+                {
+                    b.Navigation("ChildWorkItems");
                 });
 
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowProfileEntity", b =>

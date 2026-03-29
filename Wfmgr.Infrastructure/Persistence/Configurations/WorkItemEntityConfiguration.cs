@@ -12,11 +12,17 @@ public class WorkItemEntityConfiguration : IEntityTypeConfiguration<WorkItemEnti
 
         builder.HasKey(x => x.WorkItemId);
 
+        builder.Property(x => x.SequenceNo);
+        builder.Property(x => x.WorkItemGroup).HasMaxLength(64);
         builder.Property(x => x.Type).HasMaxLength(64).IsRequired();
         builder.Property(x => x.Status).HasConversion<int>().IsRequired();
         builder.Property(x => x.AssignedRole).HasMaxLength(64).IsRequired();
         builder.Property(x => x.AssignedUserId).HasMaxLength(128);
         builder.Property(x => x.ExternalCorrelationId).HasMaxLength(128);
+        builder.Property(x => x.ResultCode).HasMaxLength(64);
+        builder.Property(x => x.CompletedBy).HasMaxLength(128);
+        builder.Property(x => x.RetryCount).HasDefaultValue(0).IsRequired();
+        builder.Property(x => x.Remarks).HasColumnType("text");
         builder.Property(x => x.PayloadJson).HasColumnType("text");
         builder.Property(x => x.CreatedAt).IsRequired();
         builder.Property(x => x.UpdatedAt).IsRequired();
@@ -29,5 +35,15 @@ public class WorkItemEntityConfiguration : IEntityTypeConfiguration<WorkItemEnti
             .WithMany(x => x.WorkItems)
             .HasForeignKey(x => x.CaseId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(x => x.ParentWorkItem)
+            .WithMany(x => x.ChildWorkItems)
+            .HasForeignKey(x => x.ParentWorkItemId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(x => x.Form)
+            .WithMany(x => x.WorkItems)
+            .HasForeignKey(x => x.FormId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
