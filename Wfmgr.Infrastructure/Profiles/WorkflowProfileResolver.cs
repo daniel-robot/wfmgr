@@ -19,26 +19,146 @@ public class WorkflowProfileResolver : IWorkflowProfileResolver
         string siteId,
         string departmentId,
         CancellationToken ct)
+        => await ResolveSlotConfigAsync(
+            hospitalId,
+            siteId,
+            departmentId,
+            WorkflowSlotCodes.S1ContouringStrategy,
+            () => new S1ContouringStrategy(),
+            ct);
+
+    public async Task<S2ContourReviewPolicy> ResolveS2ContourReviewPolicyAsync(
+        string hospitalId,
+        string siteId,
+        string departmentId,
+        CancellationToken ct)
+        => await ResolveSlotConfigAsync(
+            hospitalId,
+            siteId,
+            departmentId,
+            WorkflowSlotCodes.S2ContourReviewPolicy,
+            () => new S2ContourReviewPolicy(),
+            ct);
+
+    public async Task<S3PlanDispatchPolicy> ResolveS3PlanDispatchPolicyAsync(
+        string hospitalId,
+        string siteId,
+        string departmentId,
+        CancellationToken ct)
+        => await ResolveSlotConfigAsync(
+            hospitalId,
+            siteId,
+            departmentId,
+            WorkflowSlotCodes.S3PlanDispatch,
+            () => new S3PlanDispatchPolicy(),
+            ct);
+
+    public async Task<S4PlanReReviewPolicy> ResolveS4PlanReReviewPolicyAsync(
+        string hospitalId,
+        string siteId,
+        string departmentId,
+        CancellationToken ct)
+        => await ResolveSlotConfigAsync(
+            hospitalId,
+            siteId,
+            departmentId,
+            WorkflowSlotCodes.S4PlanReReviewPolicy,
+            () => new S4PlanReReviewPolicy(),
+            ct);
+
+    public async Task<S5PlanDoubleCheckPolicy> ResolveS5PlanDoubleCheckPolicyAsync(
+        string hospitalId,
+        string siteId,
+        string departmentId,
+        CancellationToken ct)
+        => await ResolveSlotConfigAsync(
+            hospitalId,
+            siteId,
+            departmentId,
+            WorkflowSlotCodes.S5PlanDoubleCheck,
+            () => new S5PlanDoubleCheckPolicy(),
+            ct);
+
+    public async Task<S6QueueAndCancelPolicy> ResolveS6QueueAndCancelPolicyAsync(
+        string hospitalId,
+        string siteId,
+        string departmentId,
+        CancellationToken ct)
+        => await ResolveSlotConfigAsync(
+            hospitalId,
+            siteId,
+            departmentId,
+            WorkflowSlotCodes.S6QueueAndCancelPolicy,
+            () => new S6QueueAndCancelPolicy(),
+            ct);
+
+    public async Task<S7TreatmentCompletionPolicy> ResolveS7TreatmentCompletionPolicyAsync(
+        string hospitalId,
+        string siteId,
+        string departmentId,
+        CancellationToken ct)
+        => await ResolveSlotConfigAsync(
+            hospitalId,
+            siteId,
+            departmentId,
+            WorkflowSlotCodes.S7TreatmentCompletionPolicy,
+            () => new S7TreatmentCompletionPolicy(),
+            ct);
+
+    public async Task<S8ExceptionHandlingPolicy> ResolveS8ExceptionHandlingPolicyAsync(
+        string hospitalId,
+        string siteId,
+        string departmentId,
+        CancellationToken ct)
+        => await ResolveSlotConfigAsync(
+            hospitalId,
+            siteId,
+            departmentId,
+            WorkflowSlotCodes.S8ExceptionHandlingPolicy,
+            () => new S8ExceptionHandlingPolicy(),
+            ct);
+
+    private async Task<TConfig> ResolveSlotConfigAsync<TConfig>(
+        string hospitalId,
+        string siteId,
+        string departmentId,
+        string slotCode,
+        Func<TConfig> fallbackFactory,
+        CancellationToken ct)
+        where TConfig : class
     {
         var profile = await ResolveProfileAsync(hospitalId, siteId, departmentId, ct);
         if (profile is null)
         {
-            return new S1ContouringStrategy();
+            return fallbackFactory();
         }
 
+        var now = DateTimeOffset.UtcNow;
         var rule = await _dbContext.WorkflowRules
             .AsNoTracking()
-            .Where(x => x.ProfileId == profile.ProfileId && x.SlotCode == "S1_CONTOURING_STRATEGY" && x.IsEnabled)
-            .OrderBy(x => x.Priority)
+            .Where(x =>
+                x.ProfileId == profile.ProfileId &&
+                x.SlotCode == slotCode &&
+                x.IsEnabled &&
+                (x.EffectiveFrom == null || x.EffectiveFrom <= now) &&
+                (x.EffectiveTo == null || x.EffectiveTo >= now))
+            .OrderByDescending(x => x.Priority)
             .FirstOrDefaultAsync(ct);
 
         if (rule is null || string.IsNullOrWhiteSpace(rule.ConfigJson))
         {
-            return new S1ContouringStrategy();
+            return fallbackFactory();
         }
 
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        return JsonSerializer.Deserialize<S1ContouringStrategy>(rule.ConfigJson, options) ?? new S1ContouringStrategy();
+        var config = JsonSerializer.Deserialize<TConfig>(rule.ConfigJson, options);
+        if (config is null)
+        {
+            return fallbackFactory();
+        }
+
+        var validationErrors = WorkflowSlotConfigValidator.Validate(slotCode, config);
+        return validationErrors.Count == 0 ? config : fallbackFactory();
     }
 
     private async Task<Persistence.Entities.WorkflowProfileEntity?> ResolveProfileAsync(

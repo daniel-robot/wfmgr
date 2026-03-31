@@ -262,15 +262,14 @@ CREATE INDEX "IX_PlanVersion_CaseId_VersionNo"
     ON "PlanVersion" ("CaseId", "VersionNo");
 
 WITH seed AS (
-    SELECT
-        '11111111-1111-1111-1111-111111111111'::uuid AS global_profile_id,
-        '22222222-2222-2222-2222-222222222222'::uuid AS department_profile_id,
-        '33333333-3333-3333-3333-333333333333'::uuid AS rule_id,
-        now() AS created_at
+        SELECT
+                '11111111-1111-1111-1111-111111111111'::uuid AS global_profile_id,
+                '22222222-2222-2222-2222-222222222222'::uuid AS department_profile_id,
+                now() AS created_at
 )
 INSERT INTO "WorkflowProfile"
 (
-    "ProfileId", "HospitalId", "SiteId", "DepartmentId", "Name", "Version", "IsActive", "CreatedAt"
+        "ProfileId", "HospitalId", "SiteId", "DepartmentId", "Name", "Version", "IsActive", "CreatedAt"
 )
 SELECT global_profile_id, NULL, NULL, NULL, 'Global Default Workflow', 1, true, created_at
 FROM seed
@@ -278,20 +277,429 @@ UNION ALL
 SELECT department_profile_id, 'HOSP001', 'SITE_A', 'RT', 'RT Department Workflow', 1, true, created_at
 FROM seed;
 
+WITH seed AS (
+    SELECT
+        '11111111-1111-1111-1111-111111111111'::uuid AS global_profile_id,
+        '22222222-2222-2222-2222-222222222222'::uuid AS department_profile_id,
+        now() AS created_at
+)
 INSERT INTO "WorkflowRule"
 (
-    "RuleId", "ProfileId", "SlotCode", "Priority", "ConditionJson", "ConfigJson", "IsEnabled", "EffectiveFrom", "EffectiveTo"
+        "RuleId", "ProfileId", "SlotCode", "Priority", "ConditionJson", "ConfigJson", "IsEnabled", "EffectiveFrom", "EffectiveTo"
 )
 SELECT
-    seed.rule_id,
-    seed.department_profile_id,
-    'S1_CONTOURING_STRATEGY',
-    1,
-    NULL,
-    '{"slotCode":"S1_CONTOURING_STRATEGY","mode":"AutoAssign","roles":["Dosimetrist","Physician"],"slaMinutes":240}',
-    true,
-    seed.created_at,
-    NULL
-FROM seed;
+        v."RuleId",
+        seed.department_profile_id,
+        v."SlotCode",
+        v."Priority",
+        v."ConditionJson",
+        v."ConfigJson",
+        true,
+        seed.created_at,
+        NULL
+FROM seed
+CROSS JOIN (
+        VALUES
+        (
+                '30000000-0000-0000-0000-000000000001'::uuid,
+                'S1_CONTOURING_STRATEGY',
+                1,
+                NULL,
+                $$
+                {
+                    "autoContourEnabled": true,
+                    "provider": "PvMed",
+                    "onAutoContourComplete": {
+                        "autoForwardToMonaco": true,
+                        "allowManualForward": true
+                    },
+                    "fallback": {
+                        "onFailureCreateManualWorkItem": true,
+                        "manualWorkItemType": "ManualContouring",
+                        "manualWorkItemRole": "Doctor"
+                    }
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000002'::uuid,
+                'S2_CONTOUR_REVIEW_POLICY',
+                1,
+                NULL,
+                $$
+                {
+                    "reviewMode": "Single",
+                    "allowSecondReview": false,
+                    "onReject": {
+                        "targetStatus": "ContourReworkRequired",
+                        "createReworkWorkItem": true,
+                        "reworkWorkItemRole": "Doctor"
+                    },
+                    "timeoutHours": 24
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000003'::uuid,
+                'S3_PLAN_DISPATCH',
+                1,
+                NULL,
+                $$
+                {
+                    "dispatchMode": "AutoAssignByRole",
+                    "targetRole": "Dosimetrist",
+                    "allowManualClaim": true,
+                    "slaMinutes": 240,
+                    "escalation": {
+                        "enabled": true,
+                        "afterMinutes": 180,
+                        "escalateToRole": "ChiefDoctor"
+                    }
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000004'::uuid,
+                'S4_PLAN_REREVIEW_POLICY',
+                1,
+                NULL,
+                $$
+                {
+                    "enabled": true,
+                    "trigger": {
+                        "riskLevelIn": ["High"],
+                        "doseDeltaPercentGte": 5
+                    },
+                    "reviewRole": "SeniorPhysicist",
+                    "onRejectBackTo": "PlanningInProgress"
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000005'::uuid,
+                'S5_PLAN_DOUBLE_CHECK',
+                1,
+                NULL,
+                $$
+                {
+                    "enabled": true,
+                    "workItemRole": "QAReviewer",
+                    "requiresDifferentUserFrom": "PlanQA",
+                    "onFailBackTo": "PlanQAInProgress",
+                    "maxRetry": 1
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000006'::uuid,
+                'S6_QUEUE_AND_CANCEL_POLICY',
+                1,
+                NULL,
+                $$
+                {
+                    "queueMode": "MsqDriven",
+                    "allowCancel": true,
+                    "cancelAllowedBeforeStatus": "Treating",
+                    "requireCancelReason": true,
+                    "onCancel": {
+                        "closeOpenWorkItems": true,
+                        "createAudit": true,
+                        "finalStatus": "Cancelled"
+                    }
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000007'::uuid,
+                'S7_TREATMENT_COMPLETION_POLICY',
+                1,
+                NULL,
+                $$
+                {
+                    "mode": "ByCourseCompletedEvent",
+                    "requiredFractions": 30,
+                    "acceptCourseCompletedEvent": true,
+                    "allowManualCompletion": false,
+                    "onMismatch": {
+                        "createExceptionWorkItem": true,
+                        "exceptionRole": "Therapist"
+                    }
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000008'::uuid,
+                'S8_EXCEPTION_HANDLING_POLICY',
+                1,
+                NULL,
+                $$
+                {
+                    "retry": {
+                        "enabled": true,
+                        "maxAttempts": 5,
+                        "backoff": "Exponential",
+                        "baseSeconds": 30
+                    },
+                    "manualFallback": {
+                        "enabled": true,
+                        "workItemType": "TreatmentExceptionHandling",
+                        "workItemRole": "Admin"
+                    },
+                    "notify": {
+                        "enabled": true,
+                        "channels": ["InApp", "Email"]
+                    }
+                }
+                $$
+        )
+) AS v("RuleId", "SlotCode", "Priority", "ConditionJson", "ConfigJson");
+
+WITH seed AS (
+    SELECT
+        '11111111-1111-1111-1111-111111111111'::uuid AS global_profile_id,
+        '22222222-2222-2222-2222-222222222222'::uuid AS department_profile_id,
+        now() AS created_at
+)
+INSERT INTO "WorkflowRule"
+(
+        "RuleId", "ProfileId", "SlotCode", "Priority", "ConditionJson", "ConfigJson", "IsEnabled", "EffectiveFrom", "EffectiveTo"
+)
+SELECT
+        v."RuleId",
+        seed.global_profile_id,
+        v."SlotCode",
+        v."Priority",
+        v."ConditionJson",
+        v."ConfigJson",
+        true,
+        seed.created_at,
+        NULL
+FROM seed
+CROSS JOIN (
+        VALUES
+        (
+                '30000000-0000-0000-0000-000000000101'::uuid,
+                'S1_CONTOURING_STRATEGY',
+                1,
+                NULL,
+                $$
+                {
+                    "autoContourEnabled": false,
+                    "provider": "PvMed",
+                    "onAutoContourComplete": {
+                        "autoForwardToMonaco": false,
+                        "allowManualForward": true
+                    },
+                    "fallback": {
+                        "onFailureCreateManualWorkItem": true,
+                        "manualWorkItemType": "ManualContouring",
+                        "manualWorkItemRole": "Doctor"
+                    }
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000102'::uuid,
+                'S2_CONTOUR_REVIEW_POLICY',
+                1,
+                NULL,
+                $$
+                {
+                    "reviewMode": "Single",
+                    "allowSecondReview": false,
+                    "onReject": {
+                        "targetStatus": "ContourReworkRequired",
+                        "createReworkWorkItem": true,
+                        "reworkWorkItemRole": "Doctor"
+                    },
+                    "timeoutHours": 24
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000103'::uuid,
+                'S3_PLAN_DISPATCH',
+                1,
+                NULL,
+                $$
+                {
+                    "dispatchMode": "AutoAssignByRole",
+                    "targetRole": "Dosimetrist",
+                    "allowManualClaim": true,
+                    "slaMinutes": 240,
+                    "escalation": {
+                        "enabled": false,
+                        "afterMinutes": 180,
+                        "escalateToRole": "ChiefDoctor"
+                    }
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000104'::uuid,
+                'S4_PLAN_REREVIEW_POLICY',
+                1,
+                NULL,
+                $$
+                {
+                    "enabled": false,
+                    "trigger": {
+                        "riskLevelIn": [],
+                        "doseDeltaPercentGte": null
+                    },
+                    "reviewRole": "SeniorPhysicist",
+                    "onRejectBackTo": "PlanningInProgress"
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000105'::uuid,
+                'S5_PLAN_DOUBLE_CHECK',
+                1,
+                NULL,
+                $$
+                {
+                    "enabled": false,
+                    "workItemRole": "QAReviewer",
+                    "requiresDifferentUserFrom": "PlanQA",
+                    "onFailBackTo": "PlanQAInProgress",
+                    "maxRetry": 1
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000106'::uuid,
+                'S6_QUEUE_AND_CANCEL_POLICY',
+                1,
+                NULL,
+                $$
+                {
+                    "queueMode": "MsqDriven",
+                    "allowCancel": true,
+                    "cancelAllowedBeforeStatus": "Treating",
+                    "requireCancelReason": true,
+                    "onCancel": {
+                        "closeOpenWorkItems": true,
+                        "createAudit": true,
+                        "finalStatus": "Cancelled"
+                    }
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000107'::uuid,
+                'S7_TREATMENT_COMPLETION_POLICY',
+                1,
+                NULL,
+                $$
+                {
+                    "mode": "ByCourseCompletedEvent",
+                    "requiredFractions": 30,
+                    "acceptCourseCompletedEvent": true,
+                    "allowManualCompletion": false,
+                    "onMismatch": {
+                        "createExceptionWorkItem": true,
+                        "exceptionRole": "Therapist"
+                    }
+                }
+                $$
+        ),
+        (
+                '30000000-0000-0000-0000-000000000108'::uuid,
+                'S8_EXCEPTION_HANDLING_POLICY',
+                1,
+                NULL,
+                $$
+                {
+                    "retry": {
+                        "enabled": true,
+                        "maxAttempts": 5,
+                        "backoff": "Exponential",
+                        "baseSeconds": 30
+                    },
+                    "manualFallback": {
+                        "enabled": true,
+                        "workItemType": "TreatmentExceptionHandling",
+                        "workItemRole": "Admin"
+                    },
+                    "notify": {
+                        "enabled": false,
+                        "channels": ["InApp"]
+                    }
+                }
+                $$
+        )
+) AS v("RuleId", "SlotCode", "Priority", "ConditionJson", "ConfigJson");
+
+DO $$
+DECLARE
+    missing_count integer;
+    missing_details text;
+BEGIN
+    SELECT COUNT(*)
+    INTO missing_count
+    FROM (
+        SELECT
+            p."ProfileId",
+            s."SlotCode"
+        FROM "WorkflowProfile" p
+        CROSS JOIN (
+            VALUES
+                ('S1_CONTOURING_STRATEGY'),
+                ('S2_CONTOUR_REVIEW_POLICY'),
+                ('S3_PLAN_DISPATCH'),
+                ('S4_PLAN_REREVIEW_POLICY'),
+                ('S5_PLAN_DOUBLE_CHECK'),
+                ('S6_QUEUE_AND_CANCEL_POLICY'),
+                ('S7_TREATMENT_COMPLETION_POLICY'),
+                ('S8_EXCEPTION_HANDLING_POLICY')
+        ) AS s("SlotCode")
+        LEFT JOIN "WorkflowRule" r
+            ON r."ProfileId" = p."ProfileId"
+           AND r."SlotCode" = s."SlotCode"
+           AND r."IsEnabled" = true
+        WHERE p."ProfileId" IN (
+            '11111111-1111-1111-1111-111111111111'::uuid,
+            '22222222-2222-2222-2222-222222222222'::uuid
+        )
+          AND r."RuleId" IS NULL
+    ) missing;
+
+    SELECT string_agg(
+        '(' || missing."ProfileId"::text || ', ' || missing."SlotCode" || ')',
+        ', '
+        ORDER BY missing."ProfileId", missing."SlotCode")
+    INTO missing_details
+    FROM (
+        SELECT
+            p."ProfileId",
+            s."SlotCode"
+        FROM "WorkflowProfile" p
+        CROSS JOIN (
+            VALUES
+                ('S1_CONTOURING_STRATEGY'),
+                ('S2_CONTOUR_REVIEW_POLICY'),
+                ('S3_PLAN_DISPATCH'),
+                ('S4_PLAN_REREVIEW_POLICY'),
+                ('S5_PLAN_DOUBLE_CHECK'),
+                ('S6_QUEUE_AND_CANCEL_POLICY'),
+                ('S7_TREATMENT_COMPLETION_POLICY'),
+                ('S8_EXCEPTION_HANDLING_POLICY')
+        ) AS s("SlotCode")
+        LEFT JOIN "WorkflowRule" r
+            ON r."ProfileId" = p."ProfileId"
+           AND r."SlotCode" = s."SlotCode"
+           AND r."IsEnabled" = true
+        WHERE p."ProfileId" IN (
+            '11111111-1111-1111-1111-111111111111'::uuid,
+            '22222222-2222-2222-2222-222222222222'::uuid
+        )
+          AND r."RuleId" IS NULL
+    ) missing;
+
+    IF missing_count > 0 THEN
+        RAISE EXCEPTION 'Workflow seed validation failed: % required slot rules are missing. Missing pairs: %', missing_count, COALESCE(missing_details, '<none>');
+    END IF;
+END $$;
 
 COMMIT;

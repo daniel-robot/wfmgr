@@ -47,7 +47,8 @@ export class WorkflowApiService {
   }
 
   forwardToMonaco(caseId: string): Observable<void> {
-    return this.http.post<void>(`${this.baseUrl}/api/cases/${caseId}/forward/monaco`, {});
+    const normalizedCaseId = this.normalizeCaseId(caseId);
+    return this.http.post<void>(`${this.baseUrl}/api/cases/${normalizedCaseId}/forward/monaco`, {});
   }
 
   simulateCtImageStored(request: CtImageStoredRequest): Observable<void> {
@@ -172,6 +173,15 @@ export class WorkflowApiService {
 
   private postCaseAction(caseId: string, action: string, request: WorkflowActionRequest): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/api/cases/${caseId}/actions/${action}`, request);
+  }
+
+  private normalizeCaseId(caseId: string): string {
+    const trimmed = (caseId ?? '').trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}') && trimmed.length > 2) {
+      return trimmed.slice(1, -1).trim();
+    }
+
+    return trimmed;
   }
 
   private extractArray(value: unknown): Record<string, unknown>[] {

@@ -19,17 +19,20 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
     private readonly ICaseWorkflowService _workflowService;
     private readonly ICaseStateMachineService _stateMachineService;
     private readonly IWorkItemLifecycleService _workItemLifecycleService;
+    private readonly IWorkflowProfileResolver _profileResolver;
 
     public ExternalEventDispatcher(
         IWorkflowDataAccess dataAccess,
         ICaseWorkflowService workflowService,
         ICaseStateMachineService stateMachineService,
-        IWorkItemLifecycleService workItemLifecycleService)
+        IWorkItemLifecycleService workItemLifecycleService,
+        IWorkflowProfileResolver profileResolver)
     {
         _dataAccess = dataAccess;
         _workflowService = workflowService;
         _stateMachineService = stateMachineService;
         _workItemLifecycleService = workItemLifecycleService;
+        _profileResolver = profileResolver;
     }
 
     public async Task DispatchAsync(ExternalIntegrationEventRequest request, CancellationToken ct)
@@ -261,20 +264,12 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
 
             case ExternalIntegrationEventTypes.TreatmentFractionCompleted:
                 await EnsureCaseAsync(caseData, request.Type);
+                await TryCompleteTreatmentByPolicyAsync(caseData!, request, isCourseCompletedEvent: false, ct);
                 break;
 
             case ExternalIntegrationEventTypes.TreatmentCourseCompleted:
                 await EnsureCaseAsync(caseData, request.Type);
-                if (caseData!.CurrentStatus == CaseStatus.Treating)
-                {
-                    await _stateMachineService.ApplyTransitionAsync(caseData, CaseStatus.TreatmentCompleted, new TransitionExecutionContext
-                    {
-                        TriggerName = "CompleteTreatment",
-                        TriggerType = WorkflowTriggerType.ExternalEvent,
-                        TriggeredBy = "MSQ",
-                        Metadata = request
-                    }, ct);
-                }
+                await TryCompleteTreatmentByPolicyAsync(caseData!, request, isCourseCompletedEvent: true, ct);
                 break;
 
             case ExternalIntegrationEventTypes.TreatmentInterrupted:
@@ -333,6 +328,109 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
                     }
                 },
             OccurredAt = request.OccurredAt
+        }, ct);
+    }
+
+    private async Task TryCompleteTreatmentByPolicyAsync(
+        CaseData caseData,
+        ExternalIntegrationEventRequest request,
+        bool isCourseCompletedEvent,
+        CancellationToken ct)
+    {
+        if (caseData.CurrentStatus != CaseStatus.Treating)
+        {
+            return;
+        }
+
+        var policy = await _profileResolver.ResolveS7TreatmentCompletionPolicyAsync(
+            caseData.HospitalId,
+            caseData.SiteId,
+            caseData.DepartmentId,
+            ct);
+
+        if (string.Equals(policy.Mode, "ByCourseCompletedEvent", StringComparison.OrdinalIgnoreCase))
+        {
+            if (isCourseCompletedEvent && policy.AcceptCourseCompletedEvent)
+            {
+                await CompleteTreatmentAsync(caseData, request, ct);
+                return;
+            }
+
+            if (isCourseCompletedEvent && !policy.AcceptCourseCompletedEvent)
+            {
+                await CreateTreatmentMismatchWorkItemAsync(caseData, policy, request, ct);
+            }
+
+            return;
+        }
+
+        if (string.Equals(policy.Mode, "ByFractions", StringComparison.OrdinalIgnoreCase))
+        {
+            var requiredFractions = policy.RequiredFractions.GetValueOrDefault();
+            if (requiredFractions <= 0)
+            {
+                return;
+            }
+
+            var history = await _dataAccess.GetExternalEventsByCaseIdAsync(caseData.CaseId, ct);
+            var completedFractions = history.Count(x => string.Equals(x.Type, ExternalIntegrationEventTypes.TreatmentFractionCompleted, StringComparison.OrdinalIgnoreCase));
+            var effectiveFractions = completedFractions + (isCourseCompletedEvent ? 0 : 1);
+
+            if (effectiveFractions >= requiredFractions)
+            {
+                await CompleteTreatmentAsync(caseData, request, ct);
+                return;
+            }
+
+            if (isCourseCompletedEvent)
+            {
+                await CreateTreatmentMismatchWorkItemAsync(caseData, policy, request, ct);
+            }
+        }
+    }
+
+    private async Task CompleteTreatmentAsync(CaseData caseData, ExternalIntegrationEventRequest request, CancellationToken ct)
+    {
+        await _stateMachineService.ApplyTransitionAsync(caseData, CaseStatus.TreatmentCompleted, new TransitionExecutionContext
+        {
+            TriggerName = "CompleteTreatment",
+            TriggerType = WorkflowTriggerType.ExternalEvent,
+            TriggeredBy = request.Source,
+            Metadata = request
+        }, ct);
+    }
+
+    private async Task CreateTreatmentMismatchWorkItemAsync(
+        CaseData caseData,
+        S7TreatmentCompletionPolicy policy,
+        ExternalIntegrationEventRequest request,
+        CancellationToken ct)
+    {
+        if (!policy.OnMismatch.CreateExceptionWorkItem)
+        {
+            return;
+        }
+
+        var openItem = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.TreatmentExceptionHandling, ct);
+        if (openItem is not null)
+        {
+            return;
+        }
+
+        await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
+        {
+            CaseId = caseData.CaseId,
+            Type = WorkItemTypes.TreatmentExceptionHandling,
+            AssignedRole = policy.OnMismatch.ExceptionRole,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                request.Type,
+                request.ExternalId,
+                policy.Mode,
+                policy.RequiredFractions,
+                reason = "Treatment completion policy mismatch"
+            }),
+            CreatedAtUtc = DateTimeOffset.UtcNow
         }, ct);
     }
 

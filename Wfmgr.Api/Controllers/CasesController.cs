@@ -109,7 +109,7 @@ public class CasesController : ControllerBase
         return NoContent();
     }
 
-    [HttpPost("{caseId:guid}/forward/monaco")]
+    [HttpPost("{caseId}/forward/monaco")]
     public async Task<IActionResult> ForwardToMonaco(Guid caseId, CancellationToken ct)
     {
         await _workflowService.ForwardToMonacoAsync(caseId, ct);

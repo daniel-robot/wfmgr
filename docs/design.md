@@ -407,6 +407,290 @@ WorkflowProfile 按三层解析：
 }
 ```
 
+### 7.6 配置如何生效（执行语义）
+
+在系统运行时，每次到达关键节点会按以下步骤解析并执行插槽配置：
+
+1. 通过 `WorkflowProfileResolver` 按层级选中当前 Profile（Department -> Site -> Hospital -> Global）。
+2. 在该 Profile 下按 `SlotCode` 找到启用的 `WorkflowRule`。
+3. 若存在多条命中规则，按 `Priority` 从高到低取第一条；并校验 `EffectiveFrom/EffectiveTo`。
+4. 将 `ConfigJson` 反序列化为对应插槽 DTO，执行字段级校验。
+5. 由工作流服务在对应节点执行策略（创建 WorkItem、推进状态、发送 Outbox、记录审计）。
+
+建议约束：
+
+* 每个 Slot 在同一 Profile 同一条件下仅允许 1 条有效规则，避免歧义。
+* 所有 Slot 必须有全局默认规则，避免因未配置阻塞主流程。
+* `ConfigJson` 变更应版本化并写审计。
+
+### 7.7 八个插槽配置模板（建议起步版）
+
+以下模板是“可直接落库到 `WorkflowRule.ConfigJson`”的起步配置。
+
+#### S1_CONTOURING_STRATEGY（勾画策略）
+
+触发时机：病例进入图像就绪后，决定自动勾画、完成后推进与失败兜底。
+
+```json
+{
+  "autoContourEnabled": true,
+  "provider": "PvMed",
+  "onAutoContourComplete": {
+    "autoForwardToMonaco": true,
+    "allowManualForward": true
+  },
+  "fallback": {
+    "onFailureCreateManualWorkItem": true,
+    "manualWorkItemType": "ManualContouring",
+    "manualWorkItemRole": "Doctor"
+  }
+}
+```
+
+#### S2_CONTOUR_REVIEW_POLICY（勾画审核策略）
+
+触发时机：`ContoursReady` 后创建审核任务，控制单审/复审与驳回回退。
+
+```json
+{
+  "reviewMode": "Single",
+  "allowSecondReview": false,
+  "onReject": {
+    "targetStatus": "ContourReworkRequired",
+    "createReworkWorkItem": true,
+    "reworkWorkItemRole": "Doctor"
+  },
+  "timeoutHours": 24
+}
+```
+
+#### S3_PLAN_DISPATCH（计划派发策略）
+
+触发时机：`PlanningPending`，决定自动分配还是人工领取。
+
+```json
+{
+  "dispatchMode": "AutoAssignByRole",
+  "targetRole": "Dosimetrist",
+  "allowManualClaim": true,
+  "slaMinutes": 240,
+  "escalation": {
+    "enabled": true,
+    "afterMinutes": 180,
+    "escalateToRole": "ChiefDoctor"
+  }
+}
+```
+
+#### S4_PLAN_REREVIEW_POLICY（计划复审策略）
+
+触发时机：`PlanReviewed` 后判断是否进入复审。
+
+```json
+{
+  "enabled": true,
+  "trigger": {
+    "riskLevelIn": ["High"],
+    "doseDeltaPercentGte": 5
+  },
+  "reviewRole": "SeniorPhysicist",
+  "onRejectBackTo": "PlanningInProgress"
+}
+```
+
+#### S5_PLAN_DOUBLE_CHECK（双重复核策略）
+
+触发时机：QA 通过后，决定是否增加双重复核任务。
+
+```json
+{
+  "enabled": true,
+  "workItemRole": "QAReviewer",
+  "requiresDifferentUserFrom": "PlanQA",
+  "onFailBackTo": "PlanQAInProgress",
+  "maxRetry": 1
+}
+```
+
+#### S6_QUEUE_AND_CANCEL_POLICY（排队与取消策略）
+
+触发时机：进入排队、叫号、取消时，控制可取消边界与取消后动作。
+
+```json
+{
+  "queueMode": "MsqDriven",
+  "allowCancel": true,
+  "cancelAllowedBeforeStatus": "Treating",
+  "requireCancelReason": true,
+  "onCancel": {
+    "closeOpenWorkItems": true,
+    "createAudit": true,
+    "finalStatus": "Cancelled"
+  }
+}
+```
+
+#### S7_TREATMENT_COMPLETION_POLICY（治疗完成判定策略）
+
+触发时机：接收治疗分次/疗程事件后，判断是否可进入 `TreatmentCompleted`。
+
+```json
+{
+  "mode": "ByCourseCompletedEvent",
+  "requiredFractions": 30,
+  "acceptCourseCompletedEvent": true,
+  "allowManualCompletion": false,
+  "onMismatch": {
+    "createExceptionWorkItem": true,
+    "exceptionRole": "Therapist"
+  }
+}
+```
+
+#### S8_EXCEPTION_HANDLING_POLICY（异常处理策略）
+
+触发时机：外部调用失败、集成回调异常、状态推进失败等异常场景。
+
+```json
+{
+  "retry": {
+    "enabled": true,
+    "maxAttempts": 5,
+    "backoff": "Exponential",
+    "baseSeconds": 30
+  },
+  "manualFallback": {
+    "enabled": true,
+    "workItemType": "TreatmentExceptionHandling",
+    "workItemRole": "Admin"
+  },
+  "notify": {
+    "enabled": true,
+    "channels": ["InApp", "Email"]
+  }
+}
+```
+
+### 7.8 与状态机/任务/集成的映射建议
+
+* 状态机：插槽只决定“能否迁移、迁移到哪里、是否补充人工节点”，不直接绕过门禁规则。
+* WorkItem：凡是人工介入、失败补救、超时升级都应显式创建/关闭 WorkItem，并写 `ResultCode`。
+* Outbox/Inbox：插槽决定是否发送对外动作，但发送与回调仍必须经过 Outbox/Inbox 保障可靠性。
+* 审计：每次命中规则时记录 `SlotCode`、`RuleId`、`ConfigJson` 摘要、执行结果。
+
+### 7.9 默认值策略（建议）
+
+* 默认优先“可继续推进但可审计”：尽量避免因未配置导致流程硬阻塞。
+* 所有 `enabled` 字段缺省为 `false`，关键布尔项在 DTO 层显式赋默认。
+* 枚举字段（如 `dispatchMode`）必须做白名单校验，非法值回退到全局默认规则。
+* 任意配置解析失败时：写审计 + 进入异常插槽 S8 的处理路径。
+
+### 7.10 插槽字段字典（S1-S8）
+
+以下字段字典用于约束 `WorkflowRule.ConfigJson`，建议与后端 DTO 和校验器保持一致。
+
+#### S1_CONTOURING_STRATEGY
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| autoContourEnabled | bool | 是 | false | 是否启用自动勾画 |
+| provider | string(enum) | 否 | PvMed | 自动勾画供应方，建议枚举：PvMed/ThirdParty |
+| onAutoContourComplete | object | 否 | {} | 自动勾画完成后的推进策略 |
+| onAutoContourComplete.autoForwardToMonaco | bool | 否 | false | 完成后是否自动推进到 Monaco |
+| onAutoContourComplete.allowManualForward | bool | 否 | true | 是否允许人工手动推进 |
+| fallback | object | 否 | {} | 失败兜底策略 |
+| fallback.onFailureCreateManualWorkItem | bool | 否 | true | 自动勾画失败是否创建人工任务 |
+| fallback.manualWorkItemType | string(enum) | 否 | ManualContouring | 人工兜底任务类型 |
+| fallback.manualWorkItemRole | string(enum) | 否 | Doctor | 人工兜底任务角色 |
+
+#### S2_CONTOUR_REVIEW_POLICY
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| reviewMode | string(enum) | 是 | Single | 审核模式：Single/Double |
+| allowSecondReview | bool | 否 | false | 是否允许二次审核 |
+| onReject | object | 否 | {} | 驳回回退策略 |
+| onReject.targetStatus | string(enum) | 否 | ContourReworkRequired | 驳回后的目标状态 |
+| onReject.createReworkWorkItem | bool | 否 | true | 驳回后是否创建返工任务 |
+| onReject.reworkWorkItemRole | string(enum) | 否 | Doctor | 返工任务角色 |
+| timeoutHours | int | 否 | 24 | 审核超时小时数 |
+
+#### S3_PLAN_DISPATCH
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| dispatchMode | string(enum) | 是 | AutoAssignByRole | 派发模式：AutoAssignByRole/ManualClaimOnly |
+| targetRole | string(enum) | 否 | Dosimetrist | 自动派发目标角色 |
+| allowManualClaim | bool | 否 | true | 是否允许人工领取 |
+| slaMinutes | int | 否 | 240 | 任务 SLA（分钟） |
+| escalation | object | 否 | {} | 超时升级策略 |
+| escalation.enabled | bool | 否 | false | 是否启用升级 |
+| escalation.afterMinutes | int | 否 | 180 | 多久后触发升级 |
+| escalation.escalateToRole | string(enum) | 否 | ChiefDoctor | 升级目标角色 |
+
+#### S4_PLAN_REREVIEW_POLICY
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| enabled | bool | 是 | false | 是否启用计划复审 |
+| trigger | object | 否 | {} | 触发条件 |
+| trigger.riskLevelIn | string[] | 否 | [] | 指定风险等级集合时触发 |
+| trigger.doseDeltaPercentGte | number | 否 | null | 剂量偏差大于等于阈值时触发 |
+| reviewRole | string(enum) | 否 | SeniorPhysicist | 复审角色 |
+| onRejectBackTo | string(enum) | 否 | PlanningInProgress | 复审驳回后回退状态 |
+
+#### S5_PLAN_DOUBLE_CHECK
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| enabled | bool | 是 | false | 是否启用双重复核 |
+| workItemRole | string(enum) | 否 | QAReviewer | 复核任务角色 |
+| requiresDifferentUserFrom | string(enum) | 否 | PlanQA | 要求与哪个任务的处理人不同 |
+| onFailBackTo | string(enum) | 否 | PlanQAInProgress | 复核失败后回退状态 |
+| maxRetry | int | 否 | 1 | 最大重试次数 |
+
+#### S6_QUEUE_AND_CANCEL_POLICY
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| queueMode | string(enum) | 是 | MsqDriven | 排队模式：MsqDriven/ManualQueue |
+| allowCancel | bool | 否 | true | 是否允许取消 |
+| cancelAllowedBeforeStatus | string(enum) | 否 | Treating | 仅允许在该状态之前取消 |
+| requireCancelReason | bool | 否 | true | 取消是否必须填写原因 |
+| onCancel | object | 否 | {} | 取消后处理策略 |
+| onCancel.closeOpenWorkItems | bool | 否 | true | 是否关闭未完成任务 |
+| onCancel.createAudit | bool | 否 | true | 是否强制写取消审计 |
+| onCancel.finalStatus | string(enum) | 否 | Cancelled | 取消后的最终状态 |
+
+#### S7_TREATMENT_COMPLETION_POLICY
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| mode | string(enum) | 是 | ByCourseCompletedEvent | 完成判定模式：ByFractions/ByCourseCompletedEvent |
+| requiredFractions | int | 否 | null | 按分次判定时的总分次数 |
+| acceptCourseCompletedEvent | bool | 否 | true | 是否接受疗程完成事件作为完成依据 |
+| allowManualCompletion | bool | 否 | false | 是否允许人工强制完成 |
+| onMismatch | object | 否 | {} | 判定不一致时处理策略 |
+| onMismatch.createExceptionWorkItem | bool | 否 | true | 是否创建异常任务 |
+| onMismatch.exceptionRole | string(enum) | 否 | Therapist | 异常任务角色 |
+
+#### S8_EXCEPTION_HANDLING_POLICY
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| retry | object | 否 | {} | 重试策略 |
+| retry.enabled | bool | 否 | true | 是否启用自动重试 |
+| retry.maxAttempts | int | 否 | 5 | 最大重试次数 |
+| retry.backoff | string(enum) | 否 | Exponential | 退避策略：Fixed/Exponential |
+| retry.baseSeconds | int | 否 | 30 | 重试基准间隔（秒） |
+| manualFallback | object | 否 | {} | 人工兜底策略 |
+| manualFallback.enabled | bool | 否 | true | 是否启用人工兜底 |
+| manualFallback.workItemType | string(enum) | 否 | TreatmentExceptionHandling | 异常任务类型 |
+| manualFallback.workItemRole | string(enum) | 否 | Admin | 异常任务角色 |
+| notify | object | 否 | {} | 通知策略 |
+| notify.enabled | bool | 否 | false | 是否启用通知 |
+| notify.channels | string[] | 否 | [] | 通知渠道：InApp/Email/SMS |
+
 ---
 
 ## 8. 表单体系设计

@@ -5,6 +5,7 @@ using Wfmgr.Application.Workflows.V1.Dtos;
 using Wfmgr.Application.Workflows.V1.StateMachine;
 using Wfmgr.Application.Workflows.V1.WorkItems;
 using Wfmgr.Domain.Enums;
+using Wfmgr.Domain.Forms;
 using Wfmgr.Domain.Integrations;
 using Wfmgr.Domain.WorkItems;
 
@@ -199,13 +200,15 @@ public class CaseWorkflowService : ICaseWorkflowService
             caseData.DepartmentId,
             ct);
 
+        var contourProvider = string.IsNullOrWhiteSpace(strategy.Provider) ? "PvMed" : strategy.Provider;
+
         if (strategy.AutoContourEnabled)
         {
             await _dataAccess.AddOutboxMessageAsync(new OutboxMessageData
             {
                 MessageId = Guid.NewGuid(),
                 CaseId = caseData.CaseId,
-                TargetSystem = "PvMed",
+                TargetSystem = contourProvider,
                 Action = OutboxActions.SendImagesToContourTool,
                 PayloadJson = JsonSerializer.Serialize(new
                 {
@@ -223,7 +226,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             {
                 CaseId = caseData.CaseId,
                 Type = WorkItemTypes.AutoContourMonitor,
-                AssignedRole = "Dosimetrist",
+                AssignedRole = strategy.Fallback.ManualWorkItemRole,
                 PayloadJson = JsonSerializer.Serialize(new
                 {
                     request.DicomRef,
@@ -238,7 +241,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             {
                 CaseId = caseData.CaseId,
                 Type = WorkItemTypes.ManualContouring,
-                AssignedRole = "Dosimetrist",
+                AssignedRole = strategy.Fallback.ManualWorkItemRole,
                 CreatedAtUtc = now
             }, ct);
         }
@@ -333,23 +336,7 @@ public class CaseWorkflowService : ICaseWorkflowService
                     CreatedAt = now
                 }, ct);
 
-                var hasContourApproval = await _dataAccess.WorkItemExistsAsync(caseData.CaseId, WorkItemTypes.ContourReview, "Approved", ct);
-                if (!hasContourApproval)
-                {
-                    var contourReview = await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
-                    {
-                        CaseId = caseData.CaseId,
-                        Type = WorkItemTypes.ContourReview,
-                        AssignedRole = "Physician",
-                        CreatedAtUtc = now
-                    }, ct);
-
-                    _workItemLifecycleService.CompleteWorkItem(
-                        contourReview,
-                        completedBy: "System",
-                        resultCode: WorkItemResultCodes.Approved,
-                        completedAtUtc: now);
-                }
+                await EnsureContourApprovalEvidenceAsync(caseData.CaseId, now, "System", request, ct);
 
                 await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ContoursUnderReview, new TransitionExecutionContext
                 {
@@ -368,14 +355,16 @@ public class CaseWorkflowService : ICaseWorkflowService
                     ActorRoles = ["Physician"],
                     Metadata = request
                 }, ct);
+
+                await EnsurePlanningDispatchWorkItemAsync(caseData, ct);
             }
-            else
+            else if (strategy.OnAutoContourComplete.AllowManualForward)
             {
                 await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
                 {
                     CaseId = caseData.CaseId,
                     Type = WorkItemTypes.ManualForwardToMonaco,
-                    AssignedRole = "Dosimetrist",
+                    AssignedRole = strategy.Fallback.ManualWorkItemRole,
                     CreatedAtUtc = now
                 }, ct);
             }
@@ -405,15 +394,18 @@ public class CaseWorkflowService : ICaseWorkflowService
                     Metadata = request
                 }, ct);
 
-                await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
+                if (strategy.Fallback.OnFailureCreateManualWorkItem)
                 {
-                    CaseId = caseData.CaseId,
-                    ParentWorkItemId = autoContourMonitor?.WorkItemId,
-                    Type = WorkItemTypes.ContourRework,
-                    AssignedRole = strategy.Fallback.ManualWorkItemRole,
-                    PayloadJson = JsonSerializer.Serialize(new { request.Type, request.ExternalEventId }),
-                    CreatedAtUtc = now
-                }, ct);
+                    await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
+                    {
+                        CaseId = caseData.CaseId,
+                        ParentWorkItemId = autoContourMonitor?.WorkItemId,
+                        Type = WorkItemTypes.ContourRework,
+                        AssignedRole = strategy.Fallback.ManualWorkItemRole,
+                        PayloadJson = JsonSerializer.Serialize(new { request.Type, request.ExternalEventId }),
+                        CreatedAtUtc = now
+                    }, ct);
+                }
             }
 
             await AddAuditAsync(caseData.CaseId, "HandlePvMedFailed", null, null, request, ct);
@@ -476,6 +468,12 @@ public class CaseWorkflowService : ICaseWorkflowService
         }
 
         var now = DateTimeOffset.UtcNow;
+        var policy = await _profileResolver.ResolveS2ContourReviewPolicyAsync(
+            caseData.HospitalId,
+            caseData.SiteId,
+            caseData.DepartmentId,
+            ct);
+
         var review = await _dataAccess.GetOpenWorkItemAsync(caseId, WorkItemTypes.ContourReview, ct);
         if (review is not null)
         {
@@ -497,15 +495,18 @@ public class CaseWorkflowService : ICaseWorkflowService
             Metadata = new { caseId, reason }
         }, ct);
 
-        await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
+        if (policy.OnReject.CreateReworkWorkItem)
         {
-            CaseId = caseId,
-            ParentWorkItemId = review?.WorkItemId,
-            Type = WorkItemTypes.ContourRework,
-            AssignedRole = "Dosimetrist",
-            PayloadJson = JsonSerializer.Serialize(new { reason }),
-            CreatedAtUtc = now
-        }, ct);
+            await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
+            {
+                CaseId = caseId,
+                ParentWorkItemId = review?.WorkItemId,
+                Type = WorkItemTypes.ContourRework,
+                AssignedRole = policy.OnReject.ReworkWorkItemRole,
+                PayloadJson = JsonSerializer.Serialize(new { reason }),
+                CreatedAtUtc = now
+            }, ct);
+        }
 
         await _dataAccess.SaveChangesAsync(ct);
     }
@@ -552,21 +553,37 @@ public class CaseWorkflowService : ICaseWorkflowService
             throw new InvalidOperationException("Case must be in PlanReReviewOptional status.");
         }
 
+        var reReviewPolicy = await _profileResolver.ResolveS4PlanReReviewPolicyAsync(
+            caseData.HospitalId,
+            caseData.SiteId,
+            caseData.DepartmentId,
+            ct);
+
+        // Current state machine only supports PlanReReviewOptional -> PlanningInProgress on reject.
+        var configuredRejectBackTo = reReviewPolicy.OnRejectBackTo;
+
         await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanningInProgress, new TransitionExecutionContext
         {
             TriggerName = "ReturnToPlanning",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = triggeredBy,
             Reason = reason,
-            Metadata = new { caseId, reason }
+            Metadata = new { caseId, reason, configuredRejectBackTo }
         }, ct);
+
+        var dispatchPolicy = await _profileResolver.ResolveS3PlanDispatchPolicyAsync(
+            caseData.HospitalId,
+            caseData.SiteId,
+            caseData.DepartmentId,
+            ct);
 
         await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
         {
             CaseId = caseId,
-            Type = WorkItemTypes.PlanReReview,
-            AssignedRole = "Physician",
-            PayloadJson = JsonSerializer.Serialize(new { reason, rejected = true }),
+            Type = WorkItemTypes.PlanDesign,
+            AssignedRole = dispatchPolicy.TargetRole,
+            SlaMinutes = dispatchPolicy.SlaMinutes,
+            PayloadJson = JsonSerializer.Serialize(new { reason, rejected = true, configuredRejectBackTo }),
             CreatedAtUtc = DateTimeOffset.UtcNow
         }, ct);
 
@@ -766,7 +783,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             Metadata = new { reason }
         }, ct);
 
-        await EnsureTreatmentExceptionTaskAsync(caseId, reason, ct);
+        await EnsureTreatmentExceptionTaskAsync(caseData, reason, ct);
         await _dataAccess.SaveChangesAsync(ct);
     }
 
@@ -784,7 +801,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             Metadata = new { reason }
         }, ct);
 
-        await EnsureTreatmentExceptionTaskAsync(caseId, reason, ct);
+        await EnsureTreatmentExceptionTaskAsync(caseData, reason, ct);
         await _dataAccess.SaveChangesAsync(ct);
     }
 
@@ -824,25 +841,63 @@ public class CaseWorkflowService : ICaseWorkflowService
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
             ?? throw new InvalidOperationException("Case not found.");
 
+        var policy = await _profileResolver.ResolveS6QueueAndCancelPolicyAsync(
+            caseData.HospitalId,
+            caseData.SiteId,
+            caseData.DepartmentId,
+            ct);
+
+        if (!policy.AllowCancel)
+        {
+            throw new InvalidOperationException("Cancellation is disabled by S6 configuration.");
+        }
+
+        var cancelBoundary = TryParseCaseStatus(policy.CancelAllowedBeforeStatus, CaseStatus.Treating);
+        if (caseData.CurrentStatus >= cancelBoundary)
+        {
+            throw new InvalidOperationException($"Cancellation is only allowed before status '{cancelBoundary}'. Current status is '{caseData.CurrentStatus}'.");
+        }
+
         await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.Cancelled, new TransitionExecutionContext
         {
             TriggerName = "CancelCase",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = triggeredBy,
             Reason = reason,
-            Metadata = new { reason }
+            Metadata = new
+            {
+                reason,
+                policy.QueueMode,
+                policy.CancelAllowedBeforeStatus,
+                policy.OnCancel.FinalStatus
+            }
         }, ct);
 
-        var now = DateTimeOffset.UtcNow;
-        var workItems = await _dataAccess.GetMutableWorkItemsByCaseIdAsync(caseId, ct);
-        foreach (var item in workItems.Where(x => !IsWorkItemClosed(x.Status)))
+        if (policy.OnCancel.CloseOpenWorkItems)
         {
-            _workItemLifecycleService.CancelWorkItem(
-                item,
-                completedBy: triggeredBy,
-                resultCode: WorkItemResultCodes.Cancelled,
-                remarks: reason,
-                completedAtUtc: now);
+            var now = DateTimeOffset.UtcNow;
+            var workItems = await _dataAccess.GetMutableWorkItemsByCaseIdAsync(caseId, ct);
+            foreach (var item in workItems.Where(x => !IsWorkItemClosed(x.Status)))
+            {
+                _workItemLifecycleService.CancelWorkItem(
+                    item,
+                    completedBy: triggeredBy,
+                    resultCode: WorkItemResultCodes.Cancelled,
+                    remarks: reason,
+                    completedAtUtc: now);
+            }
+        }
+
+        if (policy.OnCancel.CreateAudit)
+        {
+            await AddAuditAsync(caseId, "CancelByPolicy", caseData.CurrentStatus, CaseStatus.Cancelled, new
+            {
+                triggeredBy,
+                reason,
+                policy.QueueMode,
+                policy.CancelAllowedBeforeStatus,
+                policy.OnCancel.FinalStatus
+            }, ct);
         }
 
         await _dataAccess.SaveChangesAsync(ct);
@@ -856,6 +911,17 @@ public class CaseWorkflowService : ICaseWorkflowService
         if (caseData.CurrentStatus != CaseStatus.ContoursReady)
         {
             throw new InvalidOperationException("Case must be in ContoursReady status.");
+        }
+
+        var strategy = await _profileResolver.ResolveS1ContouringStrategyAsync(
+            caseData.HospitalId,
+            caseData.SiteId,
+            caseData.DepartmentId,
+            ct);
+
+        if (!strategy.OnAutoContourComplete.AllowManualForward)
+        {
+            throw new InvalidOperationException("Manual forward to Monaco is disabled by S1 configuration.");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -877,6 +943,8 @@ public class CaseWorkflowService : ICaseWorkflowService
             CreatedAt = now
         }, ct);
 
+        await EnsureContourApprovalEvidenceAsync(caseData.CaseId, now, "System", new { source = "ManualForwardToMonaco" }, ct);
+
         await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ContoursUnderReview, new TransitionExecutionContext
         {
             TriggerName = "StartContourReview",
@@ -892,6 +960,8 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggeredBy = "User",
             ActorRoles = ["Physician", "Dosimetrist"]
         }, ct);
+
+        await EnsurePlanningDispatchWorkItemAsync(caseData, ct);
 
         await _dataAccess.SaveChangesAsync(ct);
     }
@@ -917,16 +987,105 @@ public class CaseWorkflowService : ICaseWorkflowService
         }, ct);
     }
 
-    private async Task EnsureTreatmentExceptionTaskAsync(Guid caseId, string reason, CancellationToken ct)
+    private async Task EnsureContourApprovalEvidenceAsync(
+        Guid caseId,
+        DateTimeOffset now,
+        string approvedBy,
+        object? metadata,
+        CancellationToken ct)
     {
+        var hasReviewWorkItem = await _dataAccess.WorkItemExistsAsync(caseId, WorkItemTypes.ContourReview, WorkItemResultCodes.Approved, ct);
+        var hasReviewForm = await _dataAccess.CaseFormExistsAsync(caseId, CaseFormTypes.ContourReviewForm, CaseFormStatuses.Submitted, ct);
+        if (hasReviewWorkItem || hasReviewForm)
+        {
+            return;
+        }
+
+        await _dataAccess.AddCaseFormAsync(new CaseFormData
+        {
+            FormId = Guid.NewGuid(),
+            CaseId = caseId,
+            FormType = CaseFormTypes.ContourReviewForm,
+            FormVersion = 1,
+            Status = CaseFormStatuses.Submitted,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                approved = true,
+                source = "System",
+                metadata
+            }),
+            SubmittedBy = approvedBy,
+            SubmittedAt = now,
+            CreatedAt = now,
+            UpdatedAt = now
+        }, ct);
+    }
+
+    private async Task EnsureTreatmentExceptionTaskAsync(CaseData caseData, string reason, CancellationToken ct)
+    {
+        var policy = await _profileResolver.ResolveS8ExceptionHandlingPolicyAsync(
+            caseData.HospitalId,
+            caseData.SiteId,
+            caseData.DepartmentId,
+            ct);
+
+        if (!policy.ManualFallback.Enabled)
+        {
+            return;
+        }
+
+        var workItemType = ResolveFallbackWorkItemType(policy.ManualFallback.WorkItemType);
         await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
         {
-            CaseId = caseId,
-            Type = WorkItemTypes.TreatmentExceptionHandling,
-            AssignedRole = "Physician",
+            CaseId = caseData.CaseId,
+            Type = workItemType,
+            AssignedRole = policy.ManualFallback.WorkItemRole,
             PayloadJson = JsonSerializer.Serialize(new { reason }),
             CreatedAtUtc = DateTimeOffset.UtcNow
         }, ct);
+    }
+
+    private async Task EnsurePlanningDispatchWorkItemAsync(CaseData caseData, CancellationToken ct)
+    {
+        var policy = await _profileResolver.ResolveS3PlanDispatchPolicyAsync(
+            caseData.HospitalId,
+            caseData.SiteId,
+            caseData.DepartmentId,
+            ct);
+
+        await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
+        {
+            CaseId = caseData.CaseId,
+            Type = WorkItemTypes.PlanAssignment,
+            AssignedRole = policy.TargetRole,
+            SlaMinutes = policy.SlaMinutes,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                policy.DispatchMode,
+                policy.AllowManualClaim,
+                policy.Escalation
+            }),
+            CreatedAtUtc = DateTimeOffset.UtcNow
+        }, ct);
+    }
+
+    private static string ResolveFallbackWorkItemType(string configuredType)
+    {
+        return configuredType switch
+        {
+            WorkItemTypes.TreatmentExceptionHandling => WorkItemTypes.TreatmentExceptionHandling,
+            WorkItemTypes.ScheduleSync => WorkItemTypes.ScheduleSync,
+            WorkItemTypes.PrescriptionSync => WorkItemTypes.PrescriptionSync,
+            WorkItemTypes.ContourRework => WorkItemTypes.ContourRework,
+            _ => WorkItemTypes.TreatmentExceptionHandling
+        };
+    }
+
+    private static CaseStatus TryParseCaseStatus(string configuredStatus, CaseStatus fallback)
+    {
+        return Enum.TryParse<CaseStatus>(configuredStatus, ignoreCase: true, out var parsed)
+            ? parsed
+            : fallback;
     }
 
     private static bool IsWorkItemClosed(WorkItemStatus status)

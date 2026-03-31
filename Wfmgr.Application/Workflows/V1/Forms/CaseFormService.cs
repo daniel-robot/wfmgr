@@ -1,10 +1,13 @@
 using System.Text.Json;
 using Wfmgr.Application.Abstractions.Persistence;
 using Wfmgr.Application.Abstractions.Persistence.Models;
+using Wfmgr.Application.Workflows.V1;
 using Wfmgr.Application.Workflows.V1.Forms.Dtos;
 using Wfmgr.Application.Workflows.V1.StateMachine;
+using Wfmgr.Application.Workflows.V1.WorkItems;
 using Wfmgr.Domain.Enums;
 using Wfmgr.Domain.Forms;
+using Wfmgr.Domain.WorkItems;
 
 namespace Wfmgr.Application.Workflows.V1.Forms;
 
@@ -13,15 +16,21 @@ public class CaseFormService : ICaseFormService
     private readonly IWorkflowDataAccess _dataAccess;
     private readonly ICaseStateMachineService _caseStateMachineService;
     private readonly ICaseWorkflowService _caseWorkflowService;
+    private readonly IWorkflowProfileResolver _profileResolver;
+    private readonly IWorkItemLifecycleService _workItemLifecycleService;
 
     public CaseFormService(
         IWorkflowDataAccess dataAccess,
         ICaseStateMachineService caseStateMachineService,
-        ICaseWorkflowService caseWorkflowService)
+        ICaseWorkflowService caseWorkflowService,
+        IWorkflowProfileResolver profileResolver,
+        IWorkItemLifecycleService workItemLifecycleService)
     {
         _dataAccess = dataAccess;
         _caseStateMachineService = caseStateMachineService;
         _caseWorkflowService = caseWorkflowService;
+        _profileResolver = profileResolver;
+        _workItemLifecycleService = workItemLifecycleService;
     }
 
     public async Task<CaseFormDto> CreateDraftFormAsync(CreateCaseFormDraftRequest request, CancellationToken ct)
@@ -195,6 +204,7 @@ public class CaseFormService : ICaseFormService
                 {
                     await ValidateRequiredFormsBeforeTransitionAsync(caseData.CaseId, CaseStatus.PlanningPending, ct);
                     await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanningPending, BuildContext("ApproveContours", WorkflowTriggerType.User, request, form, "Physician"), ct);
+                    await EnsurePlanningDispatchWorkItemAsync(caseData, ct);
                 }
                 else
                 {
@@ -209,6 +219,38 @@ public class CaseFormService : ICaseFormService
                     if (IsApproved(form.PayloadJson))
                     {
                         await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanReviewed, BuildContext("ApprovePlan", WorkflowTriggerType.User, request, form, "Physician"), ct);
+
+                        var policy = await _profileResolver.ResolveS4PlanReReviewPolicyAsync(
+                            caseData.HospitalId,
+                            caseData.SiteId,
+                            caseData.DepartmentId,
+                            ct);
+
+                        if (ShouldRequirePlanReReview(form.PayloadJson, policy))
+                        {
+                            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanReReviewOptional, BuildContext("RequestPlanRereview", WorkflowTriggerType.User, request, form, "Physician"), ct);
+
+                            var openReReview = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.PlanReReview, ct);
+                            if (openReReview is null)
+                            {
+                                await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
+                                {
+                                    CaseId = caseData.CaseId,
+                                    Type = WorkItemTypes.PlanReReview,
+                                    AssignedRole = policy.ReviewRole,
+                                    PayloadJson = JsonSerializer.Serialize(new
+                                    {
+                                        source = "PlanEvaluationForm",
+                                        policy.Trigger
+                                    }),
+                                    CreatedAtUtc = DateTimeOffset.UtcNow
+                                }, ct);
+                            }
+                        }
+                        else
+                        {
+                            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PrescriptionGenerating, BuildContext("GeneratePrescription", WorkflowTriggerType.System, request, form), ct);
+                        }
                     }
                     else
                     {
@@ -237,6 +279,41 @@ public class CaseFormService : ICaseFormService
                     if (IsApproved(form.PayloadJson))
                     {
                         await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanQAApproved, BuildContext("ApproveQa", WorkflowTriggerType.User, request, form, "Physicist"), ct);
+
+                        var policy = await _profileResolver.ResolveS5PlanDoubleCheckPolicyAsync(
+                            caseData.HospitalId,
+                            caseData.SiteId,
+                            caseData.DepartmentId,
+                            ct);
+
+                        if (policy.Enabled)
+                        {
+                            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanDoubleCheckOptional, BuildContext("RequestPlanDoubleCheck", WorkflowTriggerType.User, request, form, "Physicist"), ct);
+
+                            var openDoubleCheck = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.PlanDoubleCheck, ct);
+                            if (openDoubleCheck is null)
+                            {
+                                var requiresDifferentUserFromId = await ResolveReferencedWorkItemIdAsync(
+                                    caseData.CaseId,
+                                    policy.RequiresDifferentUserFrom,
+                                    ct);
+
+                                await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
+                                {
+                                    CaseId = caseData.CaseId,
+                                    Type = WorkItemTypes.PlanDoubleCheck,
+                                    AssignedRole = policy.WorkItemRole,
+                                    SlaMinutes = 240,
+                                    RequiresDifferentUserFrom = requiresDifferentUserFromId,
+                                    PayloadJson = JsonSerializer.Serialize(new { source = "PlanQAForm", policy.RequiresDifferentUserFrom }),
+                                    CreatedAtUtc = DateTimeOffset.UtcNow
+                                }, ct);
+                            }
+                        }
+                        else
+                        {
+                            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ReadyForScheduling, BuildContext("ReadyForScheduling", WorkflowTriggerType.System, request, form), ct);
+                        }
                     }
                     else
                     {
@@ -318,6 +395,40 @@ public class CaseFormService : ICaseFormService
             || string.Equals(token, "passed", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool ShouldRequirePlanReReview(string payloadJson, S4PlanReReviewPolicy policy)
+    {
+        if (!policy.Enabled)
+        {
+            return false;
+        }
+
+        var riskLevels = policy.Trigger.RiskLevelIn;
+        if ((riskLevels is null || riskLevels.Length == 0) && policy.Trigger.DoseDeltaPercentGte is null)
+        {
+            return true;
+        }
+
+        var riskLevel = ReadString(payloadJson, "riskLevel");
+        if (!string.IsNullOrWhiteSpace(riskLevel) && riskLevels is not null)
+        {
+            foreach (var configuredLevel in riskLevels)
+            {
+                if (string.Equals(configuredLevel, riskLevel, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+
+        var doseDelta = ReadDecimal(payloadJson, "doseDeltaPercent");
+        if (doseDelta is not null && policy.Trigger.DoseDeltaPercentGte is not null && doseDelta.Value >= policy.Trigger.DoseDeltaPercentGte.Value)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     private static string? ReadString(string payloadJson, string key)
     {
         if (string.IsNullOrWhiteSpace(payloadJson))
@@ -337,6 +448,37 @@ public class CaseFormService : ICaseFormService
         }
 
         return prop.ValueKind == JsonValueKind.String ? prop.GetString() : prop.ToString();
+    }
+
+    private static decimal? ReadDecimal(string payloadJson, string key)
+    {
+        if (string.IsNullOrWhiteSpace(payloadJson))
+        {
+            return null;
+        }
+
+        using var doc = JsonDocument.Parse(payloadJson);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!doc.RootElement.TryGetProperty(key, out var prop))
+        {
+            return null;
+        }
+
+        if (prop.ValueKind == JsonValueKind.Number && prop.TryGetDecimal(out var number))
+        {
+            return number;
+        }
+
+        if (prop.ValueKind == JsonValueKind.String && decimal.TryParse(prop.GetString(), out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
     }
 
     private static void ValidateSupportedFormType(string formType)
@@ -364,6 +506,60 @@ public class CaseFormService : ICaseFormService
     private static bool IsTreatingState(CaseStatus status)
     {
         return status is CaseStatus.Treating or CaseStatus.TreatmentPaused or CaseStatus.TreatmentInterrupted;
+    }
+
+    private async Task EnsurePlanningDispatchWorkItemAsync(CaseData caseData, CancellationToken ct)
+    {
+        var openAssignment = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.PlanAssignment, ct);
+        if (openAssignment is not null)
+        {
+            return;
+        }
+
+        var policy = await _profileResolver.ResolveS3PlanDispatchPolicyAsync(
+            caseData.HospitalId,
+            caseData.SiteId,
+            caseData.DepartmentId,
+            ct);
+
+        await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
+        {
+            CaseId = caseData.CaseId,
+            Type = WorkItemTypes.PlanAssignment,
+            AssignedRole = policy.TargetRole,
+            SlaMinutes = policy.SlaMinutes,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                policy.DispatchMode,
+                policy.AllowManualClaim,
+                policy.Escalation
+            }),
+            CreatedAtUtc = DateTimeOffset.UtcNow
+        }, ct);
+    }
+
+    private async Task<Guid?> ResolveReferencedWorkItemIdAsync(Guid caseId, string referenceKey, CancellationToken ct)
+    {
+        var referencedType = referenceKey switch
+        {
+            "PlanQA" => WorkItemTypes.PlanQA,
+            "PlanEvaluation" => WorkItemTypes.PlanEvaluation,
+            "PlanDoubleCheck" => WorkItemTypes.PlanDoubleCheck,
+            _ => null
+        };
+
+        if (referencedType is null)
+        {
+            return null;
+        }
+
+        var workItems = await _dataAccess.GetWorkItemsByCaseIdAsync(caseId, ct);
+        var referenced = workItems
+            .Where(x => string.Equals(x.Type, referencedType, StringComparison.Ordinal))
+            .OrderByDescending(x => x.UpdatedAt)
+            .FirstOrDefault();
+
+        return referenced?.WorkItemId;
     }
 
     private static TransitionExecutionContext BuildContext(
