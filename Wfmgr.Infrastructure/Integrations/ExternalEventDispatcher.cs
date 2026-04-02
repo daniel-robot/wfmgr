@@ -4,6 +4,7 @@ using Wfmgr.Application.Abstractions.Persistence.Models;
 using Wfmgr.Application.Integrations;
 using Wfmgr.Application.Integrations.Dtos;
 using Wfmgr.Application.Workflows.V1;
+using Wfmgr.Application.Workflows.V1.Compensation;
 using Wfmgr.Application.Workflows.V1.Dtos;
 using Wfmgr.Application.Workflows.V1.StateMachine;
 using Wfmgr.Application.Workflows.V1.WorkItems;
@@ -20,19 +21,22 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
     private readonly ICaseStateMachineService _stateMachineService;
     private readonly IWorkItemLifecycleService _workItemLifecycleService;
     private readonly IWorkflowProfileResolver _profileResolver;
+    private readonly IWorkflowCompensationService _compensation;
 
     public ExternalEventDispatcher(
         IWorkflowDataAccess dataAccess,
         ICaseWorkflowService workflowService,
         ICaseStateMachineService stateMachineService,
         IWorkItemLifecycleService workItemLifecycleService,
-        IWorkflowProfileResolver profileResolver)
+        IWorkflowProfileResolver profileResolver,
+        IWorkflowCompensationService compensation)
     {
         _dataAccess = dataAccess;
         _workflowService = workflowService;
         _stateMachineService = stateMachineService;
         _workItemLifecycleService = workItemLifecycleService;
         _profileResolver = profileResolver;
+        _compensation = compensation;
     }
 
     public async Task DispatchAsync(ExternalIntegrationEventRequest request, CancellationToken ct)
@@ -131,6 +135,19 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
 
             case ExternalIntegrationEventTypes.AutoContourFailed:
                 await HandlePvMedEventAsync(request, "PVMED_AUTOCONTOUR_FAILED", ct);
+                // Compensation: route to CMP-004 (auto-contour system failed)
+                await EnsureCaseAsync(caseData, request.Type);
+                await _compensation.HandleFailureAsync(
+                    caseData!.CaseId,
+                    "CON-003",
+                    new CompensationContext
+                    {
+                        Reason = request.FailureReason ?? "Auto-contouring system reported failure",
+                        SourceSystem = request.Source,
+                        ExternalEventPayload = request.PayloadJson,
+                        Metadata = new Dictionary<string, object?> { ["eventType"] = request.Type, ["externalId"] = request.ExternalId }
+                    },
+                    ct);
                 break;
 
             case ExternalIntegrationEventTypes.MonacoImportAccepted:
@@ -227,7 +244,18 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
 
             case ExternalIntegrationEventTypes.PrescriptionSyncFailed:
                 await EnsureCaseAsync(caseData, request.Type);
-                await _workflowService.HandlePrescriptionSyncFailureAsync(caseData!.CaseId, request.FailureReason ?? "MSQ prescription sync failed", request.Source, ct);
+                // Compensation: route to CMP-008 (prescription sync failed)
+                await _compensation.HandleFailureAsync(
+                    caseData!.CaseId,
+                    "RX-006",
+                    new CompensationContext
+                    {
+                        Reason = request.FailureReason ?? "MSQ prescription sync failed",
+                        SourceSystem = request.Source,
+                        ExternalEventPayload = request.PayloadJson,
+                        Metadata = new Dictionary<string, object?> { ["eventType"] = request.Type, ["externalId"] = request.ExternalId }
+                    },
+                    ct);
                 break;
 
             case ExternalIntegrationEventTypes.ScheduleSynced:
@@ -274,7 +302,18 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
 
             case ExternalIntegrationEventTypes.TreatmentInterrupted:
                 await EnsureCaseAsync(caseData, request.Type);
-                await _workflowService.InterruptTreatmentAsync(caseData!.CaseId, request.FailureReason ?? "External interruption", request.Source, ct);
+                // Compensation: route to CMP-015 (treatment interrupted)
+                await _compensation.HandleFailureAsync(
+                    caseData!.CaseId,
+                    "TRT-010",
+                    new CompensationContext
+                    {
+                        Reason = request.FailureReason ?? "External interruption",
+                        SourceSystem = request.Source,
+                        ExternalEventPayload = request.PayloadJson,
+                        Metadata = new Dictionary<string, object?> { ["eventType"] = request.Type, ["externalId"] = request.ExternalId }
+                    },
+                    ct);
                 break;
 
             default:

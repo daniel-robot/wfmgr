@@ -1,0 +1,52 @@
+Important:
+- Modify the existing wfmgr solution in place
+- Do not recreate the solution
+- Do not rename projects
+- Keep namespaces under Wfmgr.*
+- Keep the project compilable
+- Prefer incremental safe changes
+- Keep controllers thin
+- Keep business logic in services
+- Reuse existing entities and services where possible
+- If a database change is required, update both EF Core model and SQL init script
+
+You are modifying the existing wfmgr backend.
+
+## Goal
+Refactor and finalize the workflow transition + compensation implementation so it is coherent, testable, and aligned with the full radiotherapy workflow design.
+
+## Requirements
+Review and improve:
+- TransitionDefinition catalog
+- CompensationDefinition catalog
+- GateValidationService
+- CaseTransitionService
+- Transition side effect service
+- CompensationService
+- External event integration
+- Outbox integration
+
+## Add or improve:
+- clear result models
+- logging
+- XML comments on key services
+- internal helper methods for maintainability
+- unit-test-friendly structure
+- avoidance of duplicate logic
+
+## Also add
+A markdown technical note in the repo, for example:
+- /docs/workflow-engine-design.md
+
+It should explain:
+- how transitions are defined
+- how gate checks work
+- how compensation works
+- how external events interact with the state machine
+- how outbox failures escalate into manual work items
+
+## Important
+- do not rebuild from scratch
+- keep the project compiling
+- prefer safe refactoring
+- preserve existing behavior where not in conflict with the new workflow model

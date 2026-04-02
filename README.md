@@ -383,6 +383,395 @@ Development overrides live in `appsettings.Development.json` and are merged auto
 
 ---
 
+## 5. Workflow Engine Architecture
+
+The application layer contains a structured, catalog-driven workflow engine built across two releases:
+
+- **v2 (March 2026)** — Transition & compensation catalogs, gate validation service.
+- **v3 (April 2026)** — `CaseTransitionService`: the central execution engine that ties catalog lookup, role gating, gate validation, and audit persistence into a single service. `CaseWorkflowService` now routes all transitions through it.
+
+### 5.1 Transition Catalog
+
+**`Wfmgr.Application.Workflows.V1.Definitions.TransitionDefinition`**
+
+Immutable record that describes a single named state transition:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `Code` | `string` | Unique code, e.g. `SIM-001` |
+| `FromStatuses` | `CaseStatus[]` | Valid source statuses |
+| `ToStatus` | `CaseStatus` | Target status on success |
+| `TriggerName` | `string` | Command / event name |
+| `TriggerType` | `WorkflowTriggerType` | User / System / ExternalEvent / Timer |
+| `RequiredRole` | `string?` | Slash-separated role list, or `null` for system triggers |
+| `GateChecks` | `string[]` | Named pre-conditions (resolved by `GateValidationService`) |
+| `SuccessActions` | `string[]` | Side-effect descriptions on success |
+| `FailureActions` | `string[]` | Side-effect descriptions on gate failure |
+| `WorkItemsToCreate` | `string[]` | Work item types to create on success |
+| `ConfigSlot` | `string?` | Workflow profile slot code (S1–S8), or `null` |
+
+**`Wfmgr.Application.Workflows.V1.WorkflowTransitionCatalog`**
+
+Static catalog of **44 transitions** covering the full radiotherapy lifecycle:
+
+| Phase | Codes |
+|-------|-------|
+| Intake & Simulation | SIM-001 … SIM-005 |
+| Image Acquisition | IMG-001 … IMG-003 |
+| Contouring | CON-001 … CON-005 |
+| Contour Review | REV-001 … REV-004 |
+| Treatment Planning | PLN-001 … PLN-006 |
+| Re-review & Prescription | RX-001 … RX-007 |
+| Plan QA & Double-check | QA-001 … QA-008 |
+| Scheduling, Order & Treatment | TRT-001 … TRT-012 |
+| Post-treatment & Archiving | POST-001 … POST-003 |
+
+Lookup:
+
+```csharp
+var t = WorkflowTransitionCatalog.ByCode["SIM-001"];
+foreach (var t in WorkflowTransitionCatalog.All) { ... }
+```
+
+### 5.2 Compensation Catalog
+
+**`Wfmgr.Application.Workflows.V1.Definitions.CompensationDefinition`**
+
+Immutable record that describes the recovery action when a workflow step fails:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `Code` | `string` | Unique code, e.g. `CMP-001` |
+| `FailedStepCode` | `string` | Transition code of the failing step |
+| `FailureCondition` | `string` | Human-readable failure description |
+| `CompensationAction` | `string` | Action to take |
+| `TargetStatus` | `CaseStatus?` | Status to restore, or `null` for no-op |
+| `WorkItemToCreate` | `string?` | Work item type to open for manual resolution |
+| `ManualInterventionRequired` | `bool` | Whether human action is needed |
+| `RetryPolicy` | `RetryPolicy?` | Retry strategy (`ExponentialBackoff`, `LimitedRetry`, `TimerEscalation`) |
+
+**`Wfmgr.Application.Workflows.V1.WorkflowCompensationCatalog`**
+
+Static catalog of **20 compensation rules** (CMP-001 … CMP-020).
+
+Lookup:
+
+```csharp
+var c = WorkflowCompensationCatalog.ByCode["CMP-001"];
+var rules = WorkflowCompensationCatalog.ByFailedStep["IMG-002"];
+```
+
+### 5.3 Gate Validation Service
+
+**`IGateValidationService`** (registered as scoped DI service)
+
+```csharp
+public interface IGateValidationService
+{
+    Task<GateValidationResult> ValidateAsync(
+        CaseData caseData,
+        TransitionDefinition transition,
+        GateValidationContext context,
+        CancellationToken ct = default);
+}
+```
+
+**`GateValidationContext`** — caller-supplied context:
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `UserId` | `string?` | ID of the acting user |
+| `Roles` | `IReadOnlyCollection<string>` | Roles of the acting user |
+| `FormId` | `Guid?` | Submitted form accompanying the transition |
+| `WorkItemId` | `Guid?` | Work item being completed |
+| `ExternalEventPayload` | `string?` | Raw external event JSON |
+| `Reason` | `string?` | Rejection / cancellation reason |
+| `Metadata` | `IReadOnlyDictionary<string, object?>` | Arbitrary key-value pairs (see `GateCheckNames.Meta*` constants) |
+
+Factory helpers: `GateValidationContext.FromTransitionContext(ctx)`, `GateValidationContext.System()`.
+
+**`GateValidationResult`** — rich result:
+
+```csharp
+result.IsValid          // bool
+result.FailedChecks     // IReadOnlyList<string> — names of failing checks
+result.Messages         // IReadOnlyList<string> — human-readable reasons
+result.ToSummary()      // formatted string for logging
+```
+
+**Named gate checks** (all string constants on `GateCheckNames`):
+
+| Category | Gate check names |
+|----------|------------------|
+| Simulation | `SimulationRequestFormValid`, `SimulationRecordFormValid`, `SimulationScheduleExists` |
+| Case state | `CaseNotCancelled`, `CancellationAllowed`, `TreatmentNotStarted` |
+| Image | `ImageReferenceExists`, `ImageAccessible`, `CaseResolvedByCorrelationKey` |
+| Contouring | `ContourResultExists`, `EventIdempotent`, `ManualContourPayloadValid`, `RetryAllowed` |
+| Review | `ReviewApprovalExists`, `RejectionReasonRequired` |
+| Planning | `PlanVersionExists`, `PlanEvaluationApproved`, `AssigneeExists`, `TaskAssigned` |
+| Re-review | `S4ReReviewEnabled`, `NoReReviewRequired`, `ReReviewApproved` |
+| Prescription | `PrescriptionReferenceExists` |
+| QA | `QAFormApproved`, `PlanAndPrescriptionPresent`, `DoubleCheckApproved` |
+| Scheduling | `S5DoubleCheckEnabled`, `S5DoubleCheckDisabled`, `ScheduleReferenceExists` |
+| Treatment | `TreatmentOrderFormValid`, `TreatmentCompletionSatisfied`, `MedicalApprovalExists` |
+| Post-treatment | `PostTreatmentReviewFormValid`, `NoBlockingTasks`, `RequiredFormsComplete` |
+
+**Example usage:**
+
+```csharp
+// Inject IGateValidationService
+var transition = WorkflowTransitionCatalog.ByCode["REV-002"];
+var ctx = new GateValidationContext
+{
+    UserId = currentUserId,
+    Roles  = userRoles,
+    Reason = request.Reason,
+};
+var result = await _gateValidationService.ValidateAsync(caseData, transition, ctx, ct);
+if (!result.IsValid)
+    return BadRequest(result.ToSummary());
+```
+
+> The gate validation service is invoked automatically by `CaseTransitionService` for every
+> catalog-matched transition. You do not need to call `IGateValidationService` directly
+> unless building custom pre-condition checks outside the standard transition flow.
+
+### 5.4 Transition Execution Service
+
+**`ICaseTransitionService`** (registered as scoped DI service)
+
+```csharp
+public interface ICaseTransitionService
+{
+    Task<TransitionExecutionResult> ApplyTransitionAsync(
+        Guid caseId, string triggerName, GateValidationContext context,
+        CancellationToken ct = default, CaseStatus? fallbackToStatus = null);
+
+    Task<TransitionExecutionResult> ApplyTransitionAsync(
+        CaseData caseData, string triggerName, GateValidationContext context,
+        CancellationToken ct = default, CaseStatus? fallbackToStatus = null);
+}
+```
+
+For each call the service executes these steps in order:
+
+1. Looks up the `WorkflowTransitionCatalog` by `triggerName` + `caseData.CurrentStatus`.
+2. Checks `RequiredRole` (slash-separated list against `context.Roles`).
+3. Runs `IGateValidationService.ValidateAsync` for all declared `GateChecks`.
+4. On success: mutates `caseData.CurrentStatus`, increments `StatusVersion`.
+5. Writes `AuditLog` and `CaseTransitionHistory`.
+6. Calls `IWorkflowSideEffectService.ExecuteAsync` (catalog-matched transitions only).
+7. On failure: returns a structured `TransitionExecutionResult` without mutating state.
+
+When `triggerName` has no catalog entry and `fallbackToStatus` is supplied, steps 1–6 are
+skipped and the transition is applied unconditionally (backward-compatible bridge for
+call sites not yet mapped to a catalog code).
+
+**`TransitionExecutionResult`**
+
+```csharp
+result.IsSuccess        // bool
+result.TransitionCode   // string? — null when applied via fallback path
+result.FromStatus       // CaseStatus
+result.ToStatus         // CaseStatus? — null on failure
+result.FailureReason    // TransitionFailureReason? (NotFound | RoleDenied | GateCheckFailed)
+result.FailedChecks     // IReadOnlyList<string>
+result.Messages         // IReadOnlyList<string>
+result.ThrowIfFailed()  // throws InvalidOperationException if !IsSuccess
+result.ToSummary()      // formatted string for logging
+```
+
+**Example usage:**
+
+```csharp
+var gateCtx = new GateValidationContext
+{
+    UserId = currentUserId,
+    Roles  = userRoles,
+    FormId = request.FormId,
+    Reason = request.Reason,
+};
+var result = await _caseTransitionService.ApplyTransitionAsync(
+    caseData, "SubmitSimulationRequest", gateCtx, ct);
+result.ThrowIfFailed();
+await _dataAccess.SaveChangesAsync(ct);
+```
+
+### 5.5 Transition Side Effects
+
+**`IWorkflowSideEffectService`** (registered as scoped DI service)
+
+```csharp
+public interface IWorkflowSideEffectService
+{
+    Task ExecuteAsync(
+        TransitionDefinition definition,
+        SideEffectContext context,
+        CancellationToken ct = default);
+}
+```
+
+Called automatically by `CaseTransitionService` after every successful catalog-matched
+transition. Does **not** call `SaveChangesAsync` — the caller owns the unit of work.
+
+#### Work item creation
+
+Iterates `TransitionDefinition.WorkItemsToCreate`. For each type:
+
+- **Idempotency guard**: skips if an open work item of that type already exists for the case.
+- **Role resolution**: consults the relevant workflow-profile slot (S1–S5) where applicable;
+falls back to a static default-role table covering all 23 supported work item types.
+
+| Work item type | Default role | Profile slot |
+|---|---|---|
+| `SimulationSchedule` | `SimTech/Scheduler` | — |
+| `SimulationRecord` | `SimTech` | — |
+| `ImageValidation` | `SimTech/Physicist` | — |
+| `ImageForwardToContourTool` | `System` | S1 (manual role) |
+| `AutoContourMonitor` | `System` | — |
+| `ManualContouring` | `Doctor/ThirdPartyOperator` | S1 (manual role) |
+| `ContourReview` | `Doctor` | — |
+| `ContourSecondReview` | `Doctor/Physicist` | — |
+| `ContourRework` | `Doctor/ThirdPartyOperator` | S2 (rework role) |
+| `PlanAssignment` | `Scheduler/System` | S3 (target role) |
+| `PlanDesign` | `Dosimetrist` | S3 (target role) |
+| `PlanEvaluation` | `Physicist/Doctor` | — |
+| `PlanReReview` | `ChiefDoctor/SeniorPhysicist` | S4 (review role) |
+| `PrescriptionSync` | `Physicist/System` | — |
+| `PlanQA` | `Physicist/QAReviewer` | — |
+| `PlanDoubleCheck` | `SeniorPhysicist` | S5 (work item role) |
+| `ScheduleSync` | `Scheduler/System` | — |
+| `TreatmentOrder` | `Doctor` | — |
+| `QueueCall` | `System` | — |
+| `TreatmentMonitor` | `System` | — |
+| `TreatmentExceptionHandling` | `Admin` | — |
+| `PostTreatmentReview` | `Doctor` | — |
+| `ArchiveReview` | `System/Admin` | — |
+
+#### Outbox dispatch
+
+Iterates `TransitionDefinition.SuccessActions`. Recognised action strings are mapped to
+`OutboxActions` constants:
+
+| `SuccessActions` string | `OutboxActions` constant | Target system |
+|---|---|---|
+| `CreateOutboxSendImagesToContourTool` | `SendImagesToContourTool` | S1 provider (default `PvMed`) |
+| `CreateOutboxRestartContouring` | `SendImagesToContourTool` | S1 provider |
+| `SendToMonacoImport` | `SendToMonacoImport` | `Monaco` |
+| `CreateOutboxGeneratePrescription` | `GeneratePrescription` | `PvMed` |
+| `CreateOutboxPrescriptionSync` | `GeneratePrescription` | `PvMed` |
+| `StartScheduleWatch` | `SyncSchedule` | `MSQ` |
+| `CreateTreatmentMonitor` | `QueryTreatmentProgress` | `Monaco` |
+| `UpdateProgress` | `QueryTreatmentProgress` | `Monaco` |
+
+Unrecognised action strings are silently ignored, making the map forwards-compatible.
+
+### 5.6 Compensation Service
+
+**`IWorkflowCompensationService`** (registered as scoped DI service)
+
+```csharp
+public interface IWorkflowCompensationService
+{
+    Task<CompensationResult> HandleFailureAsync(
+        Guid caseId,
+        string failedStepCode,      // e.g. "IMG-002", "RX-006"
+        CompensationContext context,
+        CancellationToken ct = default);
+}
+```
+
+**`CompensationContext`** — failure details supplied by the caller:
+
+| Property | Type | Purpose |
+|---|---|---|
+| `Reason` | `string?` | Human-readable description of what went wrong |
+| `UserId` | `string?` | User who triggered the failing action |
+| `SourceSystem` | `string?` | Integration that reported the failure (e.g. `"PvMed"`) |
+| `ExternalEventPayload` | `string?` | Raw external event JSON |
+| `FailedOutboxMessageId` | `Guid?` | Outbox message that failed to deliver |
+| `RetryCount` | `int` | Attempts already made (used for retry budget check) |
+| `Metadata` | `IReadOnlyDictionary<string, object?>` | Arbitrary structured data |
+
+For each call the service executes these steps:
+
+1. Looks up `WorkflowCompensationCatalog.ByFailedStep[failedStepCode]`.
+2. Loads the case (`CaseNotFound` result if missing).
+3. **Status change** — when `definition.TargetStatus` differs from the current status, delegates to `ICaseTransitionService.ApplyTransitionAsync` with `fallbackToStatus = definition.TargetStatus` (trigger name `"Compensate:CMP-xxx"`). This ensures `AuditLog` and `CaseTransitionHistory` are written consistently.
+4. **Work item creation** — idempotency-guarded via `GetOpenWorkItemAsync`; default-role table covers all 13 compensation work item types.
+5. **Outbox retry** — when `RetryPolicy ≠ null` and `context.RetryCount < policy.MaxAttempts`, enqueues an `OutboxMessageData` with computed `NextRetryAt` (exponential back-off or linear).
+6. Returns `CompensationResult`.
+
+**`CompensationResult`**
+
+```csharp
+result.IsSuccess           // bool
+result.CompensationCode    // string?  — e.g. "CMP-008"
+result.PreviousStatus      // CaseStatus?
+result.NewStatus           // CaseStatus? — null when status unchanged
+result.WorkItemCreated     // string?  — WorkItemTypes constant, or null
+result.RetryDispatched     // bool
+result.FailureReason       // CompensationFailureReason? (DefinitionNotFound | CaseNotFound | WorkItemCreationFailed)
+result.ThrowIfFailed()     // throws InvalidOperationException if !IsSuccess
+result.ToSummary()         // formatted string for logging
+```
+
+**Compensation matrix (CMP-001 – CMP-020):**
+
+| Code | Failed step | Target status | Work item | Retry policy |
+|---|---|---|---|---|
+| CMP-001 | IMG-002 | `ImageForwarding` | `ImageForwardToContourTool` | ExponentialBackoff |
+| CMP-002 | IMG-003 | `ImageStored` | `ImageForwardToContourTool` | LimitedRetry |
+| CMP-003 | CON-002 | `ContourReworkRequired` | `ManualContouring` | — |
+| CMP-004 | CON-003 | `ContourReworkRequired` | `ManualContouring` | LimitedRetry |
+| CMP-005 | REV-003 | `ContoursRejected` | `ContourRework` | — |
+| CMP-006 | PLN-005 | `PlanningInProgress` | `PlanDesign` | — |
+| CMP-007 | RX-004 | `PlanningInProgress` | `PlanDesign` | — |
+| CMP-008 | RX-006 | `PrescriptionSyncFailed` | `PrescriptionSync` | ExponentialBackoff |
+| CMP-009 | QA-003 | `PlanQAFailed` | `PlanDesign` | — |
+| CMP-010 | QA-008 | `PlanningInProgress` | `PlanDesign` | — |
+| CMP-011 | TRT-001 | `SchedulingInProgress` | `ScheduleSync` | ExponentialBackoff |
+| CMP-012 | TRT-004 | `OrderPending` | `TreatmentOrder` | — |
+| CMP-013 | TRT-005 | `OrderSubmitted` | `QueueCall` | LimitedRetry |
+| CMP-014 | TRT-008 | `TreatmentPaused` | `TreatmentExceptionHandling` | TimerEscalation |
+| CMP-015 | TRT-010 | `TreatmentInterrupted` | `TreatmentExceptionHandling` | — |
+| CMP-016 | TRT-012 | `Treating` | `TreatmentMonitor` | PollingRetry (unlimited) |
+| CMP-017 | POST-002 | `PostTreatmentReviewPending` | `PostTreatmentReview` | — |
+| CMP-018 | POST-003 | `PostTreatmentReviewed` | `ArchiveReview` | — |
+| CMP-019 | SIM-005 | *(unchanged)* | — | — |
+| CMP-020 | ANY\_EXTERNAL\_EVENT | *(unchanged)* | — | — |
+
+**Example usage:**
+
+```csharp
+// Inject IWorkflowCompensationService
+var result = await _compensationService.HandleFailureAsync(
+    caseId,
+    "RX-006",
+    new CompensationContext
+    {
+        Reason       = "Oncology system returned HTTP 503",
+        SourceSystem = "PvMed",
+        RetryCount   = 2,
+        FailedOutboxMessageId = outboxMessageId,
+    },
+    ct);
+result.ThrowIfFailed();
+await _dataAccess.SaveChangesAsync(ct);
+```
+
+> **Note:** `HandleFailureAsync` does **not** call `SaveChangesAsync`. The caller owns the
+> unit of work and must commit when ready.
+
+### 5.7 Database Schema Impact
+
+All v2–v5 additions are **application-layer only**. No schema changes are required.
+All gate checks, side effects, and compensation writes use tables present since v1
+(`CaseForm`, `WorkItem`, `OutboxMessage`, `ExternalEvent`, `PlanVersion`, `WorkflowRule`,
+`CaseTransitionHistory`). See `database/init.sql` changelog comment for full release history.
+
+---
+
 ## Build
 
 ### Backend

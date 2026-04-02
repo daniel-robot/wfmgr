@@ -2,6 +2,7 @@ using System.Text.Json;
 using Wfmgr.Application.Abstractions.Persistence;
 using Wfmgr.Application.Abstractions.Persistence.Models;
 using Wfmgr.Application.Workflows.V1.Dtos;
+using Wfmgr.Application.Workflows.V1.Gates;
 using Wfmgr.Application.Workflows.V1.StateMachine;
 using Wfmgr.Application.Workflows.V1.WorkItems;
 using Wfmgr.Domain.Enums;
@@ -16,18 +17,33 @@ public class CaseWorkflowService : ICaseWorkflowService
     private readonly IWorkflowDataAccess _dataAccess;
     private readonly IWorkflowProfileResolver _profileResolver;
     private readonly IWorkItemLifecycleService _workItemLifecycleService;
-    private readonly ICaseStateMachineService _caseStateMachineService;
+    private readonly ICaseTransitionService _caseTransitionService;
 
     public CaseWorkflowService(
         IWorkflowDataAccess dataAccess,
         IWorkflowProfileResolver profileResolver,
         IWorkItemLifecycleService workItemLifecycleService,
-        ICaseStateMachineService caseStateMachineService)
+        ICaseTransitionService caseTransitionService)
     {
         _dataAccess = dataAccess;
         _profileResolver = profileResolver;
         _workItemLifecycleService = workItemLifecycleService;
-        _caseStateMachineService = caseStateMachineService;
+        _caseTransitionService = caseTransitionService;
+    }
+
+    // Adapter: thin wrapper that bridges old TransitionExecutionContext into the new
+    // ICaseTransitionService, preserving fallbackToStatus for trigger names not yet
+    // present in WorkflowTransitionCatalog.
+    private async Task ApplyAsync(
+        CaseData caseData,
+        CaseStatus toStatus,
+        TransitionExecutionContext ctx,
+        CancellationToken ct)
+    {
+        var gateCtx = GateValidationContext.FromTransitionContext(ctx);
+        var result = await _caseTransitionService.ApplyTransitionAsync(
+            caseData, ctx.TriggerName, gateCtx, ct, toStatus);
+        result.ThrowIfFailed();
     }
 
     public async Task<Guid> CreateCaseAsync(CreateCaseRequest request, CancellationToken ct)
@@ -51,7 +67,7 @@ public class CaseWorkflowService : ICaseWorkflowService
 
         await _dataAccess.AddCaseAsync(item, ct);
 
-        await _caseStateMachineService.ApplyTransitionAsync(item, CaseStatus.Submitted, new TransitionExecutionContext
+        await ApplyAsync(item, CaseStatus.Submitted, new TransitionExecutionContext
         {
             TriggerName = "SubmitCase",
             TriggerType = WorkflowTriggerType.User,
@@ -104,7 +120,7 @@ public class CaseWorkflowService : ICaseWorkflowService
 
         if (caseData.CurrentStatus == CaseStatus.Draft)
         {
-            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.Submitted, new TransitionExecutionContext
+            await ApplyAsync(caseData, CaseStatus.Submitted, new TransitionExecutionContext
             {
                 TriggerName = "SubmitCase",
                 TriggerType = WorkflowTriggerType.User,
@@ -116,7 +132,7 @@ public class CaseWorkflowService : ICaseWorkflowService
 
         if (caseData.CurrentStatus == CaseStatus.Submitted)
         {
-            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.SimScheduled, new TransitionExecutionContext
+            await ApplyAsync(caseData, CaseStatus.SimScheduled, new TransitionExecutionContext
             {
                 TriggerName = "ScheduleSimulation",
                 TriggerType = WorkflowTriggerType.User,
@@ -128,7 +144,7 @@ public class CaseWorkflowService : ICaseWorkflowService
 
         if (caseData.CurrentStatus == CaseStatus.SimScheduled)
         {
-            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.SimInProgress, new TransitionExecutionContext
+            await ApplyAsync(caseData, CaseStatus.SimInProgress, new TransitionExecutionContext
             {
                 TriggerName = "StartSimulation",
                 TriggerType = WorkflowTriggerType.User,
@@ -140,7 +156,7 @@ public class CaseWorkflowService : ICaseWorkflowService
 
         if (caseData.CurrentStatus == CaseStatus.SimInProgress)
         {
-            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.SimCompleted, new TransitionExecutionContext
+            await ApplyAsync(caseData, CaseStatus.SimCompleted, new TransitionExecutionContext
             {
                 TriggerName = "CompleteSimulation",
                 TriggerType = WorkflowTriggerType.User,
@@ -178,7 +194,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         caseData.CtStudyInstanceUid = request.DicomRef.StudyInstanceUid;
         caseData.CtWadoRsUrl = request.DicomWebLocation.WadoRsUrl;
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ImageStored, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.ImageStored, new TransitionExecutionContext
         {
             TriggerName = "StoreImage",
             TriggerType = WorkflowTriggerType.ExternalEvent,
@@ -186,7 +202,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             Metadata = request
         }, ct);
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ImageForwarding, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.ImageForwarding, new TransitionExecutionContext
         {
             TriggerName = "ForwardImage",
             TriggerType = WorkflowTriggerType.System,
@@ -246,7 +262,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             }, ct);
         }
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ContouringInProgress, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.ContouringInProgress, new TransitionExecutionContext
         {
             TriggerName = "StartContouring",
             TriggerType = WorkflowTriggerType.System,
@@ -309,7 +325,7 @@ public class CaseWorkflowService : ICaseWorkflowService
                     completedAtUtc: now);
             }
 
-            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ContoursReady, new TransitionExecutionContext
+            await ApplyAsync(caseData, CaseStatus.ContoursReady, new TransitionExecutionContext
             {
                 TriggerName = "ContoursReady",
                 TriggerType = WorkflowTriggerType.ExternalEvent,
@@ -338,7 +354,7 @@ public class CaseWorkflowService : ICaseWorkflowService
 
                 await EnsureContourApprovalEvidenceAsync(caseData.CaseId, now, "System", request, ct);
 
-                await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ContoursUnderReview, new TransitionExecutionContext
+                await ApplyAsync(caseData, CaseStatus.ContoursUnderReview, new TransitionExecutionContext
                 {
                     TriggerName = "StartContourReview",
                     TriggerType = WorkflowTriggerType.System,
@@ -347,7 +363,7 @@ public class CaseWorkflowService : ICaseWorkflowService
                     Metadata = request
                 }, ct);
 
-                await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanningPending, new TransitionExecutionContext
+                await ApplyAsync(caseData, CaseStatus.PlanningPending, new TransitionExecutionContext
                 {
                     TriggerName = "ApproveContours",
                     TriggerType = WorkflowTriggerType.System,
@@ -384,7 +400,7 @@ public class CaseWorkflowService : ICaseWorkflowService
                         completedAtUtc: now);
                 }
 
-                await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ContourReworkRequired, new TransitionExecutionContext
+                await ApplyAsync(caseData, CaseStatus.ContourReworkRequired, new TransitionExecutionContext
                 {
                     TriggerName = "AutoContourFailed",
                     TriggerType = WorkflowTriggerType.ExternalEvent,
@@ -444,7 +460,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             _ => throw new InvalidOperationException("Case must be in ContourReworkRequired or ContoursRejected status.")
         };
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, toStatus, new TransitionExecutionContext
+        await ApplyAsync(caseData, toStatus, new TransitionExecutionContext
         {
             TriggerName = caseData.CurrentStatus == CaseStatus.ContourReworkRequired ? "RestartContouring" : "ReopenContouring",
             TriggerType = WorkflowTriggerType.User,
@@ -485,7 +501,7 @@ public class CaseWorkflowService : ICaseWorkflowService
                 completedAtUtc: now);
         }
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ContoursRejected, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.ContoursRejected, new TransitionExecutionContext
         {
             TriggerName = "RejectContours",
             TriggerType = WorkflowTriggerType.User,
@@ -521,7 +537,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             throw new InvalidOperationException("Case must be in PlanUnderReview status.");
         }
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanningInProgress, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.PlanningInProgress, new TransitionExecutionContext
         {
             TriggerName = "RequestPlanChanges",
             TriggerType = WorkflowTriggerType.User,
@@ -562,7 +578,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         // Current state machine only supports PlanReReviewOptional -> PlanningInProgress on reject.
         var configuredRejectBackTo = reReviewPolicy.OnRejectBackTo;
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanningInProgress, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.PlanningInProgress, new TransitionExecutionContext
         {
             TriggerName = "ReturnToPlanning",
             TriggerType = WorkflowTriggerType.User,
@@ -600,7 +616,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             throw new InvalidOperationException("Case must be in PrescriptionGenerating status.");
         }
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PrescriptionSyncFailed, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.PrescriptionSyncFailed, new TransitionExecutionContext
         {
             TriggerName = "PrescriptionSyncFailed",
             TriggerType = WorkflowTriggerType.ExternalEvent,
@@ -631,7 +647,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             throw new InvalidOperationException("Case must be in PrescriptionSyncFailed status.");
         }
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PrescriptionGenerating, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.PrescriptionGenerating, new TransitionExecutionContext
         {
             TriggerName = "RetryPrescriptionSync",
             TriggerType = WorkflowTriggerType.User,
@@ -663,7 +679,7 @@ public class CaseWorkflowService : ICaseWorkflowService
                 completedAtUtc: now);
         }
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PrescriptionReady, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.PrescriptionReady, new TransitionExecutionContext
         {
             TriggerName = "ResolvePrescriptionSync",
             TriggerType = WorkflowTriggerType.User,
@@ -696,7 +712,7 @@ public class CaseWorkflowService : ICaseWorkflowService
                 completedAtUtc: now);
         }
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanQAFailed, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.PlanQAFailed, new TransitionExecutionContext
         {
             TriggerName = "FailQa",
             TriggerType = WorkflowTriggerType.User,
@@ -706,7 +722,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             Metadata = new { caseId, reason }
         }, ct);
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanningInProgress, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.PlanningInProgress, new TransitionExecutionContext
         {
             TriggerName = "ReturnToPlanningAfterQa",
             TriggerType = WorkflowTriggerType.System,
@@ -774,7 +790,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
             ?? throw new InvalidOperationException("Case not found.");
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.TreatmentPaused, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.TreatmentPaused, new TransitionExecutionContext
         {
             TriggerName = "PauseTreatment",
             TriggerType = WorkflowTriggerType.User,
@@ -792,7 +808,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
             ?? throw new InvalidOperationException("Case not found.");
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.TreatmentInterrupted, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.TreatmentInterrupted, new TransitionExecutionContext
         {
             TriggerName = "InterruptTreatment",
             TriggerType = WorkflowTriggerType.ExternalEvent,
@@ -812,7 +828,7 @@ public class CaseWorkflowService : ICaseWorkflowService
 
         if (caseData.CurrentStatus == CaseStatus.TreatmentPaused)
         {
-            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.Treating, new TransitionExecutionContext
+            await ApplyAsync(caseData, CaseStatus.Treating, new TransitionExecutionContext
             {
                 TriggerName = "ResumeTreatment",
                 TriggerType = WorkflowTriggerType.User,
@@ -821,7 +837,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         }
         else if (caseData.CurrentStatus == CaseStatus.TreatmentInterrupted)
         {
-            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.Treating, new TransitionExecutionContext
+            await ApplyAsync(caseData, CaseStatus.Treating, new TransitionExecutionContext
             {
                 TriggerName = "ResumeAfterInterruption",
                 TriggerType = WorkflowTriggerType.User,
@@ -858,7 +874,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             throw new InvalidOperationException($"Cancellation is only allowed before status '{cancelBoundary}'. Current status is '{caseData.CurrentStatus}'.");
         }
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.Cancelled, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.Cancelled, new TransitionExecutionContext
         {
             TriggerName = "CancelCase",
             TriggerType = WorkflowTriggerType.User,
@@ -945,20 +961,20 @@ public class CaseWorkflowService : ICaseWorkflowService
 
         await EnsureContourApprovalEvidenceAsync(caseData.CaseId, now, "System", new { source = "ManualForwardToMonaco" }, ct);
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ContoursUnderReview, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.ContoursUnderReview, new TransitionExecutionContext
         {
             TriggerName = "StartContourReview",
-            TriggerType = WorkflowTriggerType.User,
-            TriggeredBy = "User",
-            ActorRoles = ["Physician", "Dosimetrist"]
+            TriggerType = WorkflowTriggerType.System,
+            TriggeredBy = "System",
+            ActorRoles = ["Doctor", "ChiefDoctor"]
         }, ct);
 
-        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanningPending, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.PlanningPending, new TransitionExecutionContext
         {
             TriggerName = "ApproveContours",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = "User",
-            ActorRoles = ["Physician", "Dosimetrist"]
+            ActorRoles = ["Doctor", "ChiefDoctor"]
         }, ct);
 
         await EnsurePlanningDispatchWorkItemAsync(caseData, ct);

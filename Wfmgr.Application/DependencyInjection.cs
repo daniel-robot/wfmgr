@@ -1,7 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Wfmgr.Application.Workflows;
+using Wfmgr.Application.Workflows.V1.Compensation;
 using Wfmgr.Application.Workflows.V1.Forms;
 using Wfmgr.Application.Workflows.V1;
+using Wfmgr.Application.Workflows.V1.Gates;
+using Wfmgr.Application.Workflows.V1.SideEffects;
 using Wfmgr.Application.Workflows.V1.StateMachine;
 using Wfmgr.Application.Workflows.V1.WorkItems;
 
@@ -18,6 +21,10 @@ public static class DependencyInjection
         services.AddScoped<IWorkItemLifecycleService, WorkItemLifecycleService>();
         services.AddScoped<ICaseTransitionGateValidator, CaseTransitionGateValidator>();
         services.AddScoped<ICaseStateMachineService, CaseStateMachineService>();
+        services.AddScoped<IGateValidationService, GateValidationService>();
+        services.AddScoped<IWorkflowSideEffectService, WorkflowSideEffectService>();
+        services.AddScoped<ICaseTransitionService, CaseTransitionService>();
+        services.AddScoped<IWorkflowCompensationService, WorkflowCompensationService>();
 
         return services;
     }

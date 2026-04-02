@@ -702,4 +702,158 @@ BEGIN
     END IF;
 END $$;
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Schema changelog
+-- ─────────────────────────────────────────────────────────────────────────────
+-- v1 (initial)  All tables: Case, CaseForm, WorkItem, ExternalEvent,
+--               OutboxMessage, WorkflowProfile, WorkflowRule, AuditLog,
+--               CaseTransitionHistory, CaseAttachment, IntegrationReference,
+--               PlanVersion.
+--               Seed: 2 WorkflowProfiles + 16 WorkflowRules (S1–S8 for both
+--               global and HOSP001/SITE_A/RT profiles).
+--
+-- v2 (2026-03)  Workflow engine catalogs & gate validation — application-layer
+--               only, NO schema changes.
+--
+--   Wfmgr.Application.Workflows.V1.Definitions
+--     TransitionDefinition   — immutable record: Code, FromStatuses[],
+--                              ToStatus, TriggerName, TriggerType,
+--                              RequiredRole?, GateChecks[], SuccessActions[],
+--                              FailureActions[], WorkItemsToCreate[], ConfigSlot?.
+--     CompensationDefinition — immutable record: Code, FailedStepCode,
+--                              FailureCondition, CompensationAction,
+--                              TargetStatus?, WorkItemToCreate?,
+--                              ManualInterventionRequired, RetryPolicy?.
+--     RetryPolicy            — value record with built-in singletons:
+--                              ExponentialBackoff, LimitedRetry, TimerEscalation.
+--
+--   Wfmgr.Application.Workflows.V1
+--     WorkflowTransitionCatalog   — 44 named transitions (SIM-001…POST-003);
+--                                   All list + ByCode dictionary.
+--     WorkflowCompensationCatalog — 20 compensation rules (CMP-001…CMP-020);
+--                                   All list + ByCode + ByFailedStep dictionaries.
+--
+--   Wfmgr.Application.Workflows.V1.Gates
+--     GateCheckNames         — 60+ string constants for every named gate check.
+--     GateValidationContext  — execution context (UserId, Roles, FormId,
+--                              WorkItemId, ExternalEventPayload, Reason,
+--                              Metadata dictionary).
+--     GateValidationResult   — IsValid, FailedChecks[], Messages[], ToSummary().
+--     IGateValidationService — ValidateAsync(CaseData, TransitionDefinition,
+--                              GateValidationContext, CancellationToken).
+--     GateValidationService  — strategy-map implementation; evaluates all gate
+--                              checks declared on a TransitionDefinition.
+--                              Registered as scoped in DependencyInjection.
+--
+--   All gate checks read from existing tables (CaseForm, WorkItem,
+--   ExternalEvent, PlanVersion, WorkflowRule via IWorkflowProfileResolver).
+--   No new tables or columns are required.
+--
+-- v3 (2026-04)  CaseTransitionService — application-layer only, NO schema
+--               changes. Existing CaseTransitionHistory table is used as-is.
+--
+--   Wfmgr.Application.Workflows.V1
+--     TransitionFailureReason  — enum: NotFound | RoleDenied | GateCheckFailed.
+--     TransitionExecutionResult — sealed result class returned by
+--                                 ICaseTransitionService; carries IsSuccess,
+--                                 TransitionCode, FromStatus, ToStatus,
+--                                 FailureReason, FailedChecks[], Messages[].
+--                                 Factory methods: Succeeded, NotFound,
+--                                 RoleDenied, GateCheckFailed.
+--                                 Helpers: ThrowIfFailed(), ToSummary().
+--     ICaseTransitionService   — two ApplyTransitionAsync overloads
+--                                 (by caseId and by CaseData); optional
+--                                 fallbackToStatus for backward compatibility.
+--     CaseTransitionService    — implementation:
+--                                 1. Catalog lookup by triggerName + fromStatus.
+--                                 2. RequiredRole check (slash-separated list).
+--                                 3. IGateValidationService.ValidateAsync.
+--                                 4. CaseData mutation + StatusVersion increment.
+--                                 5. AuditLog write (SnapshotJson includes
+--                                    transitionCode, catalogMatched, gateChecks,
+--                                    reason, roles).
+--                                 6. CaseTransitionHistory write (MetadataJson
+--                                    includes transitionCode, catalogMatched,
+--                                    roles, formId, workItemId,
+--                                    externalEventPresent).
+--                                 Fallback path: when triggerName has no catalog
+--                                 entry and fallbackToStatus is supplied, the
+--                                 transition is applied without gate checks
+--                                 (backward-compatible bridge for in-flight
+--                                 call sites not yet mapped to a catalog code).
+--
+--   CaseWorkflowService refactored: replaced ICaseStateMachineService
+--   dependency with ICaseTransitionService. All ~22 ApplyTransitionAsync call
+--   sites now route through the new service; fallbackToStatus ensures all
+--   unmapped trigger names still work without regression.
+--
+--   No new tables or columns are required; CaseTransitionHistory was already
+--   present in v1 and its schema is fully aligned.
+--
+-- v4 (2026-04)  Transition side effects — application-layer only, NO schema
+--               changes.
+--
+--   Wfmgr.Application.Workflows.V1.SideEffects
+--     SideEffectContext          — context record passed to the side effect
+--                                  service: CaseData (post-transition), the
+--                                  original GateValidationContext, and Now.
+--     IWorkflowSideEffectService — ExecuteAsync(TransitionDefinition,
+--                                  SideEffectContext, CancellationToken).
+--     WorkflowSideEffectService  — implementation:
+--       Work items: iterates WorkItemsToCreate on the TransitionDefinition;
+--                   resolves assigned role from the relevant workflow profile
+--                   slot (S1–S5) where applicable, falling back to a static
+--                   default-role map for each of the 23 supported types.
+--                   Idempotency: skips creation if an open item of the same
+--                   type already exists (GetOpenWorkItemAsync guard).
+--       Outbox:     iterates SuccessActions; dispatches EnqueueOutboxAsync for
+--                   8 recognised action strings mapped to OutboxActions:
+--                   SendImagesToContourTool (target system from S1 provider),
+--                   SendToMonacoImport, GeneratePrescription,
+--                   SyncSchedule, QueryTreatmentProgress.
+--
+--   CaseTransitionService updated: IWorkflowSideEffectService injected;
+--   step 7 added — ExecuteAsync called after AuditLog + CaseTransitionHistory
+--   writes, only for catalog-matched transitions (definition is not null).
+--   Fallback-path transitions skip side effects to prevent double-creation.
+--
+--   No new tables or columns are required. WorkItem and OutboxMessage tables
+--   were present since v1 and their schemas are fully aligned.
+--
+-- v5 (2026-04)  WorkflowCompensationService — application-layer only, NO
+--               schema changes.
+--
+--   Wfmgr.Application.Workflows.V1.Compensation
+--     CompensationContext        — failure details: Reason, UserId,
+--                                  SourceSystem, ExternalEventPayload,
+--                                  FailedOutboxMessageId, RetryCount,
+--                                  Metadata dictionary.
+--     CompensationFailureReason  — enum: DefinitionNotFound | CaseNotFound |
+--                                  WorkItemCreationFailed.
+--     CompensationResult         — sealed result: IsSuccess, CompensationCode,
+--                                  PreviousStatus, NewStatus, WorkItemCreated,
+--                                  RetryDispatched, FailureReason,
+--                                  FailureDetail. Helpers: ThrowIfFailed(),
+--                                  ToSummary().
+--     IWorkflowCompensationService —
+--       HandleFailureAsync(caseId, failedStepCode, context, ct).
+--     WorkflowCompensationService — implementation CMP-001..CMP-020:
+--       1. Lookup WorkflowCompensationCatalog.ByFailedStep[failedStepCode].
+--       2. Load case (returns CaseNotFound if missing).
+--       3. Status change via ICaseTransitionService.ApplyTransitionAsync
+--          with fallbackToStatus = definition.TargetStatus
+--          (trigger name "Compensate:CMP-xxx"); skipped when status unchanged.
+--       4. Work item creation with idempotency guard;
+--          default-role table for 13 compensation work item types.
+--       5. Outbox retry: when RetryPolicy present and retryCount < MaxAttempts,
+--          enqueues OutboxMessageData with computed NextRetryAt
+--          (exponential back-off or linear). Step-code-to-action routing
+--          table covers IMG, CON, RX, TRT phases.
+--       6. Returns CompensationResult.
+--
+--   No new tables or columns are required. CompensationHistory is written
+--   to the existing CaseTransitionHistory table (via ICaseTransitionService).
+--   Outbox retries use the existing OutboxMessage table.
+-- ─────────────────────────────────────────────────────────────────────────────
+
 COMMIT;
