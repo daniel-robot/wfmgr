@@ -1,0 +1,39 @@
+@startuml
+title Radiotherapy Workflow – Simulation Saga
+
+hide empty description
+
+skinparam DefaultFontName Arial
+skinparam Shadowing false
+skinparam ArrowColor #444444
+skinparam state {
+  BackgroundColor #F4F6F8
+  BorderColor #5A6473
+  FontSize 11
+  ArrowFontSize 9
+  ArrowColor #444444
+}
+
+[*] --> Draft
+
+state "1. Intake & Simulation" as SIM {
+  state Draft
+  state Submitted
+  state SimScheduled
+  state SimInProgress
+  state SimCompleted
+}
+
+state Cancelled #FFC0CB : ◎ terminal
+
+' ─── Transitions ─────────────────────────
+Draft --> Submitted : SIM-001 SubmitSimulationRequest [User]\n«Doctor»
+Submitted --> SimScheduled : SIM-002 ScheduleSimulation [User]\n«SimTech/Scheduler»
+SimScheduled --> SimInProgress : SIM-003 StartSimulation [User]\n«SimTech»
+SimInProgress --> SimCompleted : SIM-004 SubmitSimulationRecord [User]\n«SimTech»
+Submitted --> Cancelled : SIM-005 CancelCase [User]\n«Doctor/Admin»
+SimScheduled --> Cancelled : SIM-005 CancelCase [User]\n«Doctor/Admin»
+SimInProgress --> Cancelled : SIM-005 CancelCase [User]\n«Doctor/Admin»
+
+
+@enduml

@@ -1,0 +1,90 @@
+@startuml
+title Workflow Compensation Flows
+
+hide empty description
+
+skinparam DefaultFontName Arial
+skinparam Shadowing false
+skinparam ArrowColor #444444
+skinparam state {
+  BackgroundColor #F4F6F8
+  BorderColor #5A6473
+  FontSize 11
+  ArrowFontSize 9
+  ArrowColor #444444
+}
+
+state "Image & Forwarding" as Image_and_Forwarding {
+  state "CMP-001\nOutbox send to contouring tool failed" as CMP_001
+  state "CMP-002\nExternal contouring tool not accepting images" as CMP_002
+}
+
+state "Contouring" as Contouring {
+  state "CMP-003\nAuto-contour result is invalid or corrupt" as CMP_003
+  state "CMP-004\nPvMed or third-party auto-contouring system failed" as CMP_004
+}
+
+state "Contour Review" as Contour_Review {
+  state "CMP-005\nContour review rejected by clinician" as CMP_005
+}
+
+state "Treatment Planning" as Treatment_Planning {
+  state "CMP-006\nPlan evaluation failed during review" as CMP_006
+}
+
+state "Re-review & Prescription" as Re_review_and_Prescription {
+  state "CMP-007\nPlan re-review failed during secondary clinical review" as CMP_007
+  state "CMP-008\nPrescription synchronisation to oncology system failed" as CMP_008
+}
+
+state "Plan QA" as Plan_QA {
+  state "CMP-009\nPhysics QA check failed" as CMP_009
+  state "CMP-010\nIndependent plan double-check failed" as CMP_010
+}
+
+state "Scheduling & Order" as Scheduling_and_Order {
+  state "CMP-011\nMSQ schedule synchronisation timed out or failed" as CMP_011
+  state "CMP-012\nTreatment order form failed validation on submit" as CMP_012
+  state "CMP-013\nQueue integration with external treatment system failed" as CMP_013
+}
+
+state "Treatment" as Treatment {
+  state "CMP-014\nPaused case not resumed within SLA period" as CMP_014
+  state "CMP-015\nTreatment course interrupted" as CMP_015
+  state "CMP-016\nTreatment completion data incomplete per completion …" as CMP_016
+}
+
+state "Post-treatment & Archiving" as Post_treatment_and_Archiving {
+  state "CMP-017\nPost-treatment review form is incomplete" as CMP_017
+  state "CMP-018\nOne or more blocking tasks remain open at archive time" as CMP_018
+}
+
+state "General" as General {
+  state "CMP-019\nCancellation not medically permitted (treatment alre…" as CMP_019
+  state "CMP-020\nDuplicate external event received (idempotency check…" as CMP_020
+}
+
+' ─── Compensation links ─────────────
+CMP_001 --> ImageForwarding : Retry send with exponential back-off; if retry limit…\n[ExponentialBackoff]\n⚠ manual
+CMP_002 --> ImageStored : Keep case at ImageStored; allow operator to manually…\n[LimitedRetry]\n⚠ manual
+CMP_003 --> ContourReworkRequired : Request manual contouring; route case to rework-requ…\n⚠ manual
+CMP_004 --> ContourReworkRequired : Create manual contouring rework work item\n[LimitedRetry]\n⚠ manual
+CMP_005 --> ContoursRejected : Route back for contour rework\n⚠ manual
+CMP_006 --> PlanningInProgress : Reopen planning path and create a new plan-design task\n⚠ manual
+CMP_007 --> PlanningInProgress : Reopen planning with a new plan version; create plan…\n⚠ manual
+CMP_008 --> PrescriptionSyncFailed : Create manual prescription-sync task; retry automati…\n[ExponentialBackoff]\n⚠ manual
+CMP_009 --> PlanQAFailed : Return case to planning for rework; create plan-desi…\n⚠ manual
+CMP_010 --> PlanningInProgress : Reopen planning path; create plan-design task\n⚠ manual
+CMP_011 --> SchedulingInProgress : Retry schedule sync; if retry limit exceeded, create…\n[ExponentialBackoff]\n⚠ manual
+CMP_012 --> OrderPending : Remain at OrderPending; require operator to correct …\n⚠ manual
+CMP_013 --> OrderSubmitted : Keep case at OrderSubmitted; allow local or manual q…\n[LimitedRetry]\n⚠ manual
+CMP_014 --> TreatmentPaused : Create escalation handling work item; notify respons…\n[TimerEscalation]\n⚠ manual
+CMP_015 --> TreatmentInterrupted : Open exception-handling work item; require clinician…\n⚠ manual
+CMP_016 --> Treating : Keep case in Treating; continue monitoring and retry…\n[PollingRetry]
+CMP_017 --> PostTreatmentReviewPending : Keep case at PostTreatmentReviewPending; require ope…\n⚠ manual
+CMP_018 --> PostTreatmentReviewed : Reject archive; keep case at PostTreatmentReviewed u…\n⚠ manual
+CMP_019 --> [*] : Reject cancellation; case status remains unchanged\n⚠ manual
+CMP_020 --> [*] : Ignore the duplicate event safely; do not change cas…
+
+
+@enduml

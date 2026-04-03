@@ -1,0 +1,163 @@
+@startuml
+title Radiotherapy Case – Full State Machine
+
+left to right direction
+hide empty description
+
+skinparam DefaultFontName Arial
+skinparam Shadowing false
+skinparam ArrowColor #444444
+skinparam state {
+  BackgroundColor #F4F6F8
+  BorderColor #5A6473
+  FontSize 11
+  ArrowFontSize 9
+  ArrowColor #444444
+}
+
+[*] --> Draft
+
+state "1. Intake & Simulation" as SIM {
+  state Draft
+  state Submitted
+  state SimScheduled
+  state SimInProgress
+  state SimCompleted
+}
+
+state "2. Image Acquisition & Forwarding" as IMG {
+  state ImageStored
+  state ImageForwarding
+}
+
+state "3. Contouring" as CON {
+  state ContouringInProgress
+  state ContourReworkRequired
+}
+
+state "4. Contour Review" as REV {
+  state ContoursReady
+  state ContoursUnderReview
+  state ContoursRejected
+}
+
+state "5. Treatment Planning" as PLN {
+  state PlanningPending
+  state PlanningAssigned
+  state PlanningInProgress
+  state PlanReady
+  state PlanUnderReview
+  state PlanReviewed
+}
+
+state "6. Re-review & Prescription" as RX {
+  state PlanReReviewOptional
+  state PrescriptionGenerating
+  state PrescriptionReady
+  state PrescriptionSyncFailed
+}
+
+state "7. Plan QA & Double-check" as QA {
+  state PlanQAInProgress
+  state PlanQAApproved
+  state PlanQAFailed
+  state PlanDoubleCheckOptional
+  state ReadyForScheduling
+}
+
+state "8. Scheduling, Order & Treatment" as TRT {
+  state SchedulingInProgress
+  state Scheduled
+  state OrderPending
+  state OrderSubmitted
+  state QueuePending
+  state Treating
+  state TreatmentPaused
+  state TreatmentInterrupted
+  state TreatmentCompleted
+}
+
+state "9. Post-treatment & Archiving" as POST {
+  state PostTreatmentReviewPending
+  state PostTreatmentReviewed
+  state Archived
+}
+
+state Cancelled #FFC0CB : ◎ Cancelled – terminal
+Archived --> [*]
+
+' ─── Phase 1: Intake & Simulation ───────────────
+Draft --> Submitted : SIM-001 SubmitSimulationRequest [User]\n«Doctor»
+Submitted --> SimScheduled : SIM-002 ScheduleSimulation [User]\n«SimTech/Scheduler»
+SimScheduled --> SimInProgress : SIM-003 StartSimulation [User]\n«SimTech»
+SimInProgress --> SimCompleted : SIM-004 SubmitSimulationRecord [User]\n«SimTech»
+Submitted --> Cancelled : SIM-005 CancelCase [User]\n«Doctor/Admin»
+SimScheduled --> Cancelled : SIM-005 CancelCase [User]\n«Doctor/Admin»
+SimInProgress --> Cancelled : SIM-005 CancelCase [User]\n«Doctor/Admin»
+
+' ─── Phase 2: Image Acquisition & Forwarding ───────────────
+SimCompleted --> ImageStored : IMG-001 ReceiveCtImageStoredEvent [Ext]
+ImageStored --> ImageForwarding : IMG-002 StartImageForwarding [Sys]
+ImageForwarding --> ContouringInProgress : IMG-003 ContourToolAccepted [Ext]
+
+' ─── Phase 3: Contouring ───────────────
+ContouringInProgress --> ContouringInProgress : CON-001 AutoContourProgressUpdated [Ext]
+ContouringInProgress --> ContoursReady : CON-002 AutoContourCompleted [Ext]
+ContouringInProgress --> ContourReworkRequired : CON-003 AutoContourFailed [Ext]
+ContourReworkRequired --> ContouringInProgress : CON-004 RestartContouring [User]\n«Doctor/System»
+ContourReworkRequired --> ContoursReady : CON-005 SubmitManualContourResult [User]\n«Doctor/ThirdPartyOperator»
+
+' ─── Phase 4: Contour Review ───────────────
+ContoursReady --> ContoursUnderReview : REV-001 StartContourReview [Sys]
+ContoursUnderReview --> PlanningPending : REV-002 ApproveContours [User]\n«Doctor/ChiefDoctor»
+ContoursUnderReview --> ContoursRejected : REV-003 RejectContours [User]\n«Doctor/ChiefDoctor»
+ContoursRejected --> ContouringInProgress : REV-004 ResubmitContours [User]\n«Doctor/System»
+
+' ─── Phase 5: Treatment Planning ───────────────
+PlanningPending --> PlanningAssigned : PLN-001 AssignPlanner [User]\n«Scheduler/System»
+PlanningAssigned --> PlanningInProgress : PLN-002 AcceptPlanTask [User]\n«Dosimetrist/Physicist»
+PlanningInProgress --> PlanReady : PLN-003 SubmitPlan [User]\n«Dosimetrist/Monaco»
+PlanReady --> PlanUnderReview : PLN-004 StartPlanReview [Sys]
+PlanUnderReview --> PlanningInProgress : PLN-005 RejectPlan [User]\n«Physicist/Doctor»
+PlanUnderReview --> PlanReviewed : PLN-006 ApprovePlanReview [User]\n«Physicist/Doctor»
+
+' ─── Phase 6: Re-review & Prescription ───────────────
+PlanReviewed --> PlanReReviewOptional : RX-001 StartPlanReReview [Sys]
+PlanReviewed --> PrescriptionGenerating : RX-002 StartPrescriptionGeneration [Sys]
+PlanReReviewOptional --> PrescriptionGenerating : RX-003 ApprovePlanReReview [User]\n«ChiefDoctor/SeniorPhysicist»
+PlanReReviewOptional --> PlanningInProgress : RX-004 RejectPlanReReview [User]\n«ChiefDoctor/SeniorPhysicist»
+PrescriptionGenerating --> PrescriptionReady : RX-005 PrescriptionGenerated [Ext]
+PrescriptionGenerating --> PrescriptionSyncFailed : RX-006 PrescriptionSyncFailed [Ext]
+PrescriptionSyncFailed --> PrescriptionGenerating : RX-007 RetryPrescriptionSync [User]\n«Physicist/System»
+
+' ─── Phase 7: Plan QA & Double-check ───────────────
+PrescriptionReady --> PlanQAInProgress : QA-001 StartQA [Sys]
+PlanQAInProgress --> PlanQAApproved : QA-002 ApproveQA [User]\n«Physicist/QAReviewer»
+PlanQAInProgress --> PlanQAFailed : QA-003 RejectQA [User]\n«Physicist/QAReviewer»
+PlanQAFailed --> PlanningInProgress : QA-004 ReworkAfterQA [User]\n«Physicist/System»
+PlanQAApproved --> PlanDoubleCheckOptional : QA-005 StartDoubleCheck [Sys]
+PlanQAApproved --> ReadyForScheduling : QA-006 SkipDoubleCheck [Sys]
+PlanDoubleCheckOptional --> ReadyForScheduling : QA-007 ApproveDoubleCheck [User]\n«SeniorPhysicist»
+PlanDoubleCheckOptional --> PlanningInProgress : QA-008 RejectDoubleCheck [User]\n«SeniorPhysicist»
+
+' ─── Phase 8: Scheduling, Order & Treatment ───────────────
+ReadyForScheduling --> SchedulingInProgress : TRT-001 StartScheduleSync [Sys]
+SchedulingInProgress --> Scheduled : TRT-002 ScheduleSynced [Ext]
+Scheduled --> OrderPending : TRT-003 PrepareTreatmentOrder [Sys]
+OrderPending --> OrderSubmitted : TRT-004 SubmitTreatmentOrder [User]\n«Doctor»
+OrderSubmitted --> QueuePending : TRT-005 QueueCreated [Ext]
+QueuePending --> Treating : TRT-006 TreatmentStarted [Ext]
+Treating --> Treating : TRT-007 TreatmentFractionCompleted [Ext]
+Treating --> TreatmentPaused : TRT-008 PauseTreatment [User]\n«Therapist/System»
+TreatmentPaused --> Treating : TRT-009 ResumeTreatment [User]\n«Therapist/System»
+Treating --> TreatmentInterrupted : TRT-010 InterruptTreatment [User]\n«Therapist/Doctor/System»
+TreatmentInterrupted --> Treating : TRT-011 ResumeAfterInterruption [User]\n«Doctor/Therapist»
+Treating --> TreatmentCompleted : TRT-012 CompleteTreatmentCourse [Ext]
+
+' ─── Phase 9: Post-treatment & Archiving ───────────────
+TreatmentCompleted --> PostTreatmentReviewPending : POST-001 StartPostTreatmentReview [Sys]
+PostTreatmentReviewPending --> PostTreatmentReviewed : POST-002 SubmitPostTreatmentReview [User]\n«Doctor»
+PostTreatmentReviewed --> Archived : POST-003 ArchiveCase [Sys]\n«System/Admin»
+
+
+@enduml

@@ -1,0 +1,53 @@
+@startuml
+title Radiotherapy Workflow – Contouring Saga
+
+hide empty description
+
+skinparam DefaultFontName Arial
+skinparam Shadowing false
+skinparam ArrowColor #444444
+skinparam state {
+  BackgroundColor #F4F6F8
+  BorderColor #5A6473
+  FontSize 11
+  ArrowFontSize 9
+  ArrowColor #444444
+}
+
+[*] --> SimCompleted
+
+state "2. Image Acquisition & Forwarding" as IMG {
+  state ImageStored
+  state ImageForwarding
+}
+
+state "3. Contouring" as CON {
+  state ContouringInProgress
+  state ContourReworkRequired
+}
+
+state "4. Contour Review" as REV {
+  state ContoursReady
+  state ContoursUnderReview
+  state ContoursRejected
+}
+
+state PlanningPending #DDEEFF : « external »
+state SimCompleted #DDEEFF : « external »
+
+' ─── Transitions ─────────────────────────
+SimCompleted --> ImageStored : IMG-001 ReceiveCtImageStoredEvent [Ext]
+ImageStored --> ImageForwarding : IMG-002 StartImageForwarding [Sys]
+ImageForwarding --> ContouringInProgress : IMG-003 ContourToolAccepted [Ext]
+ContouringInProgress --> ContouringInProgress : CON-001 AutoContourProgressUpdated [Ext]
+ContouringInProgress --> ContoursReady : CON-002 AutoContourCompleted [Ext]
+ContouringInProgress --> ContourReworkRequired : CON-003 AutoContourFailed [Ext]
+ContourReworkRequired --> ContouringInProgress : CON-004 RestartContouring [User]\n«Doctor/System»
+ContourReworkRequired --> ContoursReady : CON-005 SubmitManualContourResult [User]\n«Doctor/ThirdPartyOperator»
+ContoursReady --> ContoursUnderReview : REV-001 StartContourReview [Sys]
+ContoursUnderReview --> PlanningPending : REV-002 ApproveContours [User]\n«Doctor/ChiefDoctor»
+ContoursUnderReview --> ContoursRejected : REV-003 RejectContours [User]\n«Doctor/ChiefDoctor»
+ContoursRejected --> ContouringInProgress : REV-004 ResubmitContours [User]\n«Doctor/System»
+
+
+@enduml

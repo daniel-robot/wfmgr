@@ -788,3 +788,65 @@ cd wfmgr-ui
 npm install
 npm run build
 ```
+
+---
+
+## 6. Workflow Diagrams
+
+PlantUML state-machine diagrams are auto-generated from a single JSON definition file.
+
+### Structure
+
+```
+workflow/
+├── workflow-definition.json      ← source of truth (statuses, transitions, compensations)
+└── generate-workflow-diagrams.py ← generator script
+
+docs/workflow/generated/          ← output directory (committed, do not edit manually)
+├── case-state-machine.puml       ← full 40-status / 53-transition lifecycle
+├── simulation-saga.puml          ← Phase 1: Intake & Simulation
+├── contouring-saga.puml          ← Phases 2–4: Image Acquisition, Contouring, Review
+├── planning-saga.puml            ← Phases 5–7: Planning, Re-review, QA
+├── treatment-saga.puml           ← Phases 8–9: Scheduling, Treatment, Archiving
+└── compensation-flow.puml        ← All 20 compensation rules (CMP-001 – CMP-020)
+```
+
+### Regenerate after changes
+
+Any time `workflow-definition.json` is modified (new status, new transition, updated compensation), regenerate all diagrams with:
+
+```bash
+cd workflow/
+python3 generate-workflow-diagrams.py
+```
+
+To regenerate a single diagram:
+
+```bash
+python3 generate-workflow-diagrams.py simulation-saga
+python3 generate-workflow-diagrams.py compensation-flow
+# etc.
+```
+
+Available diagram names: `case-state-machine`, `simulation-saga`, `contouring-saga`, `planning-saga`, `treatment-saga`, `compensation-flow`.
+
+### Render diagrams
+
+Use any PlantUML renderer, for example:
+
+- **VS Code**: install the [PlantUML](https://marketplace.visualstudio.com/items?itemName=jebbs.plantuml) extension, then open a `.puml` file and press `Alt+D`.
+- **Online**: paste content into [plantuml.com/plantuml](https://www.plantuml.com/plantuml/uml).
+- **CLI**: `java -jar plantuml.jar docs/workflow/generated/*.puml`
+
+### Workflow definition schema
+
+`workflow-definition.json` contains four top-level arrays:
+
+| Array | Description |
+|-------|-------------|
+| `phases` | Nine workflow phases, each with `id`, `number`, `name`, `codeRange` |
+| `statuses` | All 40 `CaseStatus` values, each assigned to a phase |
+| `transitions` | All 53 `TransitionDefinition` entries (code, fromStatuses, toStatus, triggerType, role, gates, …) |
+| `compensations` | All 20 `CompensationDefinition` entries (code, failedStepCode, targetStatus, retryPolicy, …) |
+
+The JSON is the single source of truth for diagram generation. The C# catalogs (`WorkflowTransitionCatalog`, `WorkflowCompensationCatalog`) remain the runtime source of truth for the application.

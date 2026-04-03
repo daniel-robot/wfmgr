@@ -1,0 +1,67 @@
+@startuml
+title Radiotherapy Workflow – Planning Saga
+
+hide empty description
+
+skinparam DefaultFontName Arial
+skinparam Shadowing false
+skinparam ArrowColor #444444
+skinparam state {
+  BackgroundColor #F4F6F8
+  BorderColor #5A6473
+  FontSize 11
+  ArrowFontSize 9
+  ArrowColor #444444
+}
+
+[*] --> PlanningPending
+
+state "5. Treatment Planning" as PLN {
+  state PlanningPending
+  state PlanningAssigned
+  state PlanningInProgress
+  state PlanReady
+  state PlanUnderReview
+  state PlanReviewed
+}
+
+state "6. Re-review & Prescription" as RX {
+  state PlanReReviewOptional
+  state PrescriptionGenerating
+  state PrescriptionReady
+  state PrescriptionSyncFailed
+}
+
+state "7. Plan QA & Double-check" as QA {
+  state PlanQAInProgress
+  state PlanQAApproved
+  state PlanQAFailed
+  state PlanDoubleCheckOptional
+  state ReadyForScheduling
+}
+
+' ─── Transitions ─────────────────────────
+PlanningPending --> PlanningAssigned : PLN-001 AssignPlanner [User]\n«Scheduler/System»
+PlanningAssigned --> PlanningInProgress : PLN-002 AcceptPlanTask [User]\n«Dosimetrist/Physicist»
+PlanningInProgress --> PlanReady : PLN-003 SubmitPlan [User]\n«Dosimetrist/Monaco»
+PlanReady --> PlanUnderReview : PLN-004 StartPlanReview [Sys]
+PlanUnderReview --> PlanningInProgress : PLN-005 RejectPlan [User]\n«Physicist/Doctor»
+PlanUnderReview --> PlanReviewed : PLN-006 ApprovePlanReview [User]\n«Physicist/Doctor»
+PlanReviewed --> PlanReReviewOptional : RX-001 StartPlanReReview [Sys]
+PlanReviewed --> PrescriptionGenerating : RX-002 StartPrescriptionGeneration [Sys]
+PlanReReviewOptional --> PrescriptionGenerating : RX-003 ApprovePlanReReview [User]\n«ChiefDoctor/SeniorPhysicist»
+PlanReReviewOptional --> PlanningInProgress : RX-004 RejectPlanReReview [User]\n«ChiefDoctor/SeniorPhysicist»
+PrescriptionGenerating --> PrescriptionReady : RX-005 PrescriptionGenerated [Ext]
+PrescriptionGenerating --> PrescriptionSyncFailed : RX-006 PrescriptionSyncFailed [Ext]
+PrescriptionSyncFailed --> PrescriptionGenerating : RX-007 RetryPrescriptionSync [User]\n«Physicist/System»
+PrescriptionReady --> PlanQAInProgress : QA-001 StartQA [Sys]
+PlanQAInProgress --> PlanQAApproved : QA-002 ApproveQA [User]\n«Physicist/QAReviewer»
+PlanQAInProgress --> PlanQAFailed : QA-003 RejectQA [User]\n«Physicist/QAReviewer»
+PlanQAFailed --> PlanningInProgress : QA-004 ReworkAfterQA [User]\n«Physicist/System»
+PlanQAApproved --> PlanDoubleCheckOptional : QA-005 StartDoubleCheck [Sys]
+PlanQAApproved --> ReadyForScheduling : QA-006 SkipDoubleCheck [Sys]
+PlanDoubleCheckOptional --> ReadyForScheduling : QA-007 ApproveDoubleCheck [User]\n«SeniorPhysicist»
+PlanDoubleCheckOptional --> PlanningInProgress : QA-008 RejectDoubleCheck [User]\n«SeniorPhysicist»
+
+
+@enduml

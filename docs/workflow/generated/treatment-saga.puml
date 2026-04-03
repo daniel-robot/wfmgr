@@ -1,0 +1,59 @@
+@startuml
+title Radiotherapy Workflow – Treatment Saga
+
+hide empty description
+
+skinparam DefaultFontName Arial
+skinparam Shadowing false
+skinparam ArrowColor #444444
+skinparam state {
+  BackgroundColor #F4F6F8
+  BorderColor #5A6473
+  FontSize 11
+  ArrowFontSize 9
+  ArrowColor #444444
+}
+
+[*] --> ReadyForScheduling
+
+state "8. Scheduling, Order & Treatment" as TRT {
+  state SchedulingInProgress
+  state Scheduled
+  state OrderPending
+  state OrderSubmitted
+  state QueuePending
+  state Treating
+  state TreatmentPaused
+  state TreatmentInterrupted
+  state TreatmentCompleted
+}
+
+state "9. Post-treatment & Archiving" as POST {
+  state PostTreatmentReviewPending
+  state PostTreatmentReviewed
+  state Archived
+}
+
+state ReadyForScheduling #DDEEFF : « external »
+
+state Archived #D0F0D0 : ◎ terminal
+
+' ─── Transitions ─────────────────────────
+ReadyForScheduling --> SchedulingInProgress : TRT-001 StartScheduleSync [Sys]
+SchedulingInProgress --> Scheduled : TRT-002 ScheduleSynced [Ext]
+Scheduled --> OrderPending : TRT-003 PrepareTreatmentOrder [Sys]
+OrderPending --> OrderSubmitted : TRT-004 SubmitTreatmentOrder [User]\n«Doctor»
+OrderSubmitted --> QueuePending : TRT-005 QueueCreated [Ext]
+QueuePending --> Treating : TRT-006 TreatmentStarted [Ext]
+Treating --> Treating : TRT-007 TreatmentFractionCompleted [Ext]
+Treating --> TreatmentPaused : TRT-008 PauseTreatment [User]\n«Therapist/System»
+TreatmentPaused --> Treating : TRT-009 ResumeTreatment [User]\n«Therapist/System»
+Treating --> TreatmentInterrupted : TRT-010 InterruptTreatment [User]\n«Therapist/Doctor/System»
+TreatmentInterrupted --> Treating : TRT-011 ResumeAfterInterruption [User]\n«Doctor/Therapist»
+Treating --> TreatmentCompleted : TRT-012 CompleteTreatmentCourse [Ext]
+TreatmentCompleted --> PostTreatmentReviewPending : POST-001 StartPostTreatmentReview [Sys]
+PostTreatmentReviewPending --> PostTreatmentReviewed : POST-002 SubmitPostTreatmentReview [User]\n«Doctor»
+PostTreatmentReviewed --> Archived : POST-003 ArchiveCase [Sys]\n«System/Admin»
+
+
+@enduml
