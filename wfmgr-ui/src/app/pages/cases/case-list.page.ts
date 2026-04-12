@@ -33,19 +33,22 @@ export class CaseListPageComponent implements OnInit {
   ];
 
   private readonly statusToStep = new Map<string, number>([
-    ['Draft', 0],
-    ['Submitted', 0],
+    // Step 0 — Intake
     ['Cancelled', 0],
+    // Step 1 — Simulation
+    ['Submitted', 1],
     ['SimScheduled', 1],
     ['SimInProgress', 1],
     ['SimCompleted', 1],
-    ['ImageStored', 1],
-    ['ImageForwarding', 1],
+    // Step 2 — Contouring
+    ['ImageStored', 2],
+    ['ImageForwarding', 2],
     ['ContouringInProgress', 2],
     ['ContoursReady', 2],
     ['ContoursUnderReview', 2],
     ['ContoursRejected', 2],
     ['ContourReworkRequired', 2],
+    // Step 3 — Planning
     ['PlanningPending', 3],
     ['PlanningAssigned', 3],
     ['PlanningInProgress', 3],
@@ -60,6 +63,7 @@ export class CaseListPageComponent implements OnInit {
     ['PlanQAApproved', 3],
     ['PlanQAFailed', 3],
     ['PlanDoubleCheckOptional', 3],
+    // Step 4 — Treatment
     ['ReadyForScheduling', 4],
     ['SchedulingInProgress', 4],
     ['SchedulingFailed', 4],
@@ -70,6 +74,10 @@ export class CaseListPageComponent implements OnInit {
     ['Treating', 4],
     ['TreatmentPaused', 4],
     ['TreatmentInterrupted', 4],
+    ['TreatmentCompleted', 4],
+    ['PostTreatmentReviewPending', 4],
+    ['PostTreatmentReviewed', 4],
+    ['Archived', 4],
     ['Completed', 4],
     ['MonacoForwarded', 4]
   ]);

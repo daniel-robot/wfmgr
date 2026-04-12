@@ -3,11 +3,12 @@
   margin: 0 auto;
 }
 
+/* ── Header ────────────────────────────────────────────────────────────── */
 .header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .header-actions {
@@ -15,6 +16,7 @@
   gap: 0.5rem;
 }
 
+/* ── Buttons ───────────────────────────────────────────────────────────── */
 .btn {
   border: 0;
   background: #155eef;
@@ -24,6 +26,8 @@
   text-decoration: none;
   cursor: pointer;
   font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
 }
 
 .btn:disabled {
@@ -36,11 +40,34 @@
 }
 
 .btn-sm {
-  padding: 0.35rem 0.65rem;
+  padding: 0.3rem 0.6rem;
   font-size: 0.8rem;
 }
 
-/* Create patient card */
+.btn-outline {
+  background: transparent;
+  color: #155eef;
+  border: 1px solid #155eef;
+}
+
+.btn-outline:hover {
+  background: #eef4ff;
+}
+
+/* ── State messages ────────────────────────────────────────────────────── */
+.state {
+  padding: 0.75rem;
+  background: #eef4ff;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
+
+.error {
+  background: #ffe8e8;
+  color: #7a1818;
+}
+
+/* ── Create patient card ───────────────────────────────────────────────── */
 .create-card {
   background: #fff;
   border: 1px solid #dbe1ea;
@@ -51,18 +78,19 @@
 
 .create-card h2 {
   margin: 0 0 1rem;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 600;
 }
 
+/* ── Form grid ─────────────────────────────────────────────────────────── */
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
   gap: 0.75rem;
   margin-bottom: 1rem;
 }
 
-.inline-grid {
+.wf-grid {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 
@@ -91,7 +119,7 @@
   box-shadow: 0 0 0 2px rgba(21, 94, 239, 0.15);
 }
 
-.required {
+.req {
   color: #d92d20;
 }
 
@@ -106,51 +134,127 @@
   justify-content: flex-end;
 }
 
-/* Table */
+/* ── Empty state ───────────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #667085;
+}
+
+.empty-state p {
+  margin-bottom: 1rem;
+}
+
+/* ── Accordion container ───────────────────────────────────────────────── */
 .table-wrap {
-  overflow-x: auto;
   border: 1px solid #dbe1ea;
   border-radius: 12px;
   background: #fff;
+  overflow: hidden;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th,
-td {
-  text-align: left;
-  padding: 0.75rem;
+/* ── Patient row ───────────────────────────────────────────────────────── */
+.patient-row {
+  display: grid;
+  grid-template-columns: 2rem 1fr 7rem 14rem 5rem auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
   border-bottom: 1px solid #edf1f6;
-  vertical-align: top;
+  transition: background 0.1s;
 }
 
-th {
-  font-size: 0.8rem;
+.patient-row:last-child {
+  border-bottom: none;
+}
+
+.patient-row:hover,
+.patient-row.expanded {
+  background: #f5f9ff;
+}
+
+/* Chevron */
+.patient-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chevron {
+  font-size: 1.2rem;
+  color: #667085;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.chevron.open {
+  transform: rotate(90deg);
+  color: #155eef;
+}
+
+/* Name block */
+.patient-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.name {
   font-weight: 600;
-  color: #475467;
-  background: #f9fafb;
+  color: #101828;
 }
 
-.name-cell {
+.mrn {
+  font-size: 0.78rem;
+  color: #667085;
+}
+
+.patient-dob,
+.patient-location {
+  font-size: 0.85rem;
+  color: #344054;
+}
+
+.patient-meta {
+  display: flex;
+  align-items: center;
+}
+
+.case-count {
+  font-size: 0.78rem;
+  background: #eef4ff;
+  color: #155eef;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
   font-weight: 600;
 }
 
-.actions-cell {
-  text-align: right;
-  white-space: nowrap;
+.patient-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
-/* Inline workflow form row */
-.workflow-row td {
-  background: #f0f6ff;
-  padding: 0;
+/* ── Expanded panel ────────────────────────────────────────────────────── */
+.expanded-panel {
+  background: #f8fbff;
+  border-bottom: 1px solid #dbe1ea;
+  padding: 1rem 1.25rem 1.25rem;
 }
 
+.panel-loading {
+  color: #667085;
+  font-size: 0.875rem;
+  padding: 0.5rem 0;
+}
+
+/* ── Workflow start form inside panel ──────────────────────────────────── */
 .workflow-form {
+  background: #fff;
+  border: 1px solid #c3d3f0;
+  border-radius: 10px;
   padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
 }
 
 .workflow-form h3 {
@@ -160,25 +264,134 @@ th {
   color: #155eef;
 }
 
-/* Status messages */
-.state {
-  padding: 0.75rem;
-  background: #eef4ff;
-  border-radius: 10px;
-  margin-bottom: 1rem;
-}
-
-.error {
-  background: #ffe8e8;
-  color: #7a1818;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 3rem;
+/* ── No cases placeholder ──────────────────────────────────────────────── */
+.no-cases {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
   color: #667085;
+  font-size: 0.875rem;
 }
 
-.empty-state p {
-  margin-bottom: 1rem;
+.no-cases p {
+  margin: 0;
+}
+
+/* ── Cases sub-table ───────────────────────────────────────────────────── */
+.cases-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #dbe1ea;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.cases-table th,
+.cases-table td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #edf1f6;
+  vertical-align: middle;
+}
+
+.cases-table th {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #475467;
+  background: #f9fafb;
+}
+
+.cases-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.cases-table tbody tr:hover {
+  background: #f5f9ff;
+}
+
+/* ── Status badge ──────────────────────────────────────────────────────── */
+.status-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: #e5e7eb;
+  color: #1f2937;
+}
+
+.status-submitted,
+.status-simcompleted,
+.status-imagestored { background: #dbeafe; color: #1d4ed8; }
+.status-contoursready { background: #dcfce7; color: #166534; }
+.status-contouringinprogress { background: #fef3c7; color: #92400e; }
+.status-planready,
+.status-planreviewed { background: #dcfce7; color: #166534; }
+.status-treating { background: #d1fae5; color: #065f46; }
+.status-treating,
+.status-treatmentcompleted { background: #d1fae5; color: #065f46; }
+.status-cancelled { background: #fee2e2; color: #991b1b; }
+
+/* ── Workflow step pills ───────────────────────────────────────────────── */
+.workflow-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.18rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  color: #344054;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.step-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.workflow-step.completed {
+  border-color: #2f855a;
+  background: #ecfdf3;
+  color: #166534;
+}
+
+.workflow-step.current {
+  border-color: #155eef;
+  background: #eef4ff;
+  color: #155eef;
+}
+
+.workflow-step.upcoming {
+  border-color: #e5e7eb;
+  background: #f9fafb;
+  color: #9ca3af;
+}
+
+@media (max-width: 900px) {
+  .patient-row {
+    grid-template-columns: 2rem 1fr auto;
+    grid-template-rows: auto auto auto;
+  }
+
+  .patient-dob,
+  .patient-location,
+  .patient-meta {
+    display: none;
+  }
 }

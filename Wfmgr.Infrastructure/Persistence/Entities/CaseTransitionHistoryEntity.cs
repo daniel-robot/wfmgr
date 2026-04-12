@@ -4,7 +4,7 @@ public class CaseTransitionHistoryEntity
 {
     public Guid TransitionId { get; set; }
     public Guid CaseId { get; set; }
-    public string FromStatus { get; set; } = string.Empty;
+    public string? FromStatus { get; set; }
     public string ToStatus { get; set; } = string.Empty;
     public string TriggerType { get; set; } = string.Empty;
     public string TriggerName { get; set; } = string.Empty;

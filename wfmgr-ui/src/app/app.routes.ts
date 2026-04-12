@@ -11,8 +11,8 @@ import { PatientListPageComponent } from './pages/patients/patient-list.page';
 export const routes: Routes = [
 	{ path: '', component: DashboardPageComponent },
 	{ path: 'patients', component: PatientListPageComponent },
-	{ path: 'cases', component: CaseListPageComponent },
-	{ path: 'cases/new', component: CreateCasePageComponent },
+	{ path: 'cases', redirectTo: 'patients', pathMatch: 'full' },
+	{ path: 'cases/new', redirectTo: 'patients', pathMatch: 'full' },
 	{ path: 'cases/:caseId', component: CaseDetailsPageComponent },
 	{ path: 'events', component: EventsPageComponent },
 	{ path: 'audit-logs', component: AuditLogPageComponent },

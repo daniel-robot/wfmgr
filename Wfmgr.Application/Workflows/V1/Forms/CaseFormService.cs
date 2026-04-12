@@ -177,11 +177,7 @@ public class CaseFormService : ICaseFormService
         switch (form.FormType)
         {
             case CaseFormTypes.SimulationRequestForm:
-                if (caseData.CurrentStatus == CaseStatus.Draft)
-                {
-                    await ValidateRequiredFormsBeforeTransitionAsync(caseData.CaseId, CaseStatus.Submitted, ct);
-                    await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.Submitted, BuildContext("SubmitCase", WorkflowTriggerType.User, request, form), ct);
-                }
+                // Case starts as Submitted; no Draft→Submitted transition needed.
                 break;
 
             case CaseFormTypes.SimulationRecordForm:

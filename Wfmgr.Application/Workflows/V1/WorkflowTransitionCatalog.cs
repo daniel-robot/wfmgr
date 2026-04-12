@@ -24,19 +24,19 @@ public static class WorkflowTransitionCatalog
     // Phase 1 – Intake & Simulation
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Doctor submits the simulation request, creating the case workload.</summary>
+    /// <summary>Case is created and immediately active. First user action is scheduling the CT simulation.</summary>
     public static readonly TransitionDefinition SIM_001 = new()
     {
         Code = "SIM-001",
-        FromStatuses = [CaseStatus.Draft],
-        ToStatus = CaseStatus.Submitted,
-        TriggerName = "SubmitSimulationRequest",
+        FromStatuses = [CaseStatus.Submitted],
+        ToStatus = CaseStatus.SimScheduled,
+        TriggerName = "ScheduleSimulation",
         TriggerType = WorkflowTriggerType.User,
-        RequiredRole = "Doctor",
-        GateChecks = ["SimulationRequestFormValid"],
-        SuccessActions = ["SaveForm", "Audit", "RecordTransitionHistory"],
-        FailureActions = ["RejectTransition"],
-        WorkItemsToCreate = [WorkItemTypes.SimulationSchedule, WorkItemTypes.SimulationRecord],
+        RequiredRole = "SimTech/Scheduler",
+        GateChecks = ["CaseActiveNotCancelled"],
+        SuccessActions = ["SaveScheduleInfo", "Audit", "RecordTransitionHistory"],
+        FailureActions = ["StayInSubmitted"],
+        WorkItemsToCreate = [WorkItemTypes.SimulationSchedule],
     };
 
     /// <summary>Simulation technologist or scheduler books the CT simulation appointment.</summary>

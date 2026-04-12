@@ -103,7 +103,6 @@ export class CaseDetailsPageComponent implements OnInit {
     'interrupt-treatment': ['Treating'],
     'resume-treatment': ['TreatmentPaused', 'TreatmentInterrupted'],
     cancel: [
-      'Draft',
       'Submitted',
       'SimScheduled',
       'SimInProgress',

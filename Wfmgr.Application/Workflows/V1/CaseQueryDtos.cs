@@ -55,7 +55,7 @@ public sealed record AuditLogViewDto(
 public sealed record TransitionHistoryViewDto(
     Guid TransitionId,
     Guid CaseId,
-    string FromStatus,
+    string? FromStatus,
     string ToStatus,
     string TriggerType,
     string TriggerName,

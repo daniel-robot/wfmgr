@@ -1,14 +1,21 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
-import { Patient } from '../../core/models/workflow.models';
+import { CaseSummary, Patient } from '../../core/models/workflow.models';
 import { WorkflowApiService } from '../../core/services/workflow-api.service';
+
+type WorkflowStepState = 'completed' | 'current' | 'upcoming';
+
+interface WorkflowStep {
+  id: string;
+  label: string;
+}
 
 @Component({
   selector: 'app-patient-list-page',
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './patient-list.page.html',
   styleUrl: './patient-list.page.css',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -19,18 +26,15 @@ export class PatientListPageComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly cdr = inject(ChangeDetectorRef);
 
+  // ── Patients ──────────────────────────────────────────────────────────────
   patients: Patient[] = [];
   loading = false;
   error = '';
 
+  // ── Create patient form ───────────────────────────────────────────────────
   showCreateForm = false;
   creating = false;
   createError = '';
-
-  /** patientId of the row currently showing the start-workflow form */
-  activeWorkflowPatientId: string | null = null;
-  startingWorkflow = false;
-  workflowError = '';
 
   readonly createForm = this.fb.group({
     hospitalId: ['', Validators.required],
@@ -42,15 +46,61 @@ export class PatientListPageComponent implements OnInit {
     dateOfBirth: ['', Validators.required]
   });
 
+  // ── Expanded patient / lazy-loaded cases ──────────────────────────────────
+  expandedPatientId: string | null = null;
+  /** Cache: patientId → cases */
+  patientCasesMap = new Map<string, CaseSummary[]>();
+  loadingCasesFor: string | null = null;
+
+  // ── Start workflow form ───────────────────────────────────────────────────
+  activeWorkflowPatientId: string | null = null;
+  startingWorkflow = false;
+  workflowError = '';
+
   readonly workflowForm = this.fb.group({
     accessionNumber: ['', Validators.required],
     notes: ['']
   });
 
+  // ── Workflow step visualisation (mirrors case-list) ───────────────────────
+  readonly workflowSteps: WorkflowStep[] = [
+    { id: 'intake',      label: 'Intake' },
+    { id: 'simulation',  label: 'Simulation' },
+    { id: 'contouring',  label: 'Contouring' },
+    { id: 'planning',    label: 'Planning' },
+    { id: 'treatment',   label: 'Treatment' }
+  ];
+
+  private readonly statusToStep = new Map<string, number>([
+    // Step 0 — Intake
+    ['Cancelled', 0],
+    // Step 1 — Simulation (sim request submitted through sim completed)
+    ['Submitted', 1],
+    ['SimScheduled', 1], ['SimInProgress', 1], ['SimCompleted', 1],
+    // Step 2 — Contouring (images arrive → contouring complete)
+    ['ImageStored', 2], ['ImageForwarding', 2],
+    ['ContouringInProgress', 2], ['ContoursReady', 2],
+    ['ContoursUnderReview', 2], ['ContoursRejected', 2], ['ContourReworkRequired', 2],
+    // Step 3 — Planning
+    ['PlanningPending', 3], ['PlanningAssigned', 3], ['PlanningInProgress', 3],
+    ['PlanReady', 3], ['PlanUnderReview', 3], ['PlanReviewed', 3],
+    ['PlanReReviewOptional', 3], ['PrescriptionGenerating', 3], ['PrescriptionReady', 3],
+    ['PrescriptionSyncFailed', 3], ['PlanQAInProgress', 3], ['PlanQAApproved', 3],
+    ['PlanQAFailed', 3], ['PlanDoubleCheckOptional', 3],
+    // Step 4 — Treatment
+    ['ReadyForScheduling', 4], ['SchedulingInProgress', 4], ['SchedulingFailed', 4],
+    ['Scheduled', 4], ['OrderPending', 4], ['OrderSubmitted', 4], ['QueuePending', 4],
+    ['Treating', 4], ['TreatmentPaused', 4], ['TreatmentInterrupted', 4],
+    ['TreatmentCompleted', 4], ['PostTreatmentReviewPending', 4], ['PostTreatmentReviewed', 4],
+    ['Archived', 4], ['Completed', 4], ['MonacoForwarded', 4]
+  ]);
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
   ngOnInit(): void {
     this.loadPatients();
   }
 
+  // ── Patient actions ───────────────────────────────────────────────────────
   loadPatients(): void {
     this.loading = true;
     this.error = '';
@@ -116,7 +166,57 @@ export class PatientListPageComponent implements OnInit {
       });
   }
 
-  openWorkflowForm(patientId: string): void {
+  // ── Expand / collapse patient row  ────────────────────────────────────────
+  toggleExpand(patientId: string): void {
+    if (this.expandedPatientId === patientId) {
+      this.expandedPatientId = null;
+      this.activeWorkflowPatientId = null;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.expandedPatientId = patientId;
+    this.activeWorkflowPatientId = null;
+    this.workflowError = '';
+
+    if (!this.patientCasesMap.has(patientId)) {
+      this.loadCasesForPatient(patientId);
+    } else {
+      this.cdr.markForCheck();
+    }
+  }
+
+  private loadCasesForPatient(patientId: string): void {
+    this.loadingCasesFor = patientId;
+
+    this.api
+      .getPatientCases(patientId)
+      .pipe(finalize(() => {
+        this.loadingCasesFor = null;
+        this.cdr.markForCheck();
+      }))
+      .subscribe({
+        next: (cases) => {
+          this.patientCasesMap.set(patientId, cases);
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.patientCasesMap.set(patientId, []);
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
+  casesFor(patientId: string): CaseSummary[] {
+    return this.patientCasesMap.get(patientId) ?? [];
+  }
+
+  // ── Start workflow ────────────────────────────────────────────────────────
+  openWorkflowForm(patientId: string, event: Event): void {
+    event.stopPropagation();
+    if (this.expandedPatientId !== patientId) {
+      this.toggleExpand(patientId);
+    }
     this.activeWorkflowPatientId = patientId;
     this.workflowForm.reset();
     this.workflowError = '';
@@ -146,6 +246,8 @@ export class PatientListPageComponent implements OnInit {
       .pipe(finalize(() => (this.startingWorkflow = false)))
       .subscribe({
         next: (res) => {
+          // Invalidate cache so the new case appears on next expand
+          this.patientCasesMap.delete(patientId);
           this.activeWorkflowPatientId = null;
           this.cdr.markForCheck();
           this.router.navigate(['/cases', res.caseId]);
@@ -157,6 +259,19 @@ export class PatientListPageComponent implements OnInit {
       });
   }
 
+  // ── Workflow step helpers ─────────────────────────────────────────────────
+  getStepState(status: string, stepIndex: number): WorkflowStepState {
+    const current = this.statusToStep.get(status) ?? 0;
+    if (stepIndex < current) return 'completed';
+    if (stepIndex === current) return 'current';
+    return 'upcoming';
+  }
+
+  getStatusClass(status: string): string {
+    return `status-${status.toLowerCase()}`;
+  }
+
+  // ── Utilities ─────────────────────────────────────────────────────────────
   fullName(p: Patient): string {
     return `${p.firstName} ${p.lastName}`;
   }

@@ -59,30 +59,58 @@ public class CaseWorkflowService : ICaseWorkflowService
             DepartmentId = request.DepartmentId,
             PatientId = request.PatientId,
             AccessionNumber = request.AccessionNumber,
-            CurrentStatus = CaseStatus.Draft,
-            StatusVersion = 0,
+            CurrentStatus = CaseStatus.Submitted,
+            StatusVersion = 1,
+            Notes = request.Notes,
             CreatedAt = now,
             UpdatedAt = now
         };
 
         await _dataAccess.AddCaseAsync(item, ct);
 
-        await ApplyAsync(item, CaseStatus.Submitted, new TransitionExecutionContext
+        await _dataAccess.AddAuditLogAsync(new AuditLogData
         {
-            TriggerName = "SubmitCase",
-            TriggerType = WorkflowTriggerType.User,
-            TriggeredBy = "System",
-            ActorRoles = ["Coordinator"],
-            Metadata = request
+            AuditId = Guid.NewGuid(),
+            CaseId = caseId,
+            ActorType = WorkflowTriggerType.User.ToString(),
+            ActorId = request.PatientId,
+            Action = "CreateCase",
+            FromStatus = null,
+            ToStatus = CaseStatus.Submitted,
+            SnapshotJson = JsonSerializer.Serialize(new { request.AccessionNumber, request.PatientId }),
+            CreatedAt = now
+        }, ct);
+
+        await _dataAccess.AddCaseTransitionHistoryAsync(new CaseTransitionHistoryData
+        {
+            TransitionId = Guid.NewGuid(),
+            CaseId = caseId,
+            FromStatus = string.Empty,
+            ToStatus = CaseStatus.Submitted.ToString(),
+            TriggerType = WorkflowTriggerType.User.ToString(),
+            TriggerName = "CreateCase",
+            TriggeredBy = request.PatientId,
+            Reason = "Case created via patient workflow",
+            MetadataJson = JsonSerializer.Serialize(new { request.AccessionNumber }),
+            CreatedAt = now
         }, ct);
 
         await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
         {
             CaseId = caseId,
-            Type = WorkItemTypes.SimulationRecord,
+            Type = WorkItemTypes.SimulationSchedule,
             AssignedRole = "SimTech",
             PayloadJson = request.Notes,
             CreatedAtUtc = now
+        }, ct);
+
+        // Immediately advance to SimScheduled — the image scan work item is ready.
+        await ApplyAsync(item, CaseStatus.SimScheduled, new TransitionExecutionContext
+        {
+            TriggerName = "ScheduleSimulation",
+            TriggerType = WorkflowTriggerType.System,
+            TriggeredBy = "System",
+            ActorRoles = ["System"]
         }, ct);
 
         await _dataAccess.SaveChangesAsync(ct);
@@ -106,9 +134,9 @@ public class CaseWorkflowService : ICaseWorkflowService
             return;
         }
 
-        if (caseData.CurrentStatus is not (CaseStatus.Draft or CaseStatus.Submitted or CaseStatus.SimScheduled or CaseStatus.SimInProgress))
+        if (caseData.CurrentStatus is not (CaseStatus.Submitted or CaseStatus.SimScheduled or CaseStatus.SimInProgress))
         {
-            throw new InvalidOperationException($"Case must be in Draft, Submitted, SimScheduled, or SimInProgress status. Current status is '{caseData.CurrentStatus}'.");
+            throw new InvalidOperationException($"Case must be in Submitted, SimScheduled, or SimInProgress status. Current status is '{caseData.CurrentStatus}'.");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -116,18 +144,6 @@ public class CaseWorkflowService : ICaseWorkflowService
         if (simWorkItem is not null)
         {
             _workItemLifecycleService.CompleteWorkItem(simWorkItem, completedBy: "SimTech", resultCode: "Recorded", completedAtUtc: now);
-        }
-
-        if (caseData.CurrentStatus == CaseStatus.Draft)
-        {
-            await ApplyAsync(caseData, CaseStatus.Submitted, new TransitionExecutionContext
-            {
-                TriggerName = "SubmitCase",
-                TriggerType = WorkflowTriggerType.User,
-                TriggeredBy = "SimTech",
-                ActorRoles = ["SimTech"],
-                Metadata = request
-            }, ct);
         }
 
         if (caseData.CurrentStatus == CaseStatus.Submitted)

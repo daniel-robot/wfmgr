@@ -12,7 +12,7 @@ public class CaseTransitionHistoryEntityConfiguration : IEntityTypeConfiguration
 
         builder.HasKey(x => x.TransitionId);
 
-        builder.Property(x => x.FromStatus).HasMaxLength(64).IsRequired();
+        builder.Property(x => x.FromStatus).HasMaxLength(64);
         builder.Property(x => x.ToStatus).HasMaxLength(64).IsRequired();
         builder.Property(x => x.TriggerType).HasMaxLength(64).IsRequired();
         builder.Property(x => x.TriggerName).HasMaxLength(128).IsRequired();

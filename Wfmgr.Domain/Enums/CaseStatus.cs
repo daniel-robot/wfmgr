@@ -7,8 +7,6 @@ namespace Wfmgr.Domain.Enums;
 public enum CaseStatus
 {
     // ── Intake ────────────────────────────────────────────────────────────────
-    /// <summary>Case has been created but not yet submitted for processing.</summary>
-    Draft = 0,
     /// <summary>Case has been submitted and is awaiting simulation scheduling.</summary>
     Submitted = 10,
 
