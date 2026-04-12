@@ -11,6 +11,7 @@ public class WfmgrDbContext : DbContext
     }
 
     public DbSet<CaseEntity> Cases => Set<CaseEntity>();
+    public DbSet<PatientEntity> Patients => Set<PatientEntity>();
     public DbSet<WorkItemEntity> WorkItems => Set<WorkItemEntity>();
     public DbSet<ExternalEventEntity> ExternalEvents => Set<ExternalEventEntity>();
     public DbSet<OutboxMessageEntity> OutboxMessages => Set<OutboxMessageEntity>();

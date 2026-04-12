@@ -1,0 +1,184 @@
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn {
+  border: 0;
+  background: #155eef;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.55rem 0.85rem;
+  text-decoration: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn.secondary {
+  background: #475467;
+}
+
+.btn-sm {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+}
+
+/* Create patient card */
+.create-card {
+  background: #fff;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.create-card h2 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.inline-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.field label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #344054;
+}
+
+.field input {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.875rem;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: #155eef;
+  box-shadow: 0 0 0 2px rgba(21, 94, 239, 0.15);
+}
+
+.required {
+  color: #d92d20;
+}
+
+.field-error {
+  font-size: 0.75rem;
+  color: #d92d20;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+/* Table */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  background: #fff;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.75rem;
+  border-bottom: 1px solid #edf1f6;
+  vertical-align: top;
+}
+
+th {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #475467;
+  background: #f9fafb;
+}
+
+.name-cell {
+  font-weight: 600;
+}
+
+.actions-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Inline workflow form row */
+.workflow-row td {
+  background: #f0f6ff;
+  padding: 0;
+}
+
+.workflow-form {
+  padding: 1rem 1.25rem;
+}
+
+.workflow-form h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #155eef;
+}
+
+/* Status messages */
+.state {
+  padding: 0.75rem;
+  background: #eef4ff;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
+
+.error {
+  background: #ffe8e8;
+  color: #7a1818;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #667085;
+}
+
+.empty-state p {
+  margin-bottom: 1rem;
+}

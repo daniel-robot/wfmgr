@@ -21,6 +21,7 @@ public static class DependencyInjection
 
         services.AddDbContext<WfmgrDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IWorkflowCaseRepository, WorkflowCaseRepository>();
+        services.AddScoped<IPatientRepository, PatientRepository>();
         services.AddScoped<IWorkflowDataAccess, WorkflowDataAccess>();
         services.AddScoped<IWorkflowProfileResolver, WorkflowProfileResolver>();
         services.AddScoped<IExternalEventDispatcher, ExternalEventDispatcher>();

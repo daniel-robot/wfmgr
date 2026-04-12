@@ -10,11 +10,14 @@ import {
   CaseSummary,
   CreateCaseFormDraftRequest,
   CreateCaseRequest,
+  CreatePatientRequest,
   CtImageStoredRequest,
   ExternalEventItem,
   IntegrationReferenceItem,
+  Patient,
   PlanVersionItem,
   PvMedEventRequest,
+  StartWorkflowRequest,
   SubmitCaseFormRequest,
   SubmitSimRecordRequest,
   TransitionHistoryItem,
@@ -169,6 +172,28 @@ export class WorkflowApiService {
 
   getAuditLogs(): Observable<AuditLogItem[]> {
     return this.http.get<AuditLogItem[]>(`${this.baseUrl}/api/audit-logs`);
+  }
+
+  getPatients(): Observable<Patient[]> {
+    return this.http.get<Patient[]>(`${this.baseUrl}/api/patients`);
+  }
+
+  getPatientById(patientId: string): Observable<Patient> {
+    return this.http.get<Patient>(`${this.baseUrl}/api/patients/${patientId}`);
+  }
+
+  createPatient(request: CreatePatientRequest): Observable<Patient> {
+    return this.http.post<Patient>(`${this.baseUrl}/api/patients`, request);
+  }
+
+  getPatientCases(patientId: string): Observable<CaseSummary[]> {
+    return this.http.get<unknown>(`${this.baseUrl}/api/patients/${patientId}/cases`).pipe(
+      map((response) => this.extractArray(response).map((item) => this.toCaseSummary(item)))
+    );
+  }
+
+  startWorkflow(patientId: string, request: StartWorkflowRequest): Observable<{ caseId: string }> {
+    return this.http.post<{ caseId: string }>(`${this.baseUrl}/api/patients/${patientId}/cases`, request);
   }
 
   private postCaseAction(caseId: string, action: string, request: WorkflowActionRequest): Observable<void> {

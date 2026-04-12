@@ -12,6 +12,23 @@ DROP TABLE IF EXISTS "OutboxMessage" CASCADE;
 DROP TABLE IF EXISTS "ExternalEvent" CASCADE;
 DROP TABLE IF EXISTS "WorkItem" CASCADE;
 DROP TABLE IF EXISTS "Case" CASCADE;
+DROP TABLE IF EXISTS "Patient" CASCADE;
+
+CREATE TABLE "Patient"
+(
+    "PatientId" uuid PRIMARY KEY,
+    "HospitalId" varchar(32) NOT NULL,
+    "SiteId" varchar(32) NOT NULL,
+    "DepartmentId" varchar(32) NOT NULL,
+    "ExternalPatientId" varchar(100) NOT NULL,
+    "FirstName" varchar(128) NOT NULL,
+    "LastName" varchar(128) NOT NULL,
+    "DateOfBirth" date NOT NULL,
+    "CreatedAt" timestamptz NOT NULL,
+    "UpdatedAt" timestamptz NOT NULL,
+    CONSTRAINT "UQ_Patient_HospitalId_SiteId_ExternalPatientId"
+        UNIQUE ("HospitalId", "SiteId", "ExternalPatientId")
+);
 
 CREATE TABLE "Case"
 (

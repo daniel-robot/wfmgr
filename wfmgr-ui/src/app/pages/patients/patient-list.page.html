@@ -1,0 +1,165 @@
+<section class="page">
+  <div class="header-row">
+    <h1>Patients</h1>
+    <div class="header-actions">
+      <button class="btn secondary" (click)="loadPatients()" [disabled]="loading">Refresh</button>
+      <button class="btn" (click)="openCreateForm()" [disabled]="showCreateForm">Add Patient</button>
+    </div>
+  </div>
+
+  @if (error) {
+    <p class="state error">{{ error }}</p>
+  }
+
+  @if (loading) {
+    <p class="state">Loading patients...</p>
+  }
+
+  <!-- Create patient form -->
+  @if (showCreateForm) {
+    <div class="create-card">
+      <h2>New Patient</h2>
+      <form [formGroup]="createForm" (ngSubmit)="submitCreatePatient()">
+        <div class="form-grid">
+          <div class="field">
+            <label>Hospital ID <span class="required">*</span></label>
+            <input formControlName="hospitalId" placeholder="HOSP001" />
+            @if (createForm.get('hospitalId')?.invalid && createForm.get('hospitalId')?.touched) {
+              <span class="field-error">Required</span>
+            }
+          </div>
+          <div class="field">
+            <label>Site ID <span class="required">*</span></label>
+            <input formControlName="siteId" placeholder="SITE_A" />
+            @if (createForm.get('siteId')?.invalid && createForm.get('siteId')?.touched) {
+              <span class="field-error">Required</span>
+            }
+          </div>
+          <div class="field">
+            <label>Department ID <span class="required">*</span></label>
+            <input formControlName="departmentId" placeholder="RT" />
+            @if (createForm.get('departmentId')?.invalid && createForm.get('departmentId')?.touched) {
+              <span class="field-error">Required</span>
+            }
+          </div>
+          <div class="field">
+            <label>MRN / External Patient ID <span class="required">*</span></label>
+            <input formControlName="externalPatientId" placeholder="MRN-00123" />
+            @if (createForm.get('externalPatientId')?.invalid && createForm.get('externalPatientId')?.touched) {
+              <span class="field-error">Required</span>
+            }
+          </div>
+          <div class="field">
+            <label>First Name <span class="required">*</span></label>
+            <input formControlName="firstName" placeholder="Jane" />
+            @if (createForm.get('firstName')?.invalid && createForm.get('firstName')?.touched) {
+              <span class="field-error">Required</span>
+            }
+          </div>
+          <div class="field">
+            <label>Last Name <span class="required">*</span></label>
+            <input formControlName="lastName" placeholder="Smith" />
+            @if (createForm.get('lastName')?.invalid && createForm.get('lastName')?.touched) {
+              <span class="field-error">Required</span>
+            }
+          </div>
+          <div class="field">
+            <label>Date of Birth <span class="required">*</span></label>
+            <input type="date" formControlName="dateOfBirth" />
+            @if (createForm.get('dateOfBirth')?.invalid && createForm.get('dateOfBirth')?.touched) {
+              <span class="field-error">Required</span>
+            }
+          </div>
+        </div>
+
+        @if (createError) {
+          <p class="state error">{{ createError }}</p>
+        }
+
+        <div class="form-actions">
+          <button type="button" class="btn secondary" (click)="cancelCreate()" [disabled]="creating">Cancel</button>
+          <button type="submit" class="btn" [disabled]="creating">
+            {{ creating ? 'Saving…' : 'Save Patient' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+
+  @if (!loading && !error && patients.length === 0 && !showCreateForm) {
+    <div class="empty-state">
+      <p>No patients found.</p>
+      <button class="btn" (click)="openCreateForm()">Add your first patient</button>
+    </div>
+  }
+
+  @if (patients.length > 0) {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>MRN</th>
+            <th>Date of Birth</th>
+            <th>Hospital / Site / Dept</th>
+            <th>Registered</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (patient of patients; track patient.patientId) {
+            <tr>
+              <td class="name-cell">{{ fullName(patient) }}</td>
+              <td>{{ patient.externalPatientId }}</td>
+              <td>{{ patient.dateOfBirth }}</td>
+              <td>{{ patient.hospitalId }} / {{ patient.siteId }} / {{ patient.departmentId }}</td>
+              <td>{{ patient.createdAt | date: 'yyyy-MM-dd' }}</td>
+              <td class="actions-cell">
+                @if (activeWorkflowPatientId !== patient.patientId) {
+                  <button class="btn btn-sm" (click)="openWorkflowForm(patient.patientId)">
+                    Start Adaptive Treatment
+                  </button>
+                }
+              </td>
+            </tr>
+
+            <!-- Inline workflow start form -->
+            @if (activeWorkflowPatientId === patient.patientId) {
+              <tr class="workflow-row">
+                <td colspan="6">
+                  <div class="workflow-form">
+                    <h3>Start Adaptive Treatment Workflow — {{ fullName(patient) }}</h3>
+                    <form [formGroup]="workflowForm" (ngSubmit)="startWorkflow(patient.patientId)">
+                      <div class="form-grid inline-grid">
+                        <div class="field">
+                          <label>Accession Number <span class="required">*</span></label>
+                          <input formControlName="accessionNumber" placeholder="ACC-2026-001" />
+                          @if (workflowForm.get('accessionNumber')?.invalid && workflowForm.get('accessionNumber')?.touched) {
+                            <span class="field-error">Required</span>
+                          }
+                        </div>
+                        <div class="field">
+                          <label>Notes</label>
+                          <input formControlName="notes" placeholder="Optional notes…" />
+                        </div>
+                      </div>
+                      @if (workflowError) {
+                        <p class="state error">{{ workflowError }}</p>
+                      }
+                      <div class="form-actions">
+                        <button type="button" class="btn secondary" (click)="cancelWorkflow()" [disabled]="startingWorkflow">Cancel</button>
+                        <button type="submit" class="btn" [disabled]="startingWorkflow">
+                          {{ startingWorkflow ? 'Starting…' : 'Start Workflow' }}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

@@ -10,6 +10,7 @@ public interface IWorkflowDataAccess
     Task<IReadOnlyList<CaseFormData>> GetCaseFormsByCaseIdAsync(Guid caseId, CancellationToken ct);
     Task<CaseFormData?> GetLatestCaseFormByCaseAndTypeAsync(Guid caseId, string formType, CancellationToken ct);
     Task<IReadOnlyList<CaseData>> GetCasesAsync(CancellationToken ct);
+    Task<IReadOnlyList<CaseData>> GetCasesByPatientIdAsync(string patientId, CancellationToken ct);
     Task<IReadOnlyList<WorkItemData>> GetWorkItemsByCaseIdAsync(Guid caseId, CancellationToken ct);
     Task<IReadOnlyList<AuditLogData>> GetAuditLogsByCaseIdAsync(Guid caseId, CancellationToken ct);
     Task<IReadOnlyList<AuditLogData>> GetAuditLogsAsync(CancellationToken ct);

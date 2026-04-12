@@ -31,6 +31,24 @@ public class CaseQueryService : ICaseQueryService
             .ToList();
     }
 
+    public async Task<IReadOnlyList<CaseListItemDto>> GetCasesByPatientIdAsync(string patientId, CancellationToken ct)
+    {
+        var items = await _dataAccess.GetCasesByPatientIdAsync(patientId, ct);
+
+        return items
+            .Select(x => new CaseListItemDto(
+                x.CaseId,
+                x.HospitalId,
+                x.SiteId,
+                x.DepartmentId,
+                x.PatientId,
+                x.AccessionNumber,
+                x.CurrentStatus.ToString(),
+                x.CreatedAt,
+                x.UpdatedAt))
+            .ToList();
+    }
+
     public async Task<CaseDetailsDto?> GetCaseByIdAsync(Guid caseId, CancellationToken ct)
     {
         var x = await _dataAccess.GetCaseByIdAsync(caseId, ct);

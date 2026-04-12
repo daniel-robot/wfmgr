@@ -192,6 +192,34 @@ export interface WorkflowActionRequest {
   reason?: string | null;
 }
 
+export interface Patient {
+  patientId: string;
+  hospitalId: string;
+  siteId: string;
+  departmentId: string;
+  externalPatientId: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePatientRequest {
+  hospitalId: string;
+  siteId: string;
+  departmentId: string;
+  externalPatientId: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+}
+
+export interface StartWorkflowRequest {
+  accessionNumber: string;
+  notes?: string | null;
+}
+
 export interface ApiError {
   message: string;
 }

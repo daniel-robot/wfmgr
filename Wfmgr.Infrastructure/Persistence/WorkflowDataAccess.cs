@@ -56,6 +56,39 @@ public class WorkflowDataAccess : IWorkflowDataAccess
         return entity is null ? null : Map(entity);
     }
 
+    public async Task<IReadOnlyList<CaseData>> GetCasesByPatientIdAsync(string patientId, CancellationToken ct)
+    {
+        var items = await _dbContext.Cases
+            .AsNoTracking()
+            .Where(x => x.PatientId == patientId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync(ct);
+
+        return items
+            .Select(x => new CaseData
+            {
+                CaseId = x.CaseId,
+                HospitalId = x.HospitalId,
+                SiteId = x.SiteId,
+                DepartmentId = x.DepartmentId,
+                PatientId = x.PatientId,
+                AccessionNumber = x.AccessionNumber,
+                CurrentStatus = x.CurrentStatus,
+                StatusVersion = x.StatusVersion,
+                CtStudyInstanceUid = x.CtStudyInstanceUid,
+                CtWadoRsUrl = x.CtWadoRsUrl,
+                PvMedJobId = x.PvMedJobId,
+                RtStructSeriesInstanceUid = x.RtStructSeriesInstanceUid,
+                Notes = x.Notes,
+                CurrentPlannerUserId = x.CurrentPlannerUserId,
+                CurrentReviewerUserId = x.CurrentReviewerUserId,
+                CurrentPlanVersionNo = x.CurrentPlanVersionNo,
+                CreatedAt = x.CreatedAt,
+                UpdatedAt = x.UpdatedAt
+            })
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<CaseData>> GetCasesAsync(CancellationToken ct)
     {
         var items = await _dbContext.Cases
