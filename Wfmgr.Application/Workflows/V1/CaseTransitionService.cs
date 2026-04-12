@@ -129,6 +129,10 @@ public sealed class CaseTransitionService : ICaseTransitionService
         caseData.CurrentStatus = toStatus;
         caseData.StatusVersion += 1;
         caseData.UpdatedAt = now;
+
+        // Write the mutated CaseData back to the tracked EF entity so that
+        // SaveChangesAsync (called by the outer service) persists the new status.
+        await _dataAccess.UpdateCaseAsync(caseData, ct);
         _logger.LogInformation(
             "Case {CaseId} transitioned {From} → {To} via '{Trigger}' (code: {Code}, catalogMatched: {Matched})",
             caseData.CaseId, fromStatus, toStatus, triggerName, transitionCode ?? "(fallback)", catalogMatched);

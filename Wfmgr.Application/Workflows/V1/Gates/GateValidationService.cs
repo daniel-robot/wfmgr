@@ -37,7 +37,6 @@ public sealed class GateValidationService : IGateValidationService
     // Case statuses from which cancellation is permitted (mirrors CaseStateMachineService).
     private static readonly HashSet<CaseStatus> CancellableStatuses =
     [
-        CaseStatus.Submitted,
         CaseStatus.SimScheduled,
         CaseStatus.SimInProgress,
         CaseStatus.SimCompleted,

@@ -9,7 +9,6 @@ public class CaseStateMachineService : ICaseStateMachineService
 {
     private static readonly HashSet<CaseStatus> CancelAllowedFromStates =
     [
-        CaseStatus.Submitted,
         CaseStatus.SimScheduled,
         CaseStatus.SimInProgress,
         CaseStatus.SimCompleted,
@@ -133,7 +132,7 @@ public class CaseStateMachineService : ICaseStateMachineService
 
     private static readonly IReadOnlyList<TransitionRule> Rules =
     [
-        new() { FromStatus = CaseStatus.Submitted, ToStatus = CaseStatus.SimScheduled, TriggerName = "ScheduleSimulation", TriggerType = WorkflowTriggerType.User },
+        new() { FromStatus = CaseStatus.Submitted, ToStatus = CaseStatus.SimScheduled, TriggerName = "ScheduleSimulation", TriggerType = WorkflowTriggerType.System },
         new() { FromStatus = CaseStatus.SimScheduled, ToStatus = CaseStatus.SimInProgress, TriggerName = "StartSimulation", TriggerType = WorkflowTriggerType.User },
         new() { FromStatus = CaseStatus.SimInProgress, ToStatus = CaseStatus.SimCompleted, TriggerName = "CompleteSimulation", TriggerType = WorkflowTriggerType.User, GateConditions = ["SimulationRecordMustExist"], FailurePath = "SimRecordMissing" },
 

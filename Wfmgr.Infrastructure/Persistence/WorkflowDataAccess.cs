@@ -385,6 +385,24 @@ public class WorkflowDataAccess : IWorkflowDataAccess
         return _dbContext.PlanVersions.AnyAsync(x => x.CaseId == caseId, ct);
     }
 
+    public async Task UpdateCaseAsync(CaseData item, CancellationToken ct)
+    {
+        var entity = await _dbContext.Cases.FindAsync([item.CaseId], ct)
+            ?? throw new InvalidOperationException($"Case '{item.CaseId}' not found.");
+
+        entity.CurrentStatus = item.CurrentStatus;
+        entity.StatusVersion = item.StatusVersion;
+        entity.CtStudyInstanceUid = item.CtStudyInstanceUid;
+        entity.CtWadoRsUrl = item.CtWadoRsUrl;
+        entity.PvMedJobId = item.PvMedJobId;
+        entity.RtStructSeriesInstanceUid = item.RtStructSeriesInstanceUid;
+        entity.Notes = item.Notes;
+        entity.CurrentPlannerUserId = item.CurrentPlannerUserId;
+        entity.CurrentReviewerUserId = item.CurrentReviewerUserId;
+        entity.CurrentPlanVersionNo = item.CurrentPlanVersionNo;
+        entity.UpdatedAt = item.UpdatedAt;
+    }
+
     public async Task AddCaseAsync(CaseData item, CancellationToken ct)
     {
         await _dbContext.Cases.AddAsync(new CaseEntity

@@ -27,6 +27,7 @@ public interface IWorkflowDataAccess
     Task<bool> CaseFormExistsAsync(Guid caseId, string formType, string? requiredStatus, CancellationToken ct);
     Task<bool> PlanVersionExistsAsync(Guid caseId, CancellationToken ct);
     Task AddCaseAsync(CaseData item, CancellationToken ct);
+    Task UpdateCaseAsync(CaseData item, CancellationToken ct);
     Task AddCaseFormAsync(CaseFormData item, CancellationToken ct);
     Task UpdateCaseFormAsync(CaseFormData item, CancellationToken ct);
     Task AddWorkItemAsync(WorkItemData item, CancellationToken ct);
