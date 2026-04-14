@@ -5,6 +5,7 @@ using Wfmgr.Application.Workflows.V1.Dtos;
 using Wfmgr.Application.Workflows.V1.Gates;
 using Wfmgr.Application.Workflows.V1.StateMachine;
 using Wfmgr.Application.Workflows.V1.WorkItems;
+using Wfmgr.Domain;
 using Wfmgr.Domain.Enums;
 using Wfmgr.Domain.Forms;
 using Wfmgr.Domain.Integrations;
@@ -99,7 +100,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         {
             CaseId = caseId,
             Type = WorkItemTypes.SimulationSchedule,
-            AssignedRole = "SimTech",
+            AssignedRole = WorkflowRoles.SimTech,
             PayloadJson = request.Notes,
             CreatedAtUtc = now
         }, ct);
@@ -109,8 +110,8 @@ public class CaseWorkflowService : ICaseWorkflowService
         {
             TriggerName = "ScheduleSimulation",
             TriggerType = WorkflowTriggerType.System,
-            TriggeredBy = "System",
-            ActorRoles = ["System"]
+            TriggeredBy = WorkflowRoles.System,
+            ActorRoles = [WorkflowRoles.System]
         }, ct);
 
         await _dataAccess.SaveChangesAsync(ct);
@@ -143,7 +144,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         var simWorkItem = await _dataAccess.GetOpenWorkItemAsync(caseId, WorkItemTypes.SimulationRecord, ct);
         if (simWorkItem is not null)
         {
-            _workItemLifecycleService.CompleteWorkItem(simWorkItem, completedBy: "SimTech", resultCode: "Recorded", completedAtUtc: now);
+            _workItemLifecycleService.CompleteWorkItem(simWorkItem, completedBy: WorkflowRoles.SimTech, resultCode: "Recorded", completedAtUtc: now);
         }
 
         if (caseData.CurrentStatus == CaseStatus.Submitted)
@@ -152,8 +153,8 @@ public class CaseWorkflowService : ICaseWorkflowService
             {
                 TriggerName = "ScheduleSimulation",
                 TriggerType = WorkflowTriggerType.User,
-                TriggeredBy = "SimTech",
-                ActorRoles = ["SimTech"],
+                TriggeredBy = WorkflowRoles.SimTech,
+                ActorRoles = [WorkflowRoles.SimTech],
                 Metadata = request
             }, ct);
         }
@@ -164,8 +165,8 @@ public class CaseWorkflowService : ICaseWorkflowService
             {
                 TriggerName = "StartSimulation",
                 TriggerType = WorkflowTriggerType.User,
-                TriggeredBy = "SimTech",
-                ActorRoles = ["SimTech"],
+                TriggeredBy = WorkflowRoles.SimTech,
+                ActorRoles = [WorkflowRoles.SimTech],
                 Metadata = request
             }, ct);
         }
@@ -176,8 +177,8 @@ public class CaseWorkflowService : ICaseWorkflowService
             {
                 TriggerName = "CompleteSimulation",
                 TriggerType = WorkflowTriggerType.User,
-                TriggeredBy = "SimTech",
-                ActorRoles = ["SimTech"],
+                TriggeredBy = WorkflowRoles.SimTech,
+                ActorRoles = [WorkflowRoles.SimTech],
                 Metadata = request
             }, ct);
         }
@@ -222,7 +223,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         {
             TriggerName = "ForwardImage",
             TriggerType = WorkflowTriggerType.System,
-            TriggeredBy = "System",
+            TriggeredBy = WorkflowRoles.System,
             Metadata = request
         }, ct);
 
@@ -282,7 +283,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         {
             TriggerName = "StartContouring",
             TriggerType = WorkflowTriggerType.System,
-            TriggeredBy = "System",
+            TriggeredBy = WorkflowRoles.System,
             Metadata = request
         }, ct);
 
@@ -368,14 +369,14 @@ public class CaseWorkflowService : ICaseWorkflowService
                     CreatedAt = now
                 }, ct);
 
-                await EnsureContourApprovalEvidenceAsync(caseData.CaseId, now, "System", request, ct);
+                await EnsureContourApprovalEvidenceAsync(caseData.CaseId, now, WorkflowRoles.System, request, ct);
 
                 await ApplyAsync(caseData, CaseStatus.ContoursUnderReview, new TransitionExecutionContext
                 {
                     TriggerName = "StartContourReview",
                     TriggerType = WorkflowTriggerType.System,
-                    TriggeredBy = "System",
-                    ActorRoles = ["Physician"],
+                    TriggeredBy = WorkflowRoles.System,
+                    ActorRoles = [WorkflowRoles.Physician],
                     Metadata = request
                 }, ct);
 
@@ -383,8 +384,8 @@ public class CaseWorkflowService : ICaseWorkflowService
                 {
                     TriggerName = "ApproveContours",
                     TriggerType = WorkflowTriggerType.System,
-                    TriggeredBy = "System",
-                    ActorRoles = ["Physician"],
+                    TriggeredBy = WorkflowRoles.System,
+                    ActorRoles = [WorkflowRoles.Physician],
                     Metadata = request
                 }, ct);
 
@@ -422,7 +423,7 @@ public class CaseWorkflowService : ICaseWorkflowService
                     TriggerType = WorkflowTriggerType.ExternalEvent,
                     TriggeredBy = "PVMED",
                     Reason = request.Type,
-                    ActorRoles = ["Physician"],
+                    ActorRoles = [WorkflowRoles.Physician],
                     Metadata = request
                 }, ct);
 
@@ -481,7 +482,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = caseData.CurrentStatus == CaseStatus.ContourReworkRequired ? "RestartContouring" : "ReopenContouring",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = triggeredBy,
-            ActorRoles = ["Dosimetrist", "Physician"],
+            ActorRoles = [WorkflowRoles.Dosimetrist, WorkflowRoles.Physician],
             Reason = reason,
             Metadata = new { caseId, reason }
         }, ct);
@@ -522,7 +523,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "RejectContours",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = triggeredBy,
-            ActorRoles = ["Physician"],
+            ActorRoles = [WorkflowRoles.Physician],
             Reason = reason,
             Metadata = new { caseId, reason }
         }, ct);
@@ -558,7 +559,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "RequestPlanChanges",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = triggeredBy,
-            ActorRoles = ["Physician"],
+            ActorRoles = [WorkflowRoles.Physician],
             Reason = reason,
             Metadata = new { caseId, reason }
         }, ct);
@@ -567,7 +568,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         {
             CaseId = caseId,
             Type = WorkItemTypes.PlanDesign,
-            AssignedRole = "Dosimetrist",
+            AssignedRole = WorkflowRoles.Dosimetrist,
             PayloadJson = JsonSerializer.Serialize(new { reason, rework = true }),
             CreatedAtUtc = DateTimeOffset.UtcNow
         }, ct);
@@ -645,7 +646,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         {
             CaseId = caseId,
             Type = WorkItemTypes.PrescriptionSync,
-            AssignedRole = "Physician",
+            AssignedRole = WorkflowRoles.Physician,
             PayloadJson = JsonSerializer.Serialize(new { reason, manualRetry = true }),
             CreatedAtUtc = DateTimeOffset.UtcNow
         }, ct);
@@ -668,7 +669,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "RetryPrescriptionSync",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = triggeredBy,
-            ActorRoles = ["Physician", "Dosimetrist"]
+            ActorRoles = [WorkflowRoles.Physician, WorkflowRoles.Dosimetrist]
         }, ct);
 
         await _dataAccess.SaveChangesAsync(ct);
@@ -700,7 +701,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "ResolvePrescriptionSync",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = triggeredBy,
-            ActorRoles = ["Physician", "Dosimetrist"]
+            ActorRoles = [WorkflowRoles.Physician, WorkflowRoles.Dosimetrist]
         }, ct);
 
         await _dataAccess.SaveChangesAsync(ct);
@@ -733,7 +734,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "FailQa",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = triggeredBy,
-            ActorRoles = ["Physicist"],
+            ActorRoles = [WorkflowRoles.Physicist],
             Reason = reason,
             Metadata = new { caseId, reason }
         }, ct);
@@ -742,7 +743,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         {
             TriggerName = "ReturnToPlanningAfterQa",
             TriggerType = WorkflowTriggerType.System,
-            TriggeredBy = "System",
+            TriggeredBy = WorkflowRoles.System,
             Reason = reason,
             Metadata = new { caseId, reason }
         }, ct);
@@ -764,7 +765,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         {
             CaseId = caseId,
             Type = WorkItemTypes.ScheduleSync,
-            AssignedRole = "Scheduler",
+            AssignedRole = WorkflowRoles.Scheduler,
             PayloadJson = JsonSerializer.Serialize(new { reason }),
             CreatedAtUtc = DateTimeOffset.UtcNow
         }, ct);
@@ -952,7 +953,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         {
             _workItemLifecycleService.CompleteWorkItem(
                 manualContourItem,
-                completedBy: "Doctor",
+                completedBy: WorkflowRoles.Doctor,
                 resultCode: WorkItemResultCodes.Approved,
                 completedAtUtc: now);
         }
@@ -961,8 +962,8 @@ public class CaseWorkflowService : ICaseWorkflowService
         {
             TriggerName = "ManualContourCompleted",
             TriggerType = WorkflowTriggerType.User,
-            TriggeredBy = "Doctor",
-            ActorRoles = ["Doctor"]
+            TriggeredBy = WorkflowRoles.Doctor,
+            ActorRoles = [WorkflowRoles.Doctor]
         }, ct);
 
         await _dataAccess.SaveChangesAsync(ct);
@@ -1008,14 +1009,14 @@ public class CaseWorkflowService : ICaseWorkflowService
             CreatedAt = now
         }, ct);
 
-        await EnsureContourApprovalEvidenceAsync(caseData.CaseId, now, "System", new { source = "ManualForwardToMonaco" }, ct);
+        await EnsureContourApprovalEvidenceAsync(caseData.CaseId, now, WorkflowRoles.System, new { source = "ManualForwardToMonaco" }, ct);
 
         await ApplyAsync(caseData, CaseStatus.ContoursUnderReview, new TransitionExecutionContext
         {
             TriggerName = "StartContourReview",
             TriggerType = WorkflowTriggerType.System,
-            TriggeredBy = "System",
-            ActorRoles = ["Doctor", "ChiefDoctor"]
+            TriggeredBy = WorkflowRoles.System,
+            ActorRoles = [WorkflowRoles.Doctor, WorkflowRoles.ChiefDoctor]
         }, ct);
 
         await ApplyAsync(caseData, CaseStatus.PlanningPending, new TransitionExecutionContext
@@ -1023,7 +1024,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "ApproveContours",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = "User",
-            ActorRoles = ["Doctor", "ChiefDoctor"]
+            ActorRoles = [WorkflowRoles.Doctor, WorkflowRoles.ChiefDoctor]
         }, ct);
 
         await EnsurePlanningDispatchWorkItemAsync(caseData, ct);
