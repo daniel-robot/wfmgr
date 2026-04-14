@@ -1,3 +1,5 @@
+using Wfmgr.Domain;
+
 namespace Wfmgr.Application.Workflows.V1;
 
 public class S1ContouringStrategy
@@ -18,7 +20,7 @@ public class FallbackConfig
 {
     public bool OnFailureCreateManualWorkItem { get; set; } = true;
     public string ManualWorkItemType { get; set; } = "ManualContouring";
-    public string ManualWorkItemRole { get; set; } = "Doctor";
+    public string ManualWorkItemRole { get; set; } = WorkflowRoles.Doctor;
 }
 
 public class S2ContourReviewPolicy
@@ -33,13 +35,13 @@ public class S2OnRejectConfig
 {
     public string TargetStatus { get; set; } = "ContourReworkRequired";
     public bool CreateReworkWorkItem { get; set; } = true;
-    public string ReworkWorkItemRole { get; set; } = "Doctor";
+    public string ReworkWorkItemRole { get; set; } = WorkflowRoles.Doctor;
 }
 
 public class S3PlanDispatchPolicy
 {
     public string DispatchMode { get; set; } = "AutoAssignByRole";
-    public string TargetRole { get; set; } = "Dosimetrist";
+    public string TargetRole { get; set; } = WorkflowRoles.Dosimetrist;
     public bool AllowManualClaim { get; set; } = true;
     public int SlaMinutes { get; set; } = 240;
     public S3EscalationConfig Escalation { get; set; } = new();
@@ -49,14 +51,14 @@ public class S3EscalationConfig
 {
     public bool Enabled { get; set; }
     public int AfterMinutes { get; set; } = 180;
-    public string EscalateToRole { get; set; } = "ChiefDoctor";
+    public string EscalateToRole { get; set; } = WorkflowRoles.ChiefDoctor;
 }
 
 public class S4PlanReReviewPolicy
 {
     public bool Enabled { get; set; }
     public S4TriggerConfig Trigger { get; set; } = new();
-    public string ReviewRole { get; set; } = "SeniorPhysicist";
+    public string ReviewRole { get; set; } = WorkflowRoles.SeniorPhysicist;
     public string OnRejectBackTo { get; set; } = "PlanningInProgress";
 }
 

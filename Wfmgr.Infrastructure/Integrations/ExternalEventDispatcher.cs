@@ -8,6 +8,7 @@ using Wfmgr.Application.Workflows.V1.Compensation;
 using Wfmgr.Application.Workflows.V1.Dtos;
 using Wfmgr.Application.Workflows.V1.StateMachine;
 using Wfmgr.Application.Workflows.V1.WorkItems;
+using Wfmgr.Domain;
 using Wfmgr.Domain.Enums;
 using Wfmgr.Domain.Integrations;
 using Wfmgr.Domain.WorkItems;
@@ -116,7 +117,7 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
                 {
                     CaseId = caseData!.CaseId,
                     Type = WorkItemTypes.ImageValidation,
-                    AssignedRole = "SimTech",
+                    AssignedRole = WorkflowRoles.SimTech,
                     PayloadJson = JsonSerializer.Serialize(new { request.FailureReason, request.Type }),
                     CreatedAtUtc = DateTimeOffset.UtcNow
                 }, ct);
@@ -159,7 +160,7 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
                         TriggerName = "AssignPlanning",
                         TriggerType = WorkflowTriggerType.System,
                         TriggeredBy = "Monaco",
-                        ActorRoles = ["Dosimetrist"],
+                        ActorRoles = [WorkflowRoles.Dosimetrist],
                         Metadata = request
                     }, ct);
                 }
@@ -171,7 +172,7 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
                 {
                     CaseId = caseData!.CaseId,
                     Type = WorkItemTypes.PlanAssignment,
-                    AssignedRole = "Dosimetrist",
+                    AssignedRole = WorkflowRoles.Dosimetrist,
                     PayloadJson = JsonSerializer.Serialize(new { request.FailureReason, request.Type }),
                     CreatedAtUtc = DateTimeOffset.UtcNow
                 }, ct);
@@ -190,7 +191,7 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
                         TriggerName = "StartPlanning",
                         TriggerType = WorkflowTriggerType.System,
                         TriggeredBy = "Monaco",
-                        ActorRoles = ["Dosimetrist"],
+                        ActorRoles = [WorkflowRoles.Dosimetrist],
                         Metadata = request
                     }, ct);
                 }
@@ -213,7 +214,7 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
                         TriggerName = "ApprovePlan",
                         TriggerType = WorkflowTriggerType.ExternalEvent,
                         TriggeredBy = "Monaco",
-                        ActorRoles = ["Physician"],
+                        ActorRoles = [WorkflowRoles.Physician],
                         Metadata = request
                     }, ct);
                 }
