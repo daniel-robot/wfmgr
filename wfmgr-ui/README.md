@@ -104,4 +104,3 @@ Output goes to `dist/wfmgr-ui/`.
 
 - CORS must be enabled on the backend for the Angular dev server origin (`http://localhost:4200`). This is the default in `appsettings.Development.json`.
 - zone.js is included as a dependency and loaded via `angular.json` polyfills. It is required for `HttpClient` subscription callbacks to trigger change detection.
-
