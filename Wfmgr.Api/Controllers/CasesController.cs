@@ -151,66 +151,10 @@ public class CasesController : ControllerBase
         return NoContent();
     }
 
-    [HttpPost("{caseId:guid}/actions/prescription-sync-failed")]
-    public async Task<IActionResult> HandlePrescriptionSyncFailure(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
-    {
-        await _workflowService.HandlePrescriptionSyncFailureAsync(caseId, request.Reason ?? "Manual failure", request.TriggeredBy, ct);
-        return NoContent();
-    }
-
-    [HttpPost("{caseId:guid}/actions/retry-prescription-sync")]
-    public async Task<IActionResult> RetryPrescriptionSync(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
-    {
-        await _workflowService.RetryPrescriptionSyncAsync(caseId, request.TriggeredBy, ct);
-        return NoContent();
-    }
-
-    [HttpPost("{caseId:guid}/actions/resolve-prescription-sync")]
-    public async Task<IActionResult> ResolvePrescriptionSync(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
-    {
-        await _workflowService.ResolvePrescriptionSyncAsync(caseId, request.TriggeredBy, ct);
-        return NoContent();
-    }
-
     [HttpPost("{caseId:guid}/actions/fail-qa")]
     public async Task<IActionResult> FailQa(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
     {
         await _workflowService.FailQaAsync(caseId, request.Reason ?? "Manual failure", request.TriggeredBy, ct);
-        return NoContent();
-    }
-
-    [HttpPost("{caseId:guid}/actions/scheduling-failed")]
-    public async Task<IActionResult> HandleSchedulingFailure(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
-    {
-        await _workflowService.HandleSchedulingFailureAsync(caseId, request.Reason ?? "Manual scheduling failure", request.TriggeredBy, ct);
-        return NoContent();
-    }
-
-    [HttpPost("{caseId:guid}/actions/retry-scheduling")]
-    public async Task<IActionResult> RetryScheduling(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
-    {
-        await _workflowService.RetrySchedulingAsync(caseId, request.TriggeredBy, ct);
-        return NoContent();
-    }
-
-    [HttpPost("{caseId:guid}/actions/pause-treatment")]
-    public async Task<IActionResult> PauseTreatment(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
-    {
-        await _workflowService.PauseTreatmentAsync(caseId, request.Reason ?? "Manual pause", request.TriggeredBy, ct);
-        return NoContent();
-    }
-
-    [HttpPost("{caseId:guid}/actions/interrupt-treatment")]
-    public async Task<IActionResult> InterruptTreatment(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
-    {
-        await _workflowService.InterruptTreatmentAsync(caseId, request.Reason ?? "Manual interruption", request.TriggeredBy, ct);
-        return NoContent();
-    }
-
-    [HttpPost("{caseId:guid}/actions/resume-treatment")]
-    public async Task<IActionResult> ResumeTreatment(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
-    {
-        await _workflowService.ResumeTreatmentAsync(caseId, request.TriggeredBy, ct);
         return NoContent();
     }
 

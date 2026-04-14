@@ -104,14 +104,14 @@ public class CaseWorkflowService : ICaseWorkflowService
             CreatedAtUtc = now
         }, ct);
 
-        // Immediately advance to SimScheduled — the image scan work item is ready.
-        await ApplyAsync(item, CaseStatus.SimScheduled, new TransitionExecutionContext
-        {
-            TriggerName = "ScheduleSimulation",
-            TriggerType = WorkflowTriggerType.System,
-            TriggeredBy = "System",
-            ActorRoles = ["System"]
-        }, ct);
+        // // Immediately advance to SimScheduled — the image scan work item is ready.
+        // await ApplyAsync(item, CaseStatus.SimScheduled, new TransitionExecutionContext
+        // {
+        //     TriggerName = "ScheduleSimulation",
+        //     TriggerType = WorkflowTriggerType.System,
+        //     TriggeredBy = "System",
+        //     ActorRoles = ["System"]
+        // }, ct);
 
         await _dataAccess.SaveChangesAsync(ct);
 
@@ -215,14 +215,6 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "StoreImage",
             TriggerType = WorkflowTriggerType.ExternalEvent,
             TriggeredBy = "CT",
-            Metadata = request
-        }, ct);
-
-        await ApplyAsync(caseData, CaseStatus.ImageForwarding, new TransitionExecutionContext
-        {
-            TriggerName = "ForwardImage",
-            TriggerType = WorkflowTriggerType.System,
-            TriggeredBy = "System",
             Metadata = request
         }, ct);
 
@@ -622,89 +614,6 @@ public class CaseWorkflowService : ICaseWorkflowService
         await _dataAccess.SaveChangesAsync(ct);
     }
 
-    public async Task HandlePrescriptionSyncFailureAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct)
-    {
-        var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
-            ?? throw new InvalidOperationException("Case not found.");
-
-        if (caseData.CurrentStatus != CaseStatus.PrescriptionGenerating)
-        {
-            throw new InvalidOperationException("Case must be in PrescriptionGenerating status.");
-        }
-
-        await ApplyAsync(caseData, CaseStatus.PrescriptionSyncFailed, new TransitionExecutionContext
-        {
-            TriggerName = "PrescriptionSyncFailed",
-            TriggerType = WorkflowTriggerType.ExternalEvent,
-            TriggeredBy = triggeredBy,
-            Reason = reason,
-            Metadata = new { caseId, reason }
-        }, ct);
-
-        await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
-        {
-            CaseId = caseId,
-            Type = WorkItemTypes.PrescriptionSync,
-            AssignedRole = "Physician",
-            PayloadJson = JsonSerializer.Serialize(new { reason, manualRetry = true }),
-            CreatedAtUtc = DateTimeOffset.UtcNow
-        }, ct);
-
-        await _dataAccess.SaveChangesAsync(ct);
-    }
-
-    public async Task RetryPrescriptionSyncAsync(Guid caseId, string triggeredBy, CancellationToken ct)
-    {
-        var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
-            ?? throw new InvalidOperationException("Case not found.");
-
-        if (caseData.CurrentStatus != CaseStatus.PrescriptionSyncFailed)
-        {
-            throw new InvalidOperationException("Case must be in PrescriptionSyncFailed status.");
-        }
-
-        await ApplyAsync(caseData, CaseStatus.PrescriptionGenerating, new TransitionExecutionContext
-        {
-            TriggerName = "RetryPrescriptionSync",
-            TriggerType = WorkflowTriggerType.User,
-            TriggeredBy = triggeredBy,
-            ActorRoles = ["Physician", "Dosimetrist"]
-        }, ct);
-
-        await _dataAccess.SaveChangesAsync(ct);
-    }
-
-    public async Task ResolvePrescriptionSyncAsync(Guid caseId, string triggeredBy, CancellationToken ct)
-    {
-        var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
-            ?? throw new InvalidOperationException("Case not found.");
-
-        if (caseData.CurrentStatus != CaseStatus.PrescriptionSyncFailed)
-        {
-            throw new InvalidOperationException("Case must be in PrescriptionSyncFailed status.");
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        var syncWorkItem = await _dataAccess.GetOpenWorkItemAsync(caseId, WorkItemTypes.PrescriptionSync, ct);
-        if (syncWorkItem is not null)
-        {
-            _workItemLifecycleService.CompleteWorkItem(
-                syncWorkItem,
-                completedBy: triggeredBy,
-                resultCode: WorkItemResultCodes.Synced,
-                completedAtUtc: now);
-        }
-
-        await ApplyAsync(caseData, CaseStatus.PrescriptionReady, new TransitionExecutionContext
-        {
-            TriggerName = "ResolvePrescriptionSync",
-            TriggerType = WorkflowTriggerType.User,
-            TriggeredBy = triggeredBy,
-            ActorRoles = ["Physician", "Dosimetrist"]
-        }, ct);
-
-        await _dataAccess.SaveChangesAsync(ct);
-    }
 
     public async Task FailQaAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct)
     {
@@ -750,124 +659,6 @@ public class CaseWorkflowService : ICaseWorkflowService
         await _dataAccess.SaveChangesAsync(ct);
     }
 
-    public async Task HandleSchedulingFailureAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct)
-    {
-        var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
-            ?? throw new InvalidOperationException("Case not found.");
-
-        if (caseData.CurrentStatus != CaseStatus.SchedulingInProgress)
-        {
-            throw new InvalidOperationException("Case must be in SchedulingInProgress status.");
-        }
-
-        await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
-        {
-            CaseId = caseId,
-            Type = WorkItemTypes.ScheduleSync,
-            AssignedRole = "Scheduler",
-            PayloadJson = JsonSerializer.Serialize(new { reason }),
-            CreatedAtUtc = DateTimeOffset.UtcNow
-        }, ct);
-
-        await AddAuditAsync(caseId, "SchedulingFailure", caseData.CurrentStatus, caseData.CurrentStatus, new { reason, triggeredBy }, ct);
-        await _dataAccess.AddCaseTransitionHistoryAsync(new CaseTransitionHistoryData
-        {
-            TransitionId = Guid.NewGuid(),
-            CaseId = caseId,
-            FromStatus = caseData.CurrentStatus.ToString(),
-            ToStatus = caseData.CurrentStatus.ToString(),
-            TriggerType = WorkflowTriggerType.User.ToString(),
-            TriggerName = "SchedulingFailure",
-            TriggeredBy = triggeredBy,
-            Reason = reason,
-            MetadataJson = JsonSerializer.Serialize(new { reason, triggeredBy }),
-            CreatedAt = DateTimeOffset.UtcNow
-        }, ct);
-
-        await _dataAccess.SaveChangesAsync(ct);
-    }
-
-    public async Task RetrySchedulingAsync(Guid caseId, string triggeredBy, CancellationToken ct)
-    {
-        var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
-            ?? throw new InvalidOperationException("Case not found.");
-
-        if (caseData.CurrentStatus != CaseStatus.SchedulingInProgress)
-        {
-            throw new InvalidOperationException("Case must be in SchedulingInProgress status.");
-        }
-
-        await AddAuditAsync(caseId, "RetryScheduling", caseData.CurrentStatus, caseData.CurrentStatus, new { triggeredBy }, ct);
-        await _dataAccess.SaveChangesAsync(ct);
-    }
-
-    public async Task PauseTreatmentAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct)
-    {
-        var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
-            ?? throw new InvalidOperationException("Case not found.");
-
-        await ApplyAsync(caseData, CaseStatus.TreatmentPaused, new TransitionExecutionContext
-        {
-            TriggerName = "PauseTreatment",
-            TriggerType = WorkflowTriggerType.User,
-            TriggeredBy = triggeredBy,
-            Reason = reason,
-            Metadata = new { reason }
-        }, ct);
-
-        await EnsureTreatmentExceptionTaskAsync(caseData, reason, ct);
-        await _dataAccess.SaveChangesAsync(ct);
-    }
-
-    public async Task InterruptTreatmentAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct)
-    {
-        var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
-            ?? throw new InvalidOperationException("Case not found.");
-
-        await ApplyAsync(caseData, CaseStatus.TreatmentInterrupted, new TransitionExecutionContext
-        {
-            TriggerName = "InterruptTreatment",
-            TriggerType = WorkflowTriggerType.ExternalEvent,
-            TriggeredBy = triggeredBy,
-            Reason = reason,
-            Metadata = new { reason }
-        }, ct);
-
-        await EnsureTreatmentExceptionTaskAsync(caseData, reason, ct);
-        await _dataAccess.SaveChangesAsync(ct);
-    }
-
-    public async Task ResumeTreatmentAsync(Guid caseId, string triggeredBy, CancellationToken ct)
-    {
-        var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
-            ?? throw new InvalidOperationException("Case not found.");
-
-        if (caseData.CurrentStatus == CaseStatus.TreatmentPaused)
-        {
-            await ApplyAsync(caseData, CaseStatus.Treating, new TransitionExecutionContext
-            {
-                TriggerName = "ResumeTreatment",
-                TriggerType = WorkflowTriggerType.User,
-                TriggeredBy = triggeredBy
-            }, ct);
-        }
-        else if (caseData.CurrentStatus == CaseStatus.TreatmentInterrupted)
-        {
-            await ApplyAsync(caseData, CaseStatus.Treating, new TransitionExecutionContext
-            {
-                TriggerName = "ResumeAfterInterruption",
-                TriggerType = WorkflowTriggerType.User,
-                TriggeredBy = triggeredBy
-            }, ct);
-        }
-        else
-        {
-            throw new InvalidOperationException("Case must be in TreatmentPaused or TreatmentInterrupted status.");
-        }
-
-        await _dataAccess.SaveChangesAsync(ct);
-    }
-
     public async Task CancelCaseAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct)
     {
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
@@ -882,12 +673,6 @@ public class CaseWorkflowService : ICaseWorkflowService
         if (!policy.AllowCancel)
         {
             throw new InvalidOperationException("Cancellation is disabled by S6 configuration.");
-        }
-
-        var cancelBoundary = TryParseCaseStatus(policy.CancelAllowedBeforeStatus, CaseStatus.Treating);
-        if (caseData.CurrentStatus >= cancelBoundary)
-        {
-            throw new InvalidOperationException($"Cancellation is only allowed before status '{cancelBoundary}'. Current status is '{caseData.CurrentStatus}'.");
         }
 
         await ApplyAsync(caseData, CaseStatus.Cancelled, new TransitionExecutionContext

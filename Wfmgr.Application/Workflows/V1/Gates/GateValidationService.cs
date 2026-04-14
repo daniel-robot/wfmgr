@@ -41,7 +41,6 @@ public sealed class GateValidationService : IGateValidationService
         CaseStatus.SimInProgress,
         CaseStatus.SimCompleted,
         CaseStatus.ImageStored,
-        CaseStatus.ImageForwarding,
         CaseStatus.ContouringInProgress,
         CaseStatus.ContoursReady,
         CaseStatus.ContoursUnderReview,
@@ -54,19 +53,10 @@ public sealed class GateValidationService : IGateValidationService
         CaseStatus.PlanUnderReview,
         CaseStatus.PlanReviewed,
         CaseStatus.PlanReReviewOptional,
-        CaseStatus.PrescriptionGenerating,
-        CaseStatus.PrescriptionReady,
-        CaseStatus.PrescriptionSyncFailed,
         CaseStatus.PlanQAInProgress,
         CaseStatus.PlanQAApproved,
         CaseStatus.PlanQAFailed,
         CaseStatus.PlanDoubleCheckOptional,
-        CaseStatus.ReadyForScheduling,
-        CaseStatus.SchedulingInProgress,
-        CaseStatus.Scheduled,
-        CaseStatus.OrderPending,
-        CaseStatus.OrderSubmitted,
-        CaseStatus.QueuePending,
     ];
 
     public GateValidationService(
@@ -191,12 +181,10 @@ public sealed class GateValidationService : IGateValidationService
         m[GateCheckNames.TreatmentStartEventValid]  = ExternalPayloadPresentAsync;
         m[GateCheckNames.FractionDataValid]         = ExternalPayloadPresentAsync;
         m[GateCheckNames.PauseReasonProvided]       = ReasonPresentAsync;
-        m[GateCheckNames.ResumeAllowed]             = ResumeAllowedAsync;
         m[GateCheckNames.InterruptionReasonRequired] = ReasonPresentAsync;
         m[GateCheckNames.MedicalApprovalExists]     = MedicalApprovalExistsAsync;
         m[GateCheckNames.TreatmentCompletionSatisfied] = TreatmentCompletionSatisfiedAsync;
         m[GateCheckNames.S7CompletionRuleSatisfied] = TreatmentCompletionSatisfiedAsync; // alias
-        m[GateCheckNames.TreatmentCompleted]        = TreatmentCompletedStatusAsync;
 
         // ── Post-treatment & archiving ────────────────────────────────────────
         m[GateCheckNames.PostTreatmentReviewFormValid] = PostTreatmentReviewFormValidAsync;
@@ -238,7 +226,7 @@ public sealed class GateValidationService : IGateValidationService
 
     private static Task<string?> CaseNotCancelledAsync(CaseData d, GateValidationContext _, CancellationToken ct)
     {
-        var isCancelled = d.CurrentStatus is CaseStatus.Cancelled or CaseStatus.Archived;
+        var isCancelled = d.CurrentStatus is CaseStatus.Cancelled;
         return Task.FromResult<string?>(
             isCancelled ? $"Case is in terminal status '{d.CurrentStatus}' and cannot be transitioned." : null);
     }
@@ -484,14 +472,6 @@ public sealed class GateValidationService : IGateValidationService
         return hasWorkItem ? null : "A submitted treatment order (form or work item) does not exist for this case.";
     }
 
-    private static Task<string?> ResumeAllowedAsync(CaseData d, GateValidationContext _, CancellationToken ct)
-    {
-        // The case must be in the paused state for a resume to be valid.
-        var ok = d.CurrentStatus is CaseStatus.TreatmentPaused or CaseStatus.TreatmentInterrupted;
-        return Task.FromResult<string?>(
-            ok ? null : $"Case is not in a paused or interrupted state (current status: '{d.CurrentStatus}').");
-    }
-
     private async Task<string?> MedicalApprovalExistsAsync(CaseData d, GateValidationContext _, CancellationToken ct)
     {
         // Medical approval after an interruption is represented by a completed TreatmentOrder work item
@@ -506,13 +486,6 @@ public sealed class GateValidationService : IGateValidationService
         var ok = await _dataAccess.WorkItemExistsAsync(
             d.CaseId, WorkItemTypes.TreatmentMonitor, WorkItemResultCodes.Reviewed, ct);
         return ok ? null : "Treatment completion criteria have not been satisfied (no completed TreatmentMonitor work item).";
-    }
-
-    private static Task<string?> TreatmentCompletedStatusAsync(CaseData d, GateValidationContext _, CancellationToken ct)
-    {
-        var ok = d.CurrentStatus == CaseStatus.TreatmentCompleted;
-        return Task.FromResult<string?>(
-            ok ? null : $"Case must be in TreatmentCompleted status (current: '{d.CurrentStatus}').");
     }
 
     // ── Post-treatment & archiving ────────────────────────────────────────────

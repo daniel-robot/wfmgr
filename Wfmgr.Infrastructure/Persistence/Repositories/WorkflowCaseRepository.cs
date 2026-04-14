@@ -17,8 +17,7 @@ public class WorkflowCaseRepository : IWorkflowCaseRepository
     {
         var caseEntities = await _dbContext.Cases
             .AsNoTracking()
-            .Where(x => x.CurrentStatus != Domain.Enums.CaseStatus.Archived
-                     && x.CurrentStatus != Domain.Enums.CaseStatus.Cancelled)
+            .Where(x => x.CurrentStatus != Domain.Enums.CaseStatus.Cancelled)
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync(cancellationToken);
 

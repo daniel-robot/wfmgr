@@ -6,8 +6,8 @@ namespace Wfmgr.Domain.Enums;
 /// </summary>
 public enum CaseStatus
 {
-    // ── Intake ────────────────────────────────────────────────────────────────
-    /// <summary>Case has been submitted and is awaiting simulation scheduling.</summary>
+
+    /// <summary>Case has been submitted, the workflow started.</summary>
     Submitted = 10,
 
     // ── Simulation ────────────────────────────────────────────────────────────
@@ -21,9 +21,7 @@ public enum CaseStatus
     // ── Image Acquisition ────────────────────────────────────────────────────
     /// <summary>CT images have been stored in the DICOM repository.</summary>
     ImageStored = 50,
-    /// <summary>CT images are being forwarded to the contouring system.</summary>
-    ImageForwarding = 60,
-
+    
     // ── Contouring ────────────────────────────────────────────────────────────
     /// <summary>Auto-contouring or manual contouring is underway.</summary>
     ContouringInProgress = 70,
@@ -52,14 +50,6 @@ public enum CaseStatus
     /// <summary>An optional secondary review of the plan may be requested.</summary>
     PlanReReviewOptional = 180,
 
-    // ── Prescription ──────────────────────────────────────────────────────────
-    /// <summary>Prescription document is being generated from the approved plan.</summary>
-    PrescriptionGenerating = 190,
-    /// <summary>Prescription has been generated and is ready for use.</summary>
-    PrescriptionReady = 200,
-    /// <summary>Prescription synchronisation to the oncology system failed.</summary>
-    PrescriptionSyncFailed = 210,
-
     // ── Plan QA ───────────────────────────────────────────────────────────────
     /// <summary>Physics QA verification of the plan is in progress.</summary>
     PlanQAInProgress = 220,
@@ -70,41 +60,6 @@ public enum CaseStatus
     /// <summary>An optional second independent check of the plan may be performed.</summary>
     PlanDoubleCheckOptional = 250,
 
-    // ── Scheduling ────────────────────────────────────────────────────────────
-    /// <summary>All plan approvals are complete; case is ready to be scheduled.</summary>
-    ReadyForScheduling = 260,
-    /// <summary>Treatment fractions are being scheduled.</summary>
-    SchedulingInProgress = 270,
-    /// <summary>Treatment sessions have been scheduled.</summary>
-    Scheduled = 280,
-
-    // ── Order / Queue ─────────────────────────────────────────────────────────
-    /// <summary>Treatment order is being prepared for submission to the treatment system.</summary>
-    OrderPending = 290,
-    /// <summary>Treatment order has been submitted to the treatment management system.</summary>
-    OrderSubmitted = 300,
-    /// <summary>Case is queued in the linac/treatment unit queue.</summary>
-    QueuePending = 310,
-
-    // ── Treatment ─────────────────────────────────────────────────────────────
-    /// <summary>Patient is actively receiving treatment.</summary>
-    Treating = 320,
-    /// <summary>Treatment has been temporarily paused (e.g. setup adjustment).</summary>
-    TreatmentPaused = 330,
-    /// <summary>Treatment was interrupted and requires clinical review before resuming.</summary>
-    TreatmentInterrupted = 340,
-    /// <summary>All treatment fractions have been delivered.</summary>
-    TreatmentCompleted = 350,
-
-    // ── Post-Treatment ────────────────────────────────────────────────────────
-    /// <summary>Post-treatment clinical review is pending.</summary>
-    PostTreatmentReviewPending = 360,
-    /// <summary>Post-treatment review has been completed.</summary>
-    PostTreatmentReviewed = 370,
-
-    // ── Terminal ──────────────────────────────────────────────────────────────
-    /// <summary>Case has been archived after completion of all workflow steps.</summary>
-    Archived = 380,
     /// <summary>Case has been cancelled and will not proceed further.</summary>
     Cancelled = 390
 }
