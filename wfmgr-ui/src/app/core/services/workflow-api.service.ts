@@ -54,6 +54,10 @@ export class WorkflowApiService {
     return this.http.post<void>(`${this.baseUrl}/api/cases/${normalizedCaseId}/forward/monaco`, {});
   }
 
+  completeManualContouring(caseId: string): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/api/cases/${caseId}/actions/complete-manual-contouring`, {});
+  }
+
   simulateCtImageStored(request: CtImageStoredRequest): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/api/integration/ct/image-stored`, request);
   }

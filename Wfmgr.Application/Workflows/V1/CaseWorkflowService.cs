@@ -935,6 +935,39 @@ public class CaseWorkflowService : ICaseWorkflowService
         await _dataAccess.SaveChangesAsync(ct);
     }
 
+    public async Task CompleteManualContouringAsync(Guid caseId, CancellationToken ct)
+    {
+        var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
+            ?? throw new InvalidOperationException("Case not found.");
+
+        if (caseData.CurrentStatus != CaseStatus.ContouringInProgress)
+        {
+            throw new InvalidOperationException("Case must be in ContouringInProgress status.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+
+        var manualContourItem = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.ManualContouring, ct);
+        if (manualContourItem is not null)
+        {
+            _workItemLifecycleService.CompleteWorkItem(
+                manualContourItem,
+                completedBy: "Doctor",
+                resultCode: WorkItemResultCodes.Approved,
+                completedAtUtc: now);
+        }
+
+        await ApplyAsync(caseData, CaseStatus.ContoursReady, new TransitionExecutionContext
+        {
+            TriggerName = "ManualContourCompleted",
+            TriggerType = WorkflowTriggerType.User,
+            TriggeredBy = "Doctor",
+            ActorRoles = ["Doctor"]
+        }, ct);
+
+        await _dataAccess.SaveChangesAsync(ct);
+    }
+
     public async Task ForwardToMonacoAsync(Guid caseId, CancellationToken ct)
     {
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)

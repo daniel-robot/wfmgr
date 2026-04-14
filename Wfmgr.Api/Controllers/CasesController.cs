@@ -116,6 +116,13 @@ public class CasesController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{caseId:guid}/actions/complete-manual-contouring")]
+    public async Task<IActionResult> CompleteManualContouring(Guid caseId, CancellationToken ct)
+    {
+        await _workflowService.CompleteManualContouringAsync(caseId, ct);
+        return NoContent();
+    }
+
     [HttpPost("{caseId:guid}/actions/restart-contouring")]
     public async Task<IActionResult> RestartContouring(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
     {

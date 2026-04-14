@@ -198,6 +198,10 @@ export class CaseDetailsPageComponent implements OnInit {
       });
   }
 
+  get pendingWorkItems(): WorkItem[] {
+    return this.workItems.filter((w) => w.status === 'Pending');
+  }
+
   submitSimRecord(): void {
     if (this.simForm.invalid || !this.caseId) {
       this.simForm.markAllAsTouched();
@@ -313,6 +317,14 @@ export class CaseDetailsPageComponent implements OnInit {
     }
 
     this.runAction(() => this.api.forwardToMonaco(this.caseId));
+  }
+
+  completeManualContouring(): void {
+    if (!this.caseId) {
+      return;
+    }
+
+    this.runAction(() => this.api.completeManualContouring(this.caseId));
   }
 
   createAndSubmitForm(): void {

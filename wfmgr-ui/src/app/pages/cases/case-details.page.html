@@ -27,6 +27,32 @@
       <p><strong>Created:</strong> {{ details.createdAt | date: 'yyyy-MM-dd HH:mm' }}</p>
     </div>
 
+    @if (pendingWorkItems.length > 0) {
+    <div class="card">
+      <h2>Pending Actions</h2>
+      <p class="meta">Complete the following work items to advance the workflow.</p>
+      <div class="pending-actions">
+        @for (item of pendingWorkItems; track item.workItemId) {
+          <div class="pending-action-row">
+            <div class="pending-action-info">
+              <strong>{{ item.type }}</strong>
+              <span class="meta">Role: {{ item.assignedRole }} &mdash; Created: {{ item.createdAt | date: 'yyyy-MM-dd HH:mm' }}</span>
+            </div>
+            @if (item.type === 'SimulationSchedule') {
+              <button [disabled]="busy" (click)="submitSimRecord()">Submit Sim Record</button>
+            }
+            @if (item.type === 'ManualContouring') {
+              <button [disabled]="busy" (click)="completeManualContouring()">Complete Manual Contouring</button>
+            }
+            @if (item.type === 'ManualForwardToMonaco') {
+              <button [disabled]="busy" (click)="forwardToMonaco()">Forward to Monaco</button>
+            }
+          </div>
+        }
+      </div>
+    </div>
+    }
+
     <div class="grid two-col">
       <div class="card">
         <h2>Submit Sim Record</h2>
