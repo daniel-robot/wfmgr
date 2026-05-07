@@ -223,3 +223,109 @@ export interface StartWorkflowRequest {
 export interface ApiError {
   message: string;
 }
+
+export interface WorkflowProfile {
+  id: string;
+  key: string;
+  name: string | null;
+  version: number;
+  hospitalId: string | null;
+  siteId: string | null;
+  departmentId: string | null;
+  isActive: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface WorkflowRule {
+  id: string;
+  profileId: string;
+  slotCode: string;
+  priority: number;
+  enabled: boolean;
+  conditionJson: string | null;
+  configJson: string;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface WorkflowProfileDetail {
+  profile: WorkflowProfile;
+  rules: WorkflowRule[];
+}
+
+export interface CreateWorkflowProfileRequest {
+  name: string;
+  version: number;
+  hospitalId?: string | null;
+  siteId?: string | null;
+  departmentId?: string | null;
+  isActive: boolean;
+}
+
+export interface UpdateWorkflowProfileRequest {
+  name?: string;
+  version?: number;
+  hospitalId?: string | null;
+  siteId?: string | null;
+  departmentId?: string | null;
+  isActive?: boolean;
+}
+
+export interface CreateWorkflowRuleRequest {
+  slotCode: string;
+  priority: number;
+  enabled: boolean;
+  conditionJson?: string | null;
+  configJson: string;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+}
+
+export interface UpdateWorkflowRuleRequest {
+  slotCode: string;
+  priority: number;
+  enabled: boolean;
+  conditionJson?: string | null;
+  configJson: string;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+}
+
+export interface ValidateWorkflowRuleRequest {
+  slotCode: string;
+  configJson: string;
+  conditionJson?: string | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+  priority?: number | null;
+}
+
+export interface ValidateWorkflowRuleResponse {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface WorkflowSlotCode {
+  code: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface EffectiveWorkflowSlot {
+  slotCode: string;
+  sourceProfileId: string | null;
+  ruleId: string | null;
+  priority: number | null;
+  configJson: string | null;
+}
+
+export interface EffectiveWorkflowConfig {
+  matchedProfileId: string | null;
+  matchedProfileKey: string | null;
+  matchedProfileVersion: number | null;
+  resolvedSlots: EffectiveWorkflowSlot[];
+}

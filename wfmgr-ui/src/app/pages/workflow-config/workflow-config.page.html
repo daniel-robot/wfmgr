@@ -1,0 +1,267 @@
+<section class="page">
+  <header class="page-header">
+    <h1>Workflow Configuration</h1>
+    <p>
+      Manage WorkflowProfile and WorkflowRule slot configuration (S1-S8). This admin MVP edits stored profile/rule records only.
+      Runtime transition and compensation catalogs remain unchanged.
+    </p>
+    <p class="todo-note">TODO: protect this page and its APIs with admin RBAC before production use.</p>
+  </header>
+
+  <div *ngIf="pageError" class="alert error">{{ pageError }}</div>
+  <div *ngIf="pageMessage" class="alert ok">{{ pageMessage }}</div>
+
+  <div class="layout">
+    <aside class="card profiles">
+      <div class="card-title-row">
+        <h2>Profiles</h2>
+        <button type="button" (click)="prepareNewProfile()">New</button>
+      </div>
+
+      <div *ngIf="loading" class="muted">Loading profiles...</div>
+      <div *ngIf="!loading && profiles.length === 0" class="muted">No profiles yet.</div>
+
+      <ul class="profile-list" *ngIf="profiles.length > 0">
+        <li *ngFor="let profile of profiles"
+            [class.selected]="profile.id === selectedProfileId"
+            (click)="selectProfile(profile.id)">
+          <div class="profile-name">{{ profile.name || '(Unnamed profile)' }}</div>
+          <div class="profile-key">{{ profile.key }}</div>
+          <div class="profile-meta">
+            Version {{ profile.version }}
+            <span [class.active]="profile.isActive" [class.inactive]="!profile.isActive">
+              {{ profile.isActive ? 'Active' : 'Inactive' }}
+            </span>
+          </div>
+        </li>
+      </ul>
+
+      <form class="form" [formGroup]="profileForm" (ngSubmit)="saveProfile()">
+        <h3>{{ selectedProfileId ? 'Edit Profile' : 'Create Profile' }}</h3>
+
+        <label>
+          Name
+          <input type="text" formControlName="name" />
+        </label>
+
+        <label>
+          Version
+          <input type="number" min="1" formControlName="version" />
+        </label>
+
+        <label>
+          HospitalId
+          <input type="text" formControlName="hospitalId" />
+        </label>
+
+        <label>
+          SiteId
+          <input type="text" formControlName="siteId" />
+        </label>
+
+        <label>
+          DepartmentId
+          <input type="text" formControlName="departmentId" />
+        </label>
+
+        <label class="checkbox">
+          <input type="checkbox" formControlName="isActive" />
+          IsActive
+        </label>
+
+        <div class="button-row">
+          <button type="submit" [disabled]="savingProfile">
+            {{ savingProfile ? 'Saving...' : 'Save Profile' }}
+          </button>
+          <button
+            type="button"
+            *ngIf="selectedProfileId"
+            (click)="toggleSelectedProfileActive()">
+            Toggle Active
+          </button>
+        </div>
+      </form>
+    </aside>
+
+    <main class="content-area">
+      <section class="card">
+        <div class="card-title-row">
+          <h2>Rules</h2>
+          <button type="button" (click)="prepareNewRule()" [disabled]="!selectedProfileId">New Rule</button>
+        </div>
+
+        <form class="filter-row" [formGroup]="ruleFilterForm" (ngSubmit)="applyRuleFilters()">
+          <label>
+            Slot
+            <select formControlName="slotCode">
+              <option value="">All</option>
+              <option *ngFor="let slot of slotCodes" [value]="slot.code">{{ slot.code }}</option>
+            </select>
+          </label>
+
+          <label>
+            Enabled
+            <select formControlName="enabled">
+              <option value="all">All</option>
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          </label>
+
+          <button type="submit" [disabled]="!selectedProfileId">Apply</button>
+        </form>
+
+        <div class="table-wrap" *ngIf="rules.length > 0; else noRules">
+          <table>
+            <thead>
+              <tr>
+                <th>SlotCode</th>
+                <th>Priority</th>
+                <th>Enabled</th>
+                <th>EffectiveFrom</th>
+                <th>EffectiveTo</th>
+                <th>ConditionJson</th>
+                <th>ConfigJson</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let rule of rules" [class.editing]="rule.id === editingRuleId">
+                <td>{{ rule.slotCode }}</td>
+                <td>{{ rule.priority }}</td>
+                <td>{{ rule.enabled ? 'Yes' : 'No' }}</td>
+                <td>{{ rule.effectiveFrom || '-' }}</td>
+                <td>{{ rule.effectiveTo || '-' }}</td>
+                <td><span class="json-summary">{{ formatJsonSummary(rule.conditionJson) }}</span></td>
+                <td><span class="json-summary">{{ formatJsonSummary(rule.configJson) }}</span></td>
+                <td>
+                  <button type="button" (click)="editRule(rule)">Edit</button>
+                  <button type="button" (click)="toggleRuleEnabled(rule)">
+                    {{ rule.enabled ? 'Disable' : 'Enable' }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ng-template #noRules>
+          <div class="muted">No rules for the selected profile.</div>
+        </ng-template>
+      </section>
+
+      <section class="card">
+        <h2>{{ editingRuleId ? 'Edit Rule' : 'Create Rule' }}</h2>
+
+        <form class="form" [formGroup]="ruleForm" (ngSubmit)="saveRule()">
+          <label>
+            SlotCode
+            <select formControlName="slotCode">
+              <option *ngFor="let slot of slotCodes" [value]="slot.code">{{ slot.code }} - {{ slot.name }}</option>
+            </select>
+          </label>
+
+          <label>
+            Priority
+            <input type="number" min="0" formControlName="priority" />
+          </label>
+
+          <label class="checkbox">
+            <input type="checkbox" formControlName="enabled" />
+            Enabled
+          </label>
+
+          <label>
+            EffectiveFrom
+            <input type="datetime-local" formControlName="effectiveFrom" />
+          </label>
+
+          <label>
+            EffectiveTo
+            <input type="datetime-local" formControlName="effectiveTo" />
+          </label>
+
+          <label>
+            ConditionJson
+            <textarea rows="6" formControlName="conditionJson"></textarea>
+          </label>
+
+          <label>
+            ConfigJson
+            <textarea rows="12" formControlName="configJson"></textarea>
+          </label>
+
+          <div class="button-row">
+            <button type="button" (click)="validateRule()" [disabled]="validatingRule">
+              {{ validatingRule ? 'Validating...' : 'Validate' }}
+            </button>
+            <button type="submit" [disabled]="savingRule || !selectedProfileId">
+              {{ savingRule ? 'Saving...' : (editingRuleId ? 'Save Rule' : 'Create Rule') }}
+            </button>
+            <button type="button" (click)="prepareNewRule()">Reset</button>
+          </div>
+        </form>
+
+        <div *ngIf="validationResult" class="validation-box" [class.valid]="validationResult.isValid" [class.invalid]="!validationResult.isValid">
+          <div class="validation-title">
+            Validation {{ validationResult.isValid ? 'passed' : 'failed' }}
+          </div>
+          <ul *ngIf="validationResult.errors.length > 0">
+            <li *ngFor="let err of validationResult.errors">{{ err }}</li>
+          </ul>
+          <ul class="warnings" *ngIf="validationResult.warnings.length > 0">
+            <li *ngFor="let warn of validationResult.warnings">{{ warn }}</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Effective Config Preview</h2>
+
+        <form class="filter-row" [formGroup]="effectiveForm" (ngSubmit)="loadEffectivePreview()">
+          <label>
+            HospitalId
+            <input type="text" formControlName="hospitalId" />
+          </label>
+
+          <label>
+            SiteId
+            <input type="text" formControlName="siteId" />
+          </label>
+
+          <label>
+            DepartmentId
+            <input type="text" formControlName="departmentId" />
+          </label>
+
+          <button type="submit">Preview</button>
+        </form>
+
+        <div *ngIf="effectivePreview" class="preview">
+          <div class="muted">
+            Matched profile: {{ effectivePreview.matchedProfileKey || 'None' }}
+            <span *ngIf="effectivePreview.matchedProfileVersion">(v{{ effectivePreview.matchedProfileVersion }})</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>SlotCode</th>
+                <th>RuleId</th>
+                <th>Priority</th>
+                <th>Config</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let slot of effectivePreview.resolvedSlots">
+                <td>{{ slot.slotCode }}</td>
+                <td>{{ slot.ruleId || '-' }}</td>
+                <td>{{ slot.priority ?? '-' }}</td>
+                <td>{{ formatJsonSummary(slot.configJson) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</section>

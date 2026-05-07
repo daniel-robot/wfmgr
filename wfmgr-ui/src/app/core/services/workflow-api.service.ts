@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -13,6 +13,7 @@ import {
   CreatePatientRequest,
   CtImageStoredRequest,
   ExternalEventItem,
+  EffectiveWorkflowConfig,
   IntegrationReferenceItem,
   Patient,
   PlanVersionItem,
@@ -21,8 +22,16 @@ import {
   SubmitCaseFormRequest,
   SubmitSimRecordRequest,
   TransitionHistoryItem,
+  UpdateWorkflowProfileRequest,
+  UpdateWorkflowRuleRequest,
+  ValidateWorkflowRuleRequest,
+  ValidateWorkflowRuleResponse,
   WorkflowActionRequest,
+  WorkflowProfile,
+  WorkflowProfileDetail,
   WorkflowOption,
+  WorkflowRule,
+  WorkflowSlotCode,
   WorkItem
 } from '../models/workflow.models';
 
@@ -104,6 +113,107 @@ export class WorkflowApiService {
 
   getWorkflowWorkItemTypes(): Observable<WorkflowOption[]> {
     return this.http.get<WorkflowOption[]>(`${this.baseUrl}/api/workflow/work-item-types`);
+  }
+
+  getWorkflowProfiles(): Observable<WorkflowProfile[]> {
+    return this.http.get<WorkflowProfile[]>(`${this.baseUrl}/api/workflow-config/profiles`);
+  }
+
+  getWorkflowProfile(profileId: string): Observable<WorkflowProfileDetail> {
+    return this.http.get<WorkflowProfileDetail>(`${this.baseUrl}/api/workflow-config/profiles/${profileId}`);
+  }
+
+  createWorkflowProfile(request: {
+    name: string;
+    version: number;
+    hospitalId?: string | null;
+    siteId?: string | null;
+    departmentId?: string | null;
+    isActive: boolean;
+  }): Observable<WorkflowProfile> {
+    return this.http.post<WorkflowProfile>(`${this.baseUrl}/api/workflow-config/profiles`, request);
+  }
+
+  updateWorkflowProfile(profileId: string, request: UpdateWorkflowProfileRequest): Observable<WorkflowProfile> {
+    return this.http.put<WorkflowProfile>(`${this.baseUrl}/api/workflow-config/profiles/${profileId}`, request);
+  }
+
+  activateWorkflowProfile(profileId: string): Observable<WorkflowProfile> {
+    return this.http.post<WorkflowProfile>(`${this.baseUrl}/api/workflow-config/profiles/${profileId}/activate`, {});
+  }
+
+  deactivateWorkflowProfile(profileId: string): Observable<WorkflowProfile> {
+    return this.http.post<WorkflowProfile>(`${this.baseUrl}/api/workflow-config/profiles/${profileId}/deactivate`, {});
+  }
+
+  getWorkflowRules(profileId: string, filters?: { slotCode?: string; enabled?: boolean }): Observable<WorkflowRule[]> {
+    let params = new HttpParams();
+    if (filters?.slotCode) {
+      params = params.set('slotCode', filters.slotCode);
+    }
+
+    if (filters?.enabled !== undefined) {
+      params = params.set('enabled', String(filters.enabled));
+    }
+
+    return this.http.get<WorkflowRule[]>(`${this.baseUrl}/api/workflow-config/profiles/${profileId}/rules`, { params });
+  }
+
+  createWorkflowRule(profileId: string, request: {
+    slotCode: string;
+    priority: number;
+    enabled: boolean;
+    conditionJson?: string | null;
+    configJson: string;
+    effectiveFrom?: string | null;
+    effectiveTo?: string | null;
+  }): Observable<WorkflowRule> {
+    return this.http.post<WorkflowRule>(`${this.baseUrl}/api/workflow-config/profiles/${profileId}/rules`, request);
+  }
+
+  getWorkflowRule(ruleId: string): Observable<WorkflowRule> {
+    return this.http.get<WorkflowRule>(`${this.baseUrl}/api/workflow-config/rules/${ruleId}`);
+  }
+
+  updateWorkflowRule(ruleId: string, request: UpdateWorkflowRuleRequest): Observable<WorkflowRule> {
+    return this.http.put<WorkflowRule>(`${this.baseUrl}/api/workflow-config/rules/${ruleId}`, request);
+  }
+
+  disableWorkflowRule(ruleId: string): Observable<WorkflowRule> {
+    return this.http.post<WorkflowRule>(`${this.baseUrl}/api/workflow-config/rules/${ruleId}/disable`, {});
+  }
+
+  enableWorkflowRule(ruleId: string): Observable<WorkflowRule> {
+    return this.http.post<WorkflowRule>(`${this.baseUrl}/api/workflow-config/rules/${ruleId}/enable`, {});
+  }
+
+  validateWorkflowRule(request: ValidateWorkflowRuleRequest): Observable<ValidateWorkflowRuleResponse> {
+    return this.http.post<ValidateWorkflowRuleResponse>(`${this.baseUrl}/api/workflow-config/rules/validate`, request);
+  }
+
+  getWorkflowSlotCodes(): Observable<WorkflowSlotCode[]> {
+    return this.http.get<WorkflowSlotCode[]>(`${this.baseUrl}/api/workflow-config/slot-codes`);
+  }
+
+  getEffectiveWorkflowConfig(query?: {
+    hospitalId?: string | null;
+    siteId?: string | null;
+    departmentId?: string | null;
+  }): Observable<EffectiveWorkflowConfig> {
+    let params = new HttpParams();
+    if (query?.hospitalId) {
+      params = params.set('hospitalId', query.hospitalId);
+    }
+
+    if (query?.siteId) {
+      params = params.set('siteId', query.siteId);
+    }
+
+    if (query?.departmentId) {
+      params = params.set('departmentId', query.departmentId);
+    }
+
+    return this.http.get<EffectiveWorkflowConfig>(`${this.baseUrl}/api/workflow-config/effective`, { params });
   }
 
   createCaseFormDraft(caseId: string, request: CreateCaseFormDraftRequest): Observable<CaseFormItem> {

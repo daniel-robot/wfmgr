@@ -7,6 +7,7 @@ import { DashboardPageComponent } from './pages/dashboard/dashboard.page';
 import { EventsPageComponent } from './pages/events/events.page';
 import { MonacoForwardPageComponent } from './pages/monaco/monaco-forward.page';
 import { PatientListPageComponent } from './pages/patients/patient-list.page';
+import { WorkflowConfigPageComponent } from './pages/workflow-config/workflow-config.page';
 
 export const routes: Routes = [
 	{ path: '', component: DashboardPageComponent },
@@ -15,6 +16,7 @@ export const routes: Routes = [
 	{ path: 'cases/new', redirectTo: 'patients', pathMatch: 'full' },
 	{ path: 'cases/:caseId', component: CaseDetailsPageComponent },
 	{ path: 'events', component: EventsPageComponent },
+	{ path: 'workflow-config', component: WorkflowConfigPageComponent },
 	{ path: 'audit-logs', component: AuditLogPageComponent },
 	{ path: 'monaco-forward', component: MonacoForwardPageComponent },
 	{ path: '**', redirectTo: '' }
