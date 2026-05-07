@@ -99,7 +99,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
         {
             CaseId = caseId,
-            Type = WorkItemTypes.SimulationSchedule,
+            Type = WorkItemTypes.SimulationRequest,
             AssignedRole = WorkflowRoles.SimTech,
             PayloadJson = request.Notes,
             CreatedAtUtc = now
