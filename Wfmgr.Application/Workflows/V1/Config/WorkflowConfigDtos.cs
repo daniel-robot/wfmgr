@@ -9,6 +9,7 @@ public sealed record WorkflowProfileDto(
     string? SiteId,
     string? DepartmentId,
     bool IsActive,
+    string ConcurrencyHash,
     DateTimeOffset? CreatedAt,
     DateTimeOffset? UpdatedAt);
 
@@ -18,6 +19,7 @@ public sealed record WorkflowRuleDto(
     string SlotCode,
     int Priority,
     bool Enabled,
+    string ConcurrencyHash,
     string? ConditionJson,
     string ConfigJson,
     DateTimeOffset? EffectiveFrom,
@@ -35,7 +37,8 @@ public sealed record CreateWorkflowProfileRequest(
     string? HospitalId,
     string? SiteId,
     string? DepartmentId,
-    bool IsActive);
+    bool IsActive,
+    string? ChangeReason);
 
 public sealed record UpdateWorkflowProfileRequest(
     string? Name,
@@ -43,7 +46,13 @@ public sealed record UpdateWorkflowProfileRequest(
     string? HospitalId,
     string? SiteId,
     string? DepartmentId,
-    bool? IsActive);
+    bool? IsActive,
+    string? ExpectedHash,
+    string? ChangeReason);
+
+public sealed record ToggleWorkflowProfileRequest(
+    string? ExpectedHash,
+    string? ChangeReason);
 
 public sealed record CreateWorkflowRuleRequest(
     string SlotCode,
@@ -52,7 +61,8 @@ public sealed record CreateWorkflowRuleRequest(
     string? ConditionJson,
     string ConfigJson,
     DateTimeOffset? EffectiveFrom,
-    DateTimeOffset? EffectiveTo);
+    DateTimeOffset? EffectiveTo,
+    string? ChangeReason);
 
 public sealed record UpdateWorkflowRuleRequest(
     string SlotCode,
@@ -61,7 +71,13 @@ public sealed record UpdateWorkflowRuleRequest(
     string? ConditionJson,
     string ConfigJson,
     DateTimeOffset? EffectiveFrom,
-    DateTimeOffset? EffectiveTo);
+    DateTimeOffset? EffectiveTo,
+    string? ExpectedHash,
+    string? ChangeReason);
+
+public sealed record ToggleWorkflowRuleRequest(
+    string? ExpectedHash,
+    string? ChangeReason);
 
 public sealed record ValidateWorkflowRuleRequest(
     string SlotCode,
@@ -81,15 +97,53 @@ public sealed record WorkflowSlotCodeDto(
     string Name,
     string? Description);
 
+public sealed record WorkflowMutationConflictDto(
+    string Message,
+    string? CurrentHash);
+
+public sealed record EffectiveWorkflowQueryDto(
+    string? HospitalId,
+    string? SiteId,
+    string? DepartmentId);
+
+public sealed record EffectiveWorkflowMatchedProfileDto(
+    Guid Id,
+    string Key,
+    int Version,
+    string? HospitalId,
+    string? SiteId,
+    string? DepartmentId);
+
 public sealed record EffectiveWorkflowSlotDto(
     string SlotCode,
     Guid? SourceProfileId,
+    string? SourceProfileKey,
     Guid? RuleId,
     int? Priority,
-    string? ConfigJson);
+    bool? Enabled,
+    DateTimeOffset? EffectiveFrom,
+    DateTimeOffset? EffectiveTo,
+    string? ConfigJson,
+    string ResolutionReason);
+
+public sealed record EffectiveWorkflowUnmatchedSlotDto(
+    string SlotCode,
+    string Reason);
+
+public sealed record EffectiveWorkflowEvaluatedProfileDto(
+    Guid ProfileId,
+    string Key,
+    int Version,
+    string? HospitalId,
+    string? SiteId,
+    string? DepartmentId,
+    bool IsActive,
+    bool MatchedScope,
+    string ReasonIncludedOrSkipped);
 
 public sealed record EffectiveWorkflowConfigDto(
-    Guid? MatchedProfileId,
-    string? MatchedProfileKey,
-    int? MatchedProfileVersion,
-    IReadOnlyList<EffectiveWorkflowSlotDto> ResolvedSlots);
+    EffectiveWorkflowQueryDto Query,
+    EffectiveWorkflowMatchedProfileDto? MatchedProfile,
+    IReadOnlyList<EffectiveWorkflowSlotDto> ResolvedSlots,
+    IReadOnlyList<EffectiveWorkflowUnmatchedSlotDto> UnmatchedSlots,
+    IReadOnlyList<EffectiveWorkflowEvaluatedProfileDto> EvaluatedProfiles);

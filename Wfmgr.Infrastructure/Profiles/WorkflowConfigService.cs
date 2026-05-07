@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Wfmgr.Application.Workflows.V1;
@@ -55,7 +57,7 @@ public class WorkflowConfigService : IWorkflowConfigService
         return new WorkflowProfileDetailDto(ToDto(profile), rules.Select(ToDto).ToList());
     }
 
-    public async Task<WorkflowProfileDto> CreateProfileAsync(CreateWorkflowProfileRequest request, CancellationToken ct)
+    public async Task<WorkflowProfileDto> CreateProfileAsync(CreateWorkflowProfileRequest request, string? actorId, CancellationToken ct)
     {
         var entity = new WorkflowProfileEntity
         {
@@ -75,7 +77,7 @@ public class WorkflowConfigService : IWorkflowConfigService
         return ToDto(entity);
     }
 
-    public async Task<WorkflowProfileDto?> UpdateProfileAsync(Guid profileId, UpdateWorkflowProfileRequest request, CancellationToken ct)
+    public async Task<WorkflowProfileDto?> UpdateProfileAsync(Guid profileId, UpdateWorkflowProfileRequest request, string? actorId, CancellationToken ct)
     {
         var entity = await _dbContext.WorkflowProfiles.FirstOrDefaultAsync(x => x.ProfileId == profileId, ct);
         if (entity is null)
@@ -117,7 +119,7 @@ public class WorkflowConfigService : IWorkflowConfigService
         return ToDto(entity);
     }
 
-    public async Task<WorkflowProfileDto?> SetProfileActiveAsync(Guid profileId, bool isActive, CancellationToken ct)
+    public async Task<WorkflowProfileDto?> SetProfileActiveAsync(Guid profileId, bool isActive, ToggleWorkflowProfileRequest request, string? actorId, CancellationToken ct)
     {
         var entity = await _dbContext.WorkflowProfiles.FirstOrDefaultAsync(x => x.ProfileId == profileId, ct);
         if (entity is null)
@@ -126,6 +128,7 @@ public class WorkflowConfigService : IWorkflowConfigService
         }
 
         entity.IsActive = isActive;
+
         await _dbContext.SaveChangesAsync(ct);
         return ToDto(entity);
     }
@@ -164,7 +167,7 @@ public class WorkflowConfigService : IWorkflowConfigService
         return entity is null ? null : ToDto(entity);
     }
 
-    public async Task<WorkflowRuleDto?> CreateRuleAsync(Guid profileId, CreateWorkflowRuleRequest request, CancellationToken ct)
+    public async Task<WorkflowRuleDto?> CreateRuleAsync(Guid profileId, CreateWorkflowRuleRequest request, string? actorId, CancellationToken ct)
     {
         var profileExists = await _dbContext.WorkflowProfiles.AnyAsync(x => x.ProfileId == profileId, ct);
         if (!profileExists)
@@ -191,7 +194,7 @@ public class WorkflowConfigService : IWorkflowConfigService
         return ToDto(entity);
     }
 
-    public async Task<WorkflowRuleDto?> UpdateRuleAsync(Guid ruleId, UpdateWorkflowRuleRequest request, CancellationToken ct)
+    public async Task<WorkflowRuleDto?> UpdateRuleAsync(Guid ruleId, UpdateWorkflowRuleRequest request, string? actorId, CancellationToken ct)
     {
         var entity = await _dbContext.WorkflowRules.FirstOrDefaultAsync(x => x.RuleId == ruleId, ct);
         if (entity is null)
@@ -211,7 +214,7 @@ public class WorkflowConfigService : IWorkflowConfigService
         return ToDto(entity);
     }
 
-    public async Task<WorkflowRuleDto?> SetRuleEnabledAsync(Guid ruleId, bool enabled, CancellationToken ct)
+    public async Task<WorkflowRuleDto?> SetRuleEnabledAsync(Guid ruleId, bool enabled, ToggleWorkflowRuleRequest request, string? actorId, CancellationToken ct)
     {
         var entity = await _dbContext.WorkflowRules.FirstOrDefaultAsync(x => x.RuleId == ruleId, ct);
         if (entity is null)
@@ -220,6 +223,7 @@ public class WorkflowConfigService : IWorkflowConfigService
         }
 
         entity.IsEnabled = enabled;
+
         await _dbContext.SaveChangesAsync(ct);
         return ToDto(entity);
     }
@@ -305,85 +309,178 @@ public class WorkflowConfigService : IWorkflowConfigService
 
     public async Task<EffectiveWorkflowConfigDto> GetEffectiveConfigAsync(string? hospitalId, string? siteId, string? departmentId, CancellationToken ct)
     {
-        var resolvedHospital = Normalize(hospitalId) ?? string.Empty;
-        var resolvedSite = Normalize(siteId) ?? string.Empty;
-        var resolvedDepartment = Normalize(departmentId) ?? string.Empty;
+        var queryHospital = Normalize(hospitalId);
+        var querySite = Normalize(siteId);
+        var queryDepartment = Normalize(departmentId);
 
-        var profile = await ResolveProfileAsync(resolvedHospital, resolvedSite, resolvedDepartment, ct);
-        if (profile is null)
+        var allActiveProfiles = await _dbContext.WorkflowProfiles
+            .AsNoTracking()
+            .Where(x => x.IsActive)
+            .ToListAsync(ct);
+
+        var candidates = allActiveProfiles
+            .Select(p => new
+            {
+                Profile = p,
+                Rank = GetProfileMatchRank(p, queryHospital, querySite, queryDepartment)
+            })
+            .OrderBy(x => x.Rank)
+            .ThenByDescending(x => x.Profile.Version)
+            .ThenBy(x => x.Profile.CreatedAt)
+            .ToList();
+
+        var matched = candidates.FirstOrDefault(x => x.Rank < int.MaxValue);
+
+        var evaluatedProfiles = candidates.Select(x => new EffectiveWorkflowEvaluatedProfileDto(
+            x.Profile.ProfileId,
+            BuildProfileKey(x.Profile),
+            x.Profile.Version,
+            x.Profile.HospitalId,
+            x.Profile.SiteId,
+            x.Profile.DepartmentId,
+            x.Profile.IsActive,
+            x.Rank < int.MaxValue,
+            x.Rank == int.MaxValue
+                ? "Skipped: profile scope does not match query fallback chain."
+                : matched is not null && matched.Profile.ProfileId == x.Profile.ProfileId
+                    ? "Included: first matching profile by fallback priority and highest version."
+                    : "Skipped: lower-priority matching profile."))
+            .ToList();
+
+        if (matched is null)
         {
-            var emptySlots = GetSlotCodes().Select(x => new EffectiveWorkflowSlotDto(x.Code, null, null, null, null)).ToList();
-            return new EffectiveWorkflowConfigDto(null, null, null, emptySlots);
+            var unresolved = GetSlotCodes().Select(slot => new EffectiveWorkflowSlotDto(
+                slot.Code,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "No active profile matched the requested scope."))
+                .ToList();
+
+            var unmatched = GetSlotCodes().Select(slot => new EffectiveWorkflowUnmatchedSlotDto(
+                slot.Code,
+                "No active profile matched the requested scope."))
+                .ToList();
+
+            return new EffectiveWorkflowConfigDto(
+                new EffectiveWorkflowQueryDto(queryHospital, querySite, queryDepartment),
+                null,
+                unresolved,
+                unmatched,
+                evaluatedProfiles);
         }
 
         var now = DateTimeOffset.UtcNow;
-        var rules = await _dbContext.WorkflowRules
+        var activeRules = await _dbContext.WorkflowRules
             .AsNoTracking()
-            .Where(x => x.ProfileId == profile.ProfileId
+            .Where(x => x.ProfileId == matched.Profile.ProfileId
                         && x.IsEnabled
                         && (x.EffectiveFrom == null || x.EffectiveFrom <= now)
                         && (x.EffectiveTo == null || x.EffectiveTo >= now))
             .OrderByDescending(x => x.Priority)
             .ToListAsync(ct);
 
-        var resolvedSlots = GetSlotCodes()
-            .Select(slot =>
+        var resolvedSlots = new List<EffectiveWorkflowSlotDto>();
+        var unmatchedSlots = new List<EffectiveWorkflowUnmatchedSlotDto>();
+
+        foreach (var slot in GetSlotCodes())
+        {
+            var rule = activeRules.FirstOrDefault(x => x.SlotCode == slot.Code);
+            if (rule is null)
             {
-                var rule = rules.FirstOrDefault(x => x.SlotCode == slot.Code);
-                return new EffectiveWorkflowSlotDto(
+                var reason = "No enabled/effective rule found in matched profile for this slot.";
+                resolvedSlots.Add(new EffectiveWorkflowSlotDto(
                     slot.Code,
-                    profile.ProfileId,
-                    rule?.RuleId,
-                    rule?.Priority,
-                    rule?.ConfigJson);
-            })
-            .ToList();
+                    matched.Profile.ProfileId,
+                    BuildProfileKey(matched.Profile),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    reason));
+                unmatchedSlots.Add(new EffectiveWorkflowUnmatchedSlotDto(slot.Code, reason));
+                continue;
+            }
+
+            resolvedSlots.Add(new EffectiveWorkflowSlotDto(
+                slot.Code,
+                matched.Profile.ProfileId,
+                BuildProfileKey(matched.Profile),
+                rule.RuleId,
+                rule.Priority,
+                rule.IsEnabled,
+                rule.EffectiveFrom,
+                rule.EffectiveTo,
+                rule.ConfigJson,
+                "Resolved from matched profile and highest-priority active/effective rule."));
+        }
+
+        var matchedProfileDto = new EffectiveWorkflowMatchedProfileDto(
+            matched.Profile.ProfileId,
+            BuildProfileKey(matched.Profile),
+            matched.Profile.Version,
+            matched.Profile.HospitalId,
+            matched.Profile.SiteId,
+            matched.Profile.DepartmentId);
 
         return new EffectiveWorkflowConfigDto(
-            profile.ProfileId,
-            BuildProfileKey(profile),
-            profile.Version,
-            resolvedSlots);
+            new EffectiveWorkflowQueryDto(queryHospital, querySite, queryDepartment),
+            matchedProfileDto,
+            resolvedSlots,
+            unmatchedSlots,
+            evaluatedProfiles);
     }
 
-    private async Task<WorkflowProfileEntity?> ResolveProfileAsync(string hospitalId, string siteId, string departmentId, CancellationToken ct)
+    // TODO: Wire workflow configuration changes into a non-case-scoped audit pipeline before production.
+
+    private static int GetProfileMatchRank(WorkflowProfileEntity profile, string? hospitalId, string? siteId, string? departmentId)
     {
-        var profiles = _dbContext.WorkflowProfiles
-            .AsNoTracking()
-            .Where(x => x.IsActive)
-            .AsQueryable();
-
-        var level1 = await profiles
-            .Where(x => x.HospitalId == hospitalId && x.SiteId == siteId && x.DepartmentId == departmentId)
-            .OrderByDescending(x => x.Version)
-            .FirstOrDefaultAsync(ct);
-        if (level1 is not null)
+        if (!string.Equals(profile.HospitalId, hospitalId, StringComparison.Ordinal)
+            && profile.HospitalId is not null)
         {
-            return level1;
+            return int.MaxValue;
         }
 
-        var level2 = await profiles
-            .Where(x => x.HospitalId == hospitalId && x.SiteId == siteId && x.DepartmentId == null)
-            .OrderByDescending(x => x.Version)
-            .FirstOrDefaultAsync(ct);
-        if (level2 is not null)
+        if (!string.Equals(profile.SiteId, siteId, StringComparison.Ordinal)
+            && profile.SiteId is not null)
         {
-            return level2;
+            return int.MaxValue;
         }
 
-        var level3 = await profiles
-            .Where(x => x.HospitalId == hospitalId && x.SiteId == null && x.DepartmentId == null)
-            .OrderByDescending(x => x.Version)
-            .FirstOrDefaultAsync(ct);
-        if (level3 is not null)
+        if (!string.Equals(profile.DepartmentId, departmentId, StringComparison.Ordinal)
+            && profile.DepartmentId is not null)
         {
-            return level3;
+            return int.MaxValue;
         }
 
-        return await profiles
-            .Where(x => x.HospitalId == null && x.SiteId == null && x.DepartmentId == null)
-            .OrderByDescending(x => x.Version)
-            .FirstOrDefaultAsync(ct);
+        if (profile.HospitalId == hospitalId && profile.SiteId == siteId && profile.DepartmentId == departmentId)
+        {
+            return 0;
+        }
+
+        if (profile.HospitalId == hospitalId && profile.SiteId == siteId && profile.DepartmentId is null)
+        {
+            return 1;
+        }
+
+        if (profile.HospitalId == hospitalId && profile.SiteId is null && profile.DepartmentId is null)
+        {
+            return 2;
+        }
+
+        if (profile.HospitalId is null && profile.SiteId is null && profile.DepartmentId is null)
+        {
+            return 3;
+        }
+
+        return int.MaxValue;
     }
 
     private static object? TryParseSlotConfig(string slotCode, string json, out string? error)
@@ -454,6 +551,7 @@ public class WorkflowConfigService : IWorkflowConfigService
             entity.SiteId,
             entity.DepartmentId,
             entity.IsActive,
+            ComputeProfileHash(entity),
             entity.CreatedAt,
             null);
     }
@@ -466,12 +564,43 @@ public class WorkflowConfigService : IWorkflowConfigService
             entity.SlotCode,
             entity.Priority,
             entity.IsEnabled,
+            ComputeRuleHash(entity),
             entity.ConditionJson,
             entity.ConfigJson,
             entity.EffectiveFrom,
             entity.EffectiveTo,
             null,
             null);
+    }
+
+    private static string ComputeProfileHash(WorkflowProfileEntity entity)
+    {
+        return ComputeHash(
+            entity.Name,
+            entity.Version.ToString(),
+            entity.HospitalId,
+            entity.SiteId,
+            entity.DepartmentId,
+            entity.IsActive ? "1" : "0");
+    }
+
+    private static string ComputeRuleHash(WorkflowRuleEntity entity)
+    {
+        return ComputeHash(
+            entity.SlotCode,
+            entity.Priority.ToString(),
+            entity.IsEnabled ? "1" : "0",
+            entity.EffectiveFrom?.ToString("O"),
+            entity.EffectiveTo?.ToString("O"),
+            entity.ConditionJson,
+            entity.ConfigJson);
+    }
+
+    private static string ComputeHash(params string?[] parts)
+    {
+        var payload = string.Join("|", parts.Select(x => x ?? string.Empty));
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
+        return Convert.ToHexString(bytes);
     }
 
     private static string BuildProfileKey(WorkflowProfileEntity entity)

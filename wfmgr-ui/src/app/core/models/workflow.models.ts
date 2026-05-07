@@ -233,6 +233,7 @@ export interface WorkflowProfile {
   siteId: string | null;
   departmentId: string | null;
   isActive: boolean;
+  concurrencyHash: string;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -243,6 +244,7 @@ export interface WorkflowRule {
   slotCode: string;
   priority: number;
   enabled: boolean;
+  concurrencyHash: string;
   conditionJson: string | null;
   configJson: string;
   effectiveFrom: string | null;
@@ -263,6 +265,7 @@ export interface CreateWorkflowProfileRequest {
   siteId?: string | null;
   departmentId?: string | null;
   isActive: boolean;
+  changeReason?: string | null;
 }
 
 export interface UpdateWorkflowProfileRequest {
@@ -272,6 +275,13 @@ export interface UpdateWorkflowProfileRequest {
   siteId?: string | null;
   departmentId?: string | null;
   isActive?: boolean;
+  expectedHash?: string | null;
+  changeReason?: string | null;
+}
+
+export interface ToggleWorkflowProfileRequest {
+  expectedHash?: string | null;
+  changeReason?: string | null;
 }
 
 export interface CreateWorkflowRuleRequest {
@@ -282,6 +292,7 @@ export interface CreateWorkflowRuleRequest {
   configJson: string;
   effectiveFrom?: string | null;
   effectiveTo?: string | null;
+  changeReason?: string | null;
 }
 
 export interface UpdateWorkflowRuleRequest {
@@ -292,6 +303,18 @@ export interface UpdateWorkflowRuleRequest {
   configJson: string;
   effectiveFrom?: string | null;
   effectiveTo?: string | null;
+  expectedHash?: string | null;
+  changeReason?: string | null;
+}
+
+export interface ToggleWorkflowRuleRequest {
+  expectedHash?: string | null;
+  changeReason?: string | null;
+}
+
+export interface WorkflowMutationConflict {
+  message: string;
+  currentHash: string | null;
 }
 
 export interface ValidateWorkflowRuleRequest {
@@ -318,14 +341,52 @@ export interface WorkflowSlotCode {
 export interface EffectiveWorkflowSlot {
   slotCode: string;
   sourceProfileId: string | null;
+  sourceProfileKey: string | null;
   ruleId: string | null;
   priority: number | null;
+  enabled: boolean | null;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
   configJson: string | null;
+  resolutionReason: string;
+}
+
+export interface EffectiveWorkflowQuery {
+  hospitalId: string | null;
+  siteId: string | null;
+  departmentId: string | null;
+}
+
+export interface EffectiveWorkflowMatchedProfile {
+  id: string;
+  key: string;
+  version: number;
+  hospitalId: string | null;
+  siteId: string | null;
+  departmentId: string | null;
+}
+
+export interface EffectiveWorkflowUnmatchedSlot {
+  slotCode: string;
+  reason: string;
+}
+
+export interface EffectiveWorkflowEvaluatedProfile {
+  profileId: string;
+  key: string;
+  version: number;
+  hospitalId: string | null;
+  siteId: string | null;
+  departmentId: string | null;
+  isActive: boolean;
+  matchedScope: boolean;
+  reasonIncludedOrSkipped: string;
 }
 
 export interface EffectiveWorkflowConfig {
-  matchedProfileId: string | null;
-  matchedProfileKey: string | null;
-  matchedProfileVersion: number | null;
+  query: EffectiveWorkflowQuery;
+  matchedProfile: EffectiveWorkflowMatchedProfile | null;
   resolvedSlots: EffectiveWorkflowSlot[];
+  unmatchedSlots: EffectiveWorkflowUnmatchedSlot[];
+  evaluatedProfiles: EffectiveWorkflowEvaluatedProfile[];
 }

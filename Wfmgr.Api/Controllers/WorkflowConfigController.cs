@@ -7,7 +7,7 @@ namespace Wfmgr.Api.Controllers;
 [Route("api/workflow-config")]
 public class WorkflowConfigController : ControllerBase
 {
-    // TODO: protect all endpoints with admin RBAC before production use.
+    // TODO: Protect workflow configuration endpoints with admin RBAC before production.
     private readonly IWorkflowConfigService _service;
 
     public WorkflowConfigController(IWorkflowConfigService service)
@@ -39,16 +39,16 @@ public class WorkflowConfigController : ControllerBase
 
     [HttpPost("profiles")]
     [ProducesResponseType(typeof(WorkflowProfileDto), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ValidateWorkflowRuleResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<WorkflowProfileDto>> CreateProfile([FromBody] CreateWorkflowProfileRequest request, CancellationToken ct)
     {
         var errors = ValidateProfile(request.Name, request.Version);
         if (errors.Count > 0)
         {
-            return BadRequest(new { errors });
+            return BadRequest(new ValidateWorkflowRuleResponse(false, errors, []));
         }
 
-        var item = await _service.CreateProfileAsync(request, ct);
+        var item = await _service.CreateProfileAsync(request, GetActorId(), ct);
         return CreatedAtAction(nameof(GetProfile), new { profileId = item.Id }, item);
     }
 
@@ -56,15 +56,29 @@ public class WorkflowConfigController : ControllerBase
     [ProducesResponseType(typeof(WorkflowProfileDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<WorkflowProfileDto>> UpdateProfile(Guid profileId, [FromBody] UpdateWorkflowProfileRequest request, CancellationToken ct)
     {
         var errors = ValidateProfile(request.Name, request.Version);
         if (errors.Count > 0)
         {
-            return BadRequest(new { errors });
+            return BadRequest(new ValidateWorkflowRuleResponse(false, errors, []));
         }
 
-        var item = await _service.UpdateProfileAsync(profileId, request, ct);
+        var existing = await _service.GetProfileAsync(profileId, ct);
+        if (existing is null)
+        {
+            return NotFound();
+        }
+
+        if (IsHashConflict(request.ExpectedHash, existing.Profile.ConcurrencyHash))
+        {
+            return Conflict(new WorkflowMutationConflictDto(
+                "The profile was changed by another user. Reload before saving.",
+                existing.Profile.ConcurrencyHash));
+        }
+
+        var item = await _service.UpdateProfileAsync(profileId, request, GetActorId(), ct);
         if (item is null)
         {
             return NotFound();
@@ -76,9 +90,27 @@ public class WorkflowConfigController : ControllerBase
     [HttpPost("profiles/{profileId:guid}/activate")]
     [ProducesResponseType(typeof(WorkflowProfileDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<WorkflowProfileDto>> ActivateProfile(Guid profileId, CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<WorkflowProfileDto>> ActivateProfile(
+        Guid profileId,
+        [FromBody] ToggleWorkflowProfileRequest? request,
+        CancellationToken ct)
     {
-        var item = await _service.SetProfileActiveAsync(profileId, isActive: true, ct);
+        var existing = await _service.GetProfileAsync(profileId, ct);
+        if (existing is null)
+        {
+            return NotFound();
+        }
+
+        request ??= new ToggleWorkflowProfileRequest(null, null);
+        if (IsHashConflict(request.ExpectedHash, existing.Profile.ConcurrencyHash))
+        {
+            return Conflict(new WorkflowMutationConflictDto(
+                "The profile was changed by another user. Reload before saving.",
+                existing.Profile.ConcurrencyHash));
+        }
+
+        var item = await _service.SetProfileActiveAsync(profileId, isActive: true, request, GetActorId(), ct);
         if (item is null)
         {
             return NotFound();
@@ -90,9 +122,27 @@ public class WorkflowConfigController : ControllerBase
     [HttpPost("profiles/{profileId:guid}/deactivate")]
     [ProducesResponseType(typeof(WorkflowProfileDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<WorkflowProfileDto>> DeactivateProfile(Guid profileId, CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<WorkflowProfileDto>> DeactivateProfile(
+        Guid profileId,
+        [FromBody] ToggleWorkflowProfileRequest? request,
+        CancellationToken ct)
     {
-        var item = await _service.SetProfileActiveAsync(profileId, isActive: false, ct);
+        var existing = await _service.GetProfileAsync(profileId, ct);
+        if (existing is null)
+        {
+            return NotFound();
+        }
+
+        request ??= new ToggleWorkflowProfileRequest(null, null);
+        if (IsHashConflict(request.ExpectedHash, existing.Profile.ConcurrencyHash))
+        {
+            return Conflict(new WorkflowMutationConflictDto(
+                "The profile was changed by another user. Reload before saving.",
+                existing.Profile.ConcurrencyHash));
+        }
+
+        var item = await _service.SetProfileActiveAsync(profileId, isActive: false, request, GetActorId(), ct);
         if (item is null)
         {
             return NotFound();
@@ -132,7 +182,7 @@ public class WorkflowConfigController : ControllerBase
             return BadRequest(validation);
         }
 
-        var item = await _service.CreateRuleAsync(profileId, request, ct);
+        var item = await _service.CreateRuleAsync(profileId, request, GetActorId(), ct);
         if (item is null)
         {
             return NotFound();
@@ -159,6 +209,7 @@ public class WorkflowConfigController : ControllerBase
     [ProducesResponseType(typeof(WorkflowRuleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<WorkflowRuleDto>> UpdateRule(Guid ruleId, [FromBody] UpdateWorkflowRuleRequest request, CancellationToken ct)
     {
         var validation = await _service.ValidateRuleAsync(new ValidateWorkflowRuleRequest(
@@ -174,7 +225,20 @@ public class WorkflowConfigController : ControllerBase
             return BadRequest(validation);
         }
 
-        var item = await _service.UpdateRuleAsync(ruleId, request, ct);
+        var existing = await _service.GetRuleAsync(ruleId, ct);
+        if (existing is null)
+        {
+            return NotFound();
+        }
+
+        if (IsHashConflict(request.ExpectedHash, existing.ConcurrencyHash))
+        {
+            return Conflict(new WorkflowMutationConflictDto(
+                "The rule was changed by another user. Reload before saving.",
+                existing.ConcurrencyHash));
+        }
+
+        var item = await _service.UpdateRuleAsync(ruleId, request, GetActorId(), ct);
         if (item is null)
         {
             return NotFound();
@@ -186,9 +250,27 @@ public class WorkflowConfigController : ControllerBase
     [HttpPost("rules/{ruleId:guid}/disable")]
     [ProducesResponseType(typeof(WorkflowRuleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<WorkflowRuleDto>> DisableRule(Guid ruleId, CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<WorkflowRuleDto>> DisableRule(
+        Guid ruleId,
+        [FromBody] ToggleWorkflowRuleRequest? request,
+        CancellationToken ct)
     {
-        var item = await _service.SetRuleEnabledAsync(ruleId, enabled: false, ct);
+        var existing = await _service.GetRuleAsync(ruleId, ct);
+        if (existing is null)
+        {
+            return NotFound();
+        }
+
+        request ??= new ToggleWorkflowRuleRequest(null, null);
+        if (IsHashConflict(request.ExpectedHash, existing.ConcurrencyHash))
+        {
+            return Conflict(new WorkflowMutationConflictDto(
+                "The rule was changed by another user. Reload before saving.",
+                existing.ConcurrencyHash));
+        }
+
+        var item = await _service.SetRuleEnabledAsync(ruleId, enabled: false, request, GetActorId(), ct);
         if (item is null)
         {
             return NotFound();
@@ -200,9 +282,27 @@ public class WorkflowConfigController : ControllerBase
     [HttpPost("rules/{ruleId:guid}/enable")]
     [ProducesResponseType(typeof(WorkflowRuleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<WorkflowRuleDto>> EnableRule(Guid ruleId, CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<WorkflowRuleDto>> EnableRule(
+        Guid ruleId,
+        [FromBody] ToggleWorkflowRuleRequest? request,
+        CancellationToken ct)
     {
-        var item = await _service.SetRuleEnabledAsync(ruleId, enabled: true, ct);
+        var existing = await _service.GetRuleAsync(ruleId, ct);
+        if (existing is null)
+        {
+            return NotFound();
+        }
+
+        request ??= new ToggleWorkflowRuleRequest(null, null);
+        if (IsHashConflict(request.ExpectedHash, existing.ConcurrencyHash))
+        {
+            return Conflict(new WorkflowMutationConflictDto(
+                "The rule was changed by another user. Reload before saving.",
+                existing.ConcurrencyHash));
+        }
+
+        var item = await _service.SetRuleEnabledAsync(ruleId, enabled: true, request, GetActorId(), ct);
         if (item is null)
         {
             return NotFound();
@@ -236,6 +336,22 @@ public class WorkflowConfigController : ControllerBase
     {
         var result = await _service.GetEffectiveConfigAsync(hospitalId, siteId, departmentId, ct);
         return Ok(result);
+    }
+
+    private static bool IsHashConflict(string? expectedHash, string currentHash)
+    {
+        return !string.IsNullOrWhiteSpace(expectedHash)
+               && !string.Equals(expectedHash, currentHash, StringComparison.Ordinal);
+    }
+
+    private string? GetActorId()
+    {
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            return User.Identity?.Name;
+        }
+
+        return null;
     }
 
     private static List<string> ValidateProfile(string? name, int? version)

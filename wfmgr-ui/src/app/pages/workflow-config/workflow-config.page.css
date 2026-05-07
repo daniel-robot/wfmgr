@@ -203,6 +203,16 @@ tr.editing {
   color: #475569;
 }
 
+.preview h3 {
+  margin-top: 0.85rem;
+  margin-bottom: 0.4rem;
+}
+
+.plain-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.2rem;
+}
+
 @media (max-width: 1024px) {
   .layout {
     grid-template-columns: 1fr;

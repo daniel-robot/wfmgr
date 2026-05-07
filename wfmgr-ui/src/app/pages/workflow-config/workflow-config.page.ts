@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs';
@@ -26,7 +27,9 @@ export class WorkflowConfigPageComponent implements OnInit {
   rules: WorkflowRule[] = [];
   slotCodes: WorkflowSlotCode[] = [];
   selectedProfileId: string | null = null;
+  selectedProfileHash: string | null = null;
   editingRuleId: string | null = null;
+  editingRuleHash: string | null = null;
   loading = false;
   savingProfile = false;
   savingRule = false;
@@ -43,7 +46,8 @@ export class WorkflowConfigPageComponent implements OnInit {
     hospitalId: [''],
     siteId: [''],
     departmentId: [''],
-    isActive: [true]
+    isActive: [true],
+    changeReason: ['']
   });
 
   readonly ruleFilterForm = this.fb.group({
@@ -58,7 +62,8 @@ export class WorkflowConfigPageComponent implements OnInit {
     effectiveFrom: [''],
     effectiveTo: [''],
     conditionJson: [''],
-    configJson: ['{}', Validators.required]
+    configJson: ['{}', Validators.required],
+    changeReason: ['']
   });
 
   readonly effectiveForm = this.fb.group({
@@ -95,6 +100,7 @@ export class WorkflowConfigPageComponent implements OnInit {
           this.profiles = items;
           if (items.length === 0) {
             this.selectedProfileId = null;
+            this.selectedProfileHash = null;
             this.rules = [];
             this.prepareNewProfile();
             return;
@@ -121,16 +127,19 @@ export class WorkflowConfigPageComponent implements OnInit {
     this.api.getWorkflowProfile(profileId).subscribe({
       next: (detail) => {
         this.rules = detail.rules;
+        this.selectedProfileHash = detail.profile.concurrencyHash;
         this.profileForm.patchValue({
           name: detail.profile.name ?? '',
           version: detail.profile.version,
           hospitalId: detail.profile.hospitalId ?? '',
           siteId: detail.profile.siteId ?? '',
           departmentId: detail.profile.departmentId ?? '',
-          isActive: detail.profile.isActive
+          isActive: detail.profile.isActive,
+          changeReason: ''
         });
 
         this.editingRuleId = null;
+        this.editingRuleHash = null;
         this.prepareNewRule();
       },
       error: (err) => {
@@ -141,13 +150,15 @@ export class WorkflowConfigPageComponent implements OnInit {
 
   prepareNewProfile(): void {
     this.selectedProfileId = null;
+    this.selectedProfileHash = null;
     this.profileForm.reset({
       name: '',
       version: 1,
       hospitalId: '',
       siteId: '',
       departmentId: '',
-      isActive: true
+      isActive: true,
+      changeReason: ''
     });
     this.rules = [];
   }
@@ -168,7 +179,9 @@ export class WorkflowConfigPageComponent implements OnInit {
       hospitalId: this.toNullable(this.profileForm.value.hospitalId),
       siteId: this.toNullable(this.profileForm.value.siteId),
       departmentId: this.toNullable(this.profileForm.value.departmentId),
-      isActive: !!this.profileForm.value.isActive
+      isActive: !!this.profileForm.value.isActive,
+      expectedHash: this.selectedProfileHash,
+      changeReason: this.toNullable(this.profileForm.value.changeReason)
     };
 
     const work = this.selectedProfileId
@@ -181,6 +194,8 @@ export class WorkflowConfigPageComponent implements OnInit {
           ? 'Profile updated successfully.'
           : 'Profile created successfully.';
         this.selectedProfileId = profile.id;
+        this.selectedProfileHash = profile.concurrencyHash;
+        this.profileForm.patchValue({ changeReason: '' });
         this.loadProfiles();
       },
       error: (err) => {
@@ -193,13 +208,20 @@ export class WorkflowConfigPageComponent implements OnInit {
     this.pageError = '';
     this.pageMessage = '';
 
+    const changeReason = this.toNullable(this.profileForm.value.changeReason);
+    const toggleRequest = {
+      expectedHash: profile.concurrencyHash,
+      changeReason
+    };
+
     const call = profile.isActive
-      ? this.api.deactivateWorkflowProfile(profile.id)
-      : this.api.activateWorkflowProfile(profile.id);
+      ? this.api.deactivateWorkflowProfile(profile.id, toggleRequest)
+      : this.api.activateWorkflowProfile(profile.id, toggleRequest);
 
     call.subscribe({
       next: () => {
         this.pageMessage = profile.isActive ? 'Profile deactivated.' : 'Profile activated.';
+        this.profileForm.patchValue({ changeReason: '' });
         this.loadProfiles();
       },
       error: (err) => {
@@ -242,6 +264,7 @@ export class WorkflowConfigPageComponent implements OnInit {
 
   prepareNewRule(): void {
     this.editingRuleId = null;
+    this.editingRuleHash = null;
     this.validationResult = null;
     this.ruleForm.reset({
       slotCode: this.slotCodes[0]?.code ?? '',
@@ -250,12 +273,14 @@ export class WorkflowConfigPageComponent implements OnInit {
       effectiveFrom: '',
       effectiveTo: '',
       conditionJson: '',
-      configJson: '{}'
+      configJson: '{}',
+      changeReason: ''
     });
   }
 
   editRule(rule: WorkflowRule): void {
     this.editingRuleId = rule.id;
+    this.editingRuleHash = rule.concurrencyHash;
     this.validationResult = null;
     this.ruleForm.patchValue({
       slotCode: rule.slotCode,
@@ -264,7 +289,8 @@ export class WorkflowConfigPageComponent implements OnInit {
       effectiveFrom: this.toLocalDateTimeInput(rule.effectiveFrom),
       effectiveTo: this.toLocalDateTimeInput(rule.effectiveTo),
       conditionJson: this.prettyJson(rule.conditionJson),
-      configJson: this.prettyJson(rule.configJson)
+      configJson: this.prettyJson(rule.configJson),
+      changeReason: ''
     });
   }
 
@@ -318,6 +344,8 @@ export class WorkflowConfigPageComponent implements OnInit {
       configJson: (this.ruleForm.value.configJson ?? '').trim(),
       effectiveFrom: this.toIso(this.ruleForm.value.effectiveFrom),
       effectiveTo: this.toIso(this.ruleForm.value.effectiveTo),
+      expectedHash: this.editingRuleHash,
+      changeReason: this.toNullable(this.ruleForm.value.changeReason)
     };
 
     const work = this.editingRuleId
@@ -337,13 +365,20 @@ export class WorkflowConfigPageComponent implements OnInit {
   }
 
   toggleRuleEnabled(rule: WorkflowRule): void {
+    const changeReason = this.toNullable(this.ruleForm.value.changeReason);
+    const toggleRequest = {
+      expectedHash: rule.concurrencyHash,
+      changeReason
+    };
+
     const work = rule.enabled
-      ? this.api.disableWorkflowRule(rule.id)
-      : this.api.enableWorkflowRule(rule.id);
+      ? this.api.disableWorkflowRule(rule.id, toggleRequest)
+      : this.api.enableWorkflowRule(rule.id, toggleRequest);
 
     work.subscribe({
       next: () => {
         this.pageMessage = rule.enabled ? 'Rule disabled.' : 'Rule enabled.';
+        this.ruleForm.patchValue({ changeReason: '' });
         this.applyRuleFilters();
       },
       error: (err) => {
@@ -384,6 +419,15 @@ export class WorkflowConfigPageComponent implements OnInit {
     catch {
       return value.length > 80 ? `${value.slice(0, 80)}...` : value;
     }
+  }
+
+  formatRuleJsonField(fieldName: 'conditionJson' | 'configJson'): void {
+    const value = this.ruleForm.value[fieldName];
+    if (typeof value !== 'string' || !value.trim()) {
+      return;
+    }
+
+    this.ruleForm.patchValue({ [fieldName]: this.prettyJson(value) });
   }
 
   private getClientRuleValidationErrors(): string[] {
@@ -493,8 +537,12 @@ export class WorkflowConfigPageComponent implements OnInit {
     }
   }
 
-  private extractErrors(err: any): string | null {
-    const response = err?.error;
+  private extractErrors(err: unknown): string | null {
+    if (err instanceof HttpErrorResponse && err.status === 409) {
+      return 'This configuration was changed by another user. Reload before saving.';
+    }
+
+    const response = (err as any)?.error;
     if (!response) {
       return null;
     }
@@ -509,10 +557,6 @@ export class WorkflowConfigPageComponent implements OnInit {
 
     if (Array.isArray(response?.errors?.errors)) {
       return response.errors.errors.join(' ');
-    }
-
-    if (Array.isArray(response?.errors)) {
-      return response.errors.join(' ');
     }
 
     if (Array.isArray(response?.Errors)) {

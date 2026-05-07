@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.OpenApi.Models;
 using Wfmgr.Application;
+using Wfmgr.Application.Workflows.V1.Config;
 using Wfmgr.Api.Workers;
 using Wfmgr.Infrastructure;
 
@@ -10,6 +11,12 @@ const string CorsPolicyName = "FrontendCors";
 // ── Application & Infrastructure ─────────────────────────────────────────────
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// TODO: Protect workflow configuration endpoints with admin RBAC before production.
+// builder.Services.AddAuthorization(options =>
+// {
+//     options.AddPolicy(WorkflowConfigPolicies.Admin, policy => policy.RequireClaim("permission", "workflow-config.edit"));
+// });
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 // Allowed origins are read from Cors:AllowedOrigins in appsettings.
@@ -70,3 +77,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program;

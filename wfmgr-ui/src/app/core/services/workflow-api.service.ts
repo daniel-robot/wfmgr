@@ -23,6 +23,8 @@ import {
   SubmitSimRecordRequest,
   TransitionHistoryItem,
   UpdateWorkflowProfileRequest,
+  ToggleWorkflowProfileRequest,
+  ToggleWorkflowRuleRequest,
   UpdateWorkflowRuleRequest,
   ValidateWorkflowRuleRequest,
   ValidateWorkflowRuleResponse,
@@ -130,6 +132,7 @@ export class WorkflowApiService {
     siteId?: string | null;
     departmentId?: string | null;
     isActive: boolean;
+    changeReason?: string | null;
   }): Observable<WorkflowProfile> {
     return this.http.post<WorkflowProfile>(`${this.baseUrl}/api/workflow-config/profiles`, request);
   }
@@ -138,12 +141,12 @@ export class WorkflowApiService {
     return this.http.put<WorkflowProfile>(`${this.baseUrl}/api/workflow-config/profiles/${profileId}`, request);
   }
 
-  activateWorkflowProfile(profileId: string): Observable<WorkflowProfile> {
-    return this.http.post<WorkflowProfile>(`${this.baseUrl}/api/workflow-config/profiles/${profileId}/activate`, {});
+  activateWorkflowProfile(profileId: string, request?: ToggleWorkflowProfileRequest): Observable<WorkflowProfile> {
+    return this.http.post<WorkflowProfile>(`${this.baseUrl}/api/workflow-config/profiles/${profileId}/activate`, request ?? {});
   }
 
-  deactivateWorkflowProfile(profileId: string): Observable<WorkflowProfile> {
-    return this.http.post<WorkflowProfile>(`${this.baseUrl}/api/workflow-config/profiles/${profileId}/deactivate`, {});
+  deactivateWorkflowProfile(profileId: string, request?: ToggleWorkflowProfileRequest): Observable<WorkflowProfile> {
+    return this.http.post<WorkflowProfile>(`${this.baseUrl}/api/workflow-config/profiles/${profileId}/deactivate`, request ?? {});
   }
 
   getWorkflowRules(profileId: string, filters?: { slotCode?: string; enabled?: boolean }): Observable<WorkflowRule[]> {
@@ -167,6 +170,7 @@ export class WorkflowApiService {
     configJson: string;
     effectiveFrom?: string | null;
     effectiveTo?: string | null;
+    changeReason?: string | null;
   }): Observable<WorkflowRule> {
     return this.http.post<WorkflowRule>(`${this.baseUrl}/api/workflow-config/profiles/${profileId}/rules`, request);
   }
@@ -179,12 +183,12 @@ export class WorkflowApiService {
     return this.http.put<WorkflowRule>(`${this.baseUrl}/api/workflow-config/rules/${ruleId}`, request);
   }
 
-  disableWorkflowRule(ruleId: string): Observable<WorkflowRule> {
-    return this.http.post<WorkflowRule>(`${this.baseUrl}/api/workflow-config/rules/${ruleId}/disable`, {});
+  disableWorkflowRule(ruleId: string, request?: ToggleWorkflowRuleRequest): Observable<WorkflowRule> {
+    return this.http.post<WorkflowRule>(`${this.baseUrl}/api/workflow-config/rules/${ruleId}/disable`, request ?? {});
   }
 
-  enableWorkflowRule(ruleId: string): Observable<WorkflowRule> {
-    return this.http.post<WorkflowRule>(`${this.baseUrl}/api/workflow-config/rules/${ruleId}/enable`, {});
+  enableWorkflowRule(ruleId: string, request?: ToggleWorkflowRuleRequest): Observable<WorkflowRule> {
+    return this.http.post<WorkflowRule>(`${this.baseUrl}/api/workflow-config/rules/${ruleId}/enable`, request ?? {});
   }
 
   validateWorkflowRule(request: ValidateWorkflowRuleRequest): Observable<ValidateWorkflowRuleResponse> {
