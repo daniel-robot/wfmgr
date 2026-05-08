@@ -1,0 +1,113 @@
+@startuml
+title Workflow Slots Overview (S1-S8)
+
+left to right direction
+hide empty description
+skinparam DefaultFontName Arial
+skinparam Shadowing false
+skinparam ArrowColor #444444
+skinparam PackageStyle rectangle
+skinparam package {
+  BackgroundColor #F8FAFC
+  BorderColor #94A3B8
+  FontColor #0F172A
+}
+skinparam rectangle {
+  BackgroundColor #F4F6F8
+  BorderColor #5A6473
+  FontColor #111827
+  RoundCorner 8
+}
+skinparam note {
+  BackgroundColor #FFF7D6
+  BorderColor #C9A227
+  FontColor #3F3F46
+}
+
+rectangle "Profile resolver\nWorkflowProfileResolver" as Resolver
+rectangle "Transition catalog and\nruntime workflow engine" as Engine
+
+note as ResolutionRules
+Slot resolution rules
+1. Match active profile by hospital/site/department fallback.
+2. Pick highest-priority rule for the slot.
+3. Rule must be enabled and effective now.
+4. Deserialize and validate config JSON.
+5. If no valid rule exists, use built-in fallback defaults.
+
+Important:
+Disabling a slot rule does not remove a workflow phase.
+It removes that configuration override for the slot.
+Runtime then falls back to defaults or another matching rule.
+end note
+
+ResolutionRules .. Resolver
+
+Resolver --> Engine : resolved slot config
+
+package "Phase 2-4: Imaging, Contouring, Review" {
+  rectangle "S1\nContouring Strategy\nCode: S1_CONTOURING_STRATEGY\nPurpose: auto contour provider and fallback behavior\nAffects: contour provider, auto-contour monitoring,\nauto-forward-to-Monaco, manual contour fallback\nIf disabled or unmatched: fallback S1 defaults apply\nDefault effect: AutoContourEnabled=false, Provider=PvMed,\nAutoForwardToMonaco=false, AllowManualForward=true,\nManualWorkItemRole=Doctor" as S1
+
+  rectangle "S2\nContour Review Policy\nCode: S2_CONTOUR_REVIEW_POLICY\nPurpose: review mode, rejection behavior, timeout\nAffects: review expectations and contour rework routing\nIf disabled or unmatched: fallback S2 defaults apply\nDefault effect: single review, contour rework target\nremains enabled, Doctor handles rework" as S2
+}
+
+package "Phase 5: Planning" {
+  rectangle "S3\nPlan Dispatch\nCode: S3_PLAN_DISPATCH\nPurpose: assignment mode and escalation policy\nAffects: planning target role and dispatch behavior\nIf disabled or unmatched: fallback S3 defaults apply\nDefault effect: AutoAssignByRole, target role Dosimetrist" as S3
+}
+
+package "Phase 6-7: Re-review and QA" {
+  rectangle "S4\nPlan Re-review Policy\nCode: S4_PLAN_REREVIEW_POLICY\nPurpose: optional re-review trigger and reviewer role\nAffects: whether re-review is enabled and who reviews\nIf disabled or unmatched: fallback S4 defaults apply\nDefault effect: Enabled=false, reviewer role SeniorPhysicist" as S4
+
+  rectangle "S5\nPlan Double Check\nCode: S5_PLAN_DOUBLE_CHECK\nPurpose: optional independent double-check policy\nAffects: whether double-check is enabled and who performs it\nIf disabled or unmatched: fallback S5 defaults apply\nDefault effect: Enabled=false, work item role QAReviewer" as S5
+}
+
+package "Phase 8-9: Scheduling, Treatment, Completion" {
+  rectangle "S6\nQueue and Cancel Policy\nCode: S6_QUEUE_AND_CANCEL_POLICY\nPurpose: queue mode and cancellation constraints\nAffects: queue handling, cancel window, cancel final status\nIf disabled or unmatched: fallback S6 defaults apply\nDefault effect: QueueMode=MsqDriven, AllowCancel=true,\nCancelAllowedBeforeStatus=Treating" as S6
+
+  rectangle "S7\nTreatment Completion Policy\nCode: S7_TREATMENT_COMPLETION_POLICY\nPurpose: completion mode and mismatch handling\nAffects: how completion is decided and mismatch escalation\nIf disabled or unmatched: fallback S7 defaults apply\nDefault effect: ByCourseCompletedEvent, mismatch creates\nexception work item for Therapist" as S7
+
+  rectangle "S8\nException Handling Policy\nCode: S8_EXCEPTION_HANDLING_POLICY\nPurpose: retry strategy, fallback work item, notifications\nAffects: retry/backoff behavior and manual exception handling\nIf disabled or unmatched: fallback S8 defaults apply\nDefault effect: retries enabled, manual fallback enabled,\nexception work item type TreatmentExceptionHandling" as S8
+}
+
+Engine --> S1 : contouring decisions
+Engine --> S2 : contour review decisions
+Engine --> S3 : planning dispatch decisions
+Engine --> S4 : re-review decisions
+Engine --> S5 : double-check decisions
+Engine --> S6 : queue and cancel decisions
+Engine --> S7 : treatment completion decisions
+Engine --> S8 : exception handling decisions
+
+S1 --> S2
+S2 --> S3
+S3 --> S4
+S4 --> S5
+S5 --> S6
+S6 --> S7
+S7 --> S8
+
+note bottom of S1
+Concrete example
+If an S1 rule is disabled, the resolver ignores it.
+If no other enabled S1 rule matches, fallback defaults are used.
+That means contouring is not skipped.
+Instead, runtime falls back to manual-first behavior:
+- no auto-contour dispatch
+- no auto-forward to Monaco
+- manual contour fallback stays available
+end note
+
+legend right
+== Meaning of disabled ==
+Disabled rule:
+- not selected by resolver
+- does not delete the phase
+- may expose fallback defaults
+- may allow another matching rule to win
+
+== Practical reading ==
+Use the slot to tune behavior inside a phase,
+not to remove the phase from the workflow.
+endlegend
+
+@enduml

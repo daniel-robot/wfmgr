@@ -223,3 +223,170 @@ export interface StartWorkflowRequest {
 export interface ApiError {
   message: string;
 }
+
+export interface WorkflowProfile {
+  id: string;
+  key: string;
+  name: string | null;
+  version: number;
+  hospitalId: string | null;
+  siteId: string | null;
+  departmentId: string | null;
+  isActive: boolean;
+  concurrencyHash: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface WorkflowRule {
+  id: string;
+  profileId: string;
+  slotCode: string;
+  priority: number;
+  enabled: boolean;
+  concurrencyHash: string;
+  conditionJson: string | null;
+  configJson: string;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface WorkflowProfileDetail {
+  profile: WorkflowProfile;
+  rules: WorkflowRule[];
+}
+
+export interface CreateWorkflowProfileRequest {
+  name: string;
+  version: number;
+  hospitalId?: string | null;
+  siteId?: string | null;
+  departmentId?: string | null;
+  isActive: boolean;
+  changeReason?: string | null;
+}
+
+export interface UpdateWorkflowProfileRequest {
+  name?: string;
+  version?: number;
+  hospitalId?: string | null;
+  siteId?: string | null;
+  departmentId?: string | null;
+  isActive?: boolean;
+  expectedHash?: string | null;
+  changeReason?: string | null;
+}
+
+export interface ToggleWorkflowProfileRequest {
+  expectedHash?: string | null;
+  changeReason?: string | null;
+}
+
+export interface CreateWorkflowRuleRequest {
+  slotCode: string;
+  priority: number;
+  enabled: boolean;
+  conditionJson?: string | null;
+  configJson: string;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+  changeReason?: string | null;
+}
+
+export interface UpdateWorkflowRuleRequest {
+  slotCode: string;
+  priority: number;
+  enabled: boolean;
+  conditionJson?: string | null;
+  configJson: string;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+  expectedHash?: string | null;
+  changeReason?: string | null;
+}
+
+export interface ToggleWorkflowRuleRequest {
+  expectedHash?: string | null;
+  changeReason?: string | null;
+}
+
+export interface WorkflowMutationConflict {
+  message: string;
+  currentHash: string | null;
+}
+
+export interface ValidateWorkflowRuleRequest {
+  slotCode: string;
+  configJson: string;
+  conditionJson?: string | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+  priority?: number | null;
+}
+
+export interface ValidateWorkflowRuleResponse {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface WorkflowSlotCode {
+  code: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface EffectiveWorkflowSlot {
+  slotCode: string;
+  sourceProfileId: string | null;
+  sourceProfileKey: string | null;
+  ruleId: string | null;
+  priority: number | null;
+  enabled: boolean | null;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  configJson: string | null;
+  resolutionReason: string;
+}
+
+export interface EffectiveWorkflowQuery {
+  hospitalId: string | null;
+  siteId: string | null;
+  departmentId: string | null;
+}
+
+export interface EffectiveWorkflowMatchedProfile {
+  id: string;
+  key: string;
+  version: number;
+  hospitalId: string | null;
+  siteId: string | null;
+  departmentId: string | null;
+}
+
+export interface EffectiveWorkflowUnmatchedSlot {
+  slotCode: string;
+  reason: string;
+}
+
+export interface EffectiveWorkflowEvaluatedProfile {
+  profileId: string;
+  key: string;
+  version: number;
+  hospitalId: string | null;
+  siteId: string | null;
+  departmentId: string | null;
+  isActive: boolean;
+  matchedScope: boolean;
+  reasonIncludedOrSkipped: string;
+}
+
+export interface EffectiveWorkflowConfig {
+  query: EffectiveWorkflowQuery;
+  matchedProfile: EffectiveWorkflowMatchedProfile | null;
+  resolvedSlots: EffectiveWorkflowSlot[];
+  unmatchedSlots: EffectiveWorkflowUnmatchedSlot[];
+  evaluatedProfiles: EffectiveWorkflowEvaluatedProfile[];
+}

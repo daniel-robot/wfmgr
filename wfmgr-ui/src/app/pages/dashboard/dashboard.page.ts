@@ -12,6 +12,7 @@ import { RouterLink } from '@angular/router';
 export class DashboardPageComponent {
   readonly cards = [
     { title: 'Cases', description: 'Browse and inspect workflow cases.', route: '/cases' },
+    { title: 'Workflow Config', description: 'Manage workflow profiles and S1-S8 slot rules.', route: '/workflow-config' },
     { title: 'Events', description: 'Send CT and PvMed simulation events.', route: '/events' },
     { title: 'Audit Logs', description: 'Review processing timeline entries.', route: '/audit-logs' },
     { title: 'Monaco Forward Test', description: 'Trigger manual Monaco forwarding.', route: '/monaco-forward' }

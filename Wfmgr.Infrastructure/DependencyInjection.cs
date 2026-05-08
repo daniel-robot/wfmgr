@@ -5,6 +5,7 @@ using Wfmgr.Application.Abstractions.Persistence;
 using Wfmgr.Application.Integrations;
 using Wfmgr.Application.Integrations.Dtos;
 using Wfmgr.Application.Workflows.V1;
+using Wfmgr.Application.Workflows.V1.Config;
 using Wfmgr.Infrastructure.Integrations;
 using Wfmgr.Infrastructure.Persistence;
 using Wfmgr.Infrastructure.Profiles;
@@ -24,6 +25,7 @@ public static class DependencyInjection
         services.AddScoped<IPatientRepository, PatientRepository>();
         services.AddScoped<IWorkflowDataAccess, WorkflowDataAccess>();
         services.AddScoped<IWorkflowProfileResolver, WorkflowProfileResolver>();
+        services.AddScoped<IWorkflowConfigService, WorkflowConfigService>();
         services.AddScoped<IExternalEventDispatcher, ExternalEventDispatcher>();
         services.AddHttpClient<IPvMedClient, PvMedClient>(client =>
         {
