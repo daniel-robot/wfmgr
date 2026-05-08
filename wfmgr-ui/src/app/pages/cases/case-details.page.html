@@ -17,14 +17,59 @@
 
   @if (details) {
     <div class="card">
-      <div class="header-row">
-        <h1>Case {{ details.accessionNumber }}</h1>
-        <button class="secondary" (click)="loadCase()" [disabled]="loading || busy">Refresh</button>
+      <div class="merged-info">
+        <div class="header-row">
+          <h2>Case and Patient Information</h2>
+          <button class="secondary" (click)="loadCase()" [disabled]="loading || busy">Refresh</button>
+        </div>
+        <div class="info-grid" role="list">
+          <div class="info-item" role="listitem"><span class="info-label">Status</span><span class="info-value"><span class="status-badge" [class]="'status-badge ' + getStatusClass(details.currentStatus)">{{ details.currentStatus }}</span></span></div>
+          <div class="info-item" role="listitem"><span class="info-label">Accession Number</span><span class="info-value">{{ details.accessionNumber }}</span></div>
+          <div class="info-item" role="listitem"><span class="info-label">Hospital / Site / Dept</span><span class="info-value">{{ details.hospitalId }} / {{ details.siteId }} / {{ details.departmentId }}</span></div>
+          <div class="info-item" role="listitem"><span class="info-label">Case Created</span><span class="info-value">{{ details.createdAt | date: 'yyyy-MM-dd HH:mm' }}</span></div>
+          <div class="info-item" role="listitem"><span class="info-label">Patient ID</span><span class="info-value">{{ details.patientId || '-' }}</span></div>
+          <div class="info-item" role="listitem"><span class="info-label">Patient Name</span><span class="info-value">{{ patient ? (patient.firstName + ' ' + patient.lastName) : '-' }}</span></div>
+          <div class="info-item" role="listitem"><span class="info-label">MRN / External ID</span><span class="info-value">{{ patient?.externalPatientId || '-' }}</span></div>
+          <div class="info-item" role="listitem"><span class="info-label">Date of Birth</span><span class="info-value">{{ patient?.dateOfBirth || '-' }}</span></div>
+        </div>
       </div>
-      <p><strong>Status:</strong> <span class="status-badge" [class]="'status-badge ' + getStatusClass(details.currentStatus)">{{ details.currentStatus }}</span></p>
-      <p><strong>Hospital/Site/Dept:</strong> {{ details.hospitalId }} / {{ details.siteId }} / {{ details.departmentId }}</p>
-      <p><strong>Patient:</strong> {{ details.patientId || '-' }}</p>
-      <p><strong>Created:</strong> {{ details.createdAt | date: 'yyyy-MM-dd HH:mm' }}</p>
+
+      <div class="workflow-progress">
+        <div class="workflow-progress-header">
+          <h2>Workflow Progress</h2>
+          <span class="status-badge" [class]="'status-badge ' + getStatusClass(details.currentStatus)">{{ details.currentStatus }}</span>
+        </div>
+        <div
+          class="progress-track"
+          role="progressbar"
+          aria-label="Case workflow progress"
+          [attr.aria-valuemin]="0"
+          [attr.aria-valuemax]="100"
+          [attr.aria-valuenow]="getWorkflowProgressPercent(details.currentStatus)"
+        >
+          <div class="progress-fill" [style.width.%]="getWorkflowProgressPercent(details.currentStatus)"></div>
+        </div>
+        <p class="meta">Current stage: <strong>{{ getCurrentWorkflowStageLabel(details.currentStatus) }}</strong> ({{ getWorkflowProgressPercent(details.currentStatus) }}%)</p>
+
+        <div class="workflow-stage-bar">
+          @for (stage of workflowProgressStages; track stage.id; let i = $index) {
+            <div [class]="'stage-card ' + stage.colorClass + ' ' + getWorkflowStageState(details.currentStatus, i)">
+              <div class="stage-title-row">
+                <span class="stage-index">{{ i + 1 }}</span>
+                <strong>{{ stage.label }}</strong>
+              </div>
+              <div class="stage-meter" aria-hidden="true">
+                <div class="stage-meter-fill" [style.width.%]="getStageProgressPercent(details.currentStatus, i)"></div>
+              </div>
+              <div class="stage-statuses">
+                @for (subStage of stage.statuses; track subStage; let j = $index) {
+                  <span [class]="'stage-status-chip ' + getSubStageState(details.currentStatus, i, j)">{{ subStage }}</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
     </div>
 
     @if (pendingWorkItems.length > 0) {

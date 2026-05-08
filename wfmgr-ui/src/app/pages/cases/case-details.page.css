@@ -1,8 +1,225 @@
 .page {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
   display: grid;
   gap: 1rem;
+}
+
+.merged-info {
+  margin-top: 0.25rem;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.info-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #667085;
+}
+
+.info-value {
+  font-size: 0.9rem;
+  color: #101828;
+}
+
+.workflow-progress {
+  margin-top: 0.75rem;
+}
+
+.workflow-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.progress-track {
+  margin-top: 0.6rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: #e4e7ec;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #155eef 0%, #528bff 100%);
+  transition: width 200ms ease;
+}
+
+.workflow-stage-bar {
+  margin-top: 0.8rem;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.stage-card {
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  background: #fff;
+}
+
+.stage-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.stage-meter {
+  height: 0.38rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.stage-meter-fill {
+  height: 100%;
+  transition: width 200ms ease;
+  background: currentColor;
+}
+
+.stage-index {
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef4ff;
+  color: #155eef;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.stage-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.stage-status-chip {
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.72rem;
+  color: #475467;
+  background: #fff;
+}
+
+.stage-status-chip.completed {
+  border-color: transparent;
+  color: #ffffff;
+  background: currentColor;
+}
+
+.stage-status-chip.current {
+  border-color: currentColor;
+  color: currentColor;
+  background: #ffffff;
+  font-weight: 700;
+}
+
+.stage-status-chip.upcoming {
+  opacity: 0.8;
+}
+
+.stage-intake {
+  color: #0f766e;
+}
+
+.stage-simulation {
+  color: #2563eb;
+}
+
+.stage-contouring {
+  color: #7c3aed;
+}
+
+.stage-planning {
+  color: #b45309;
+}
+
+.stage-treatment {
+  color: #be123c;
+}
+
+.stage-card.completed {
+  border-color: color-mix(in srgb, currentColor 35%, #ffffff);
+  background: color-mix(in srgb, currentColor 10%, #ffffff);
+}
+
+.stage-card.current {
+  border-color: color-mix(in srgb, currentColor 45%, #ffffff);
+  background: color-mix(in srgb, currentColor 16%, #ffffff);
+}
+
+.stage-card.upcoming {
+  opacity: 0.78;
+}
+
+.workflow-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  color: #344054;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.step-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.workflow-step.completed {
+  border-color: #2f855a;
+  background: #ecfdf3;
+  color: #166534;
+}
+
+.workflow-step.current {
+  border-color: #155eef;
+  background: #eef4ff;
+  color: #155eef;
+}
+
+.workflow-step.upcoming {
+  border-color: #e5e7eb;
+  background: #f9fafb;
+  color: #9ca3af;
 }
 
 .grid {
@@ -216,8 +433,16 @@ button.danger {
 }
 
 @media (max-width: 980px) {
+  .info-grid,
+  .workflow-stage-bar,
   .two-col,
   .three-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .workflow-stage-bar {
     grid-template-columns: 1fr;
   }
 }

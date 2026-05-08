@@ -11,6 +11,7 @@ import {
   CtImageStoredRequest,
   ExternalEventItem,
   IntegrationReferenceItem,
+  Patient,
   PlanVersionItem,
   PvMedEventRequest,
   TransitionHistoryItem,
@@ -33,6 +34,7 @@ export class CaseDetailsPageComponent implements OnInit {
 
   caseId = '';
   details: CaseDetails | null = null;
+  patient: Patient | null = null;
   workItems: WorkItem[] = [];
   auditLogs: AuditLogItem[] = [];
   transitionHistory: TransitionHistoryItem[] = [];
@@ -137,6 +139,39 @@ export class CaseDetailsPageComponent implements OnInit {
     ]
   };
 
+  readonly workflowProgressStages = [
+    {
+      id: 'intake',
+      label: 'Intake',
+      colorClass: 'stage-intake',
+      statuses: ['Submitted']
+    },
+    {
+      id: 'simulation',
+      label: 'Simulation',
+      colorClass: 'stage-simulation',
+      statuses: ['SimScheduled', 'SimInProgress', 'SimCompleted', 'ImageStored', 'ImageForwarding']
+    },
+    {
+      id: 'contouring',
+      label: 'Contouring',
+      colorClass: 'stage-contouring',
+      statuses: ['ContouringInProgress', 'ContoursReady', 'ContoursUnderReview', 'ContoursRejected', 'ContourReworkRequired']
+    },
+    {
+      id: 'planning',
+      label: 'Planning',
+      colorClass: 'stage-planning',
+      statuses: ['PlanningPending', 'PlanningAssigned', 'PlanningInProgress', 'PlanReady', 'PlanUnderReview', 'PlanReviewed', 'PlanReReviewOptional', 'PrescriptionGenerating', 'PrescriptionReady', 'PrescriptionSyncFailed', 'PlanQAInProgress', 'PlanQAApproved', 'PlanQAFailed', 'PlanDoubleCheckOptional']
+    },
+    {
+      id: 'treatment',
+      label: 'Treatment',
+      colorClass: 'stage-treatment',
+      statuses: ['ReadyForScheduling', 'SchedulingInProgress', 'SchedulingFailed', 'Scheduled', 'OrderPending', 'OrderSubmitted', 'QueuePending', 'Treating', 'TreatmentPaused', 'TreatmentInterrupted', 'TreatmentCompleted', 'PostTreatmentReviewPending', 'PostTreatmentReviewed', 'MonacoForwarded', 'Archived', 'Completed', 'Cancelled']
+    }
+  ];
+
   ngOnInit(): void {
     this.caseId = this.route.snapshot.paramMap.get('caseId') ?? '';
     if (!this.caseId) {
@@ -152,23 +187,33 @@ export class CaseDetailsPageComponent implements OnInit {
     this.error = '';
     this.infoMessage = '';
 
-    forkJoin({
-      details: this.api.getCaseById(this.caseId),
-      workItems: this.api.getCaseWorkItems(this.caseId).pipe(catchError(() => of([]))),
-      auditLogs: this.api.getCaseAuditLogs(this.caseId).pipe(catchError(() => of([]))),
-      transitionHistory: this.api.getCaseTransitionHistory(this.caseId).pipe(catchError(() => of([]))),
-      forms: this.api.getCaseForms(this.caseId).pipe(catchError(() => of([]))),
-      attachments: this.api.getCaseAttachments(this.caseId).pipe(catchError(() => of([]))),
-      externalEvents: this.api.getCaseExternalEvents(this.caseId).pipe(catchError(() => of([]))),
-      integrationReferences: this.api.getCaseIntegrationReferences(this.caseId).pipe(catchError(() => of([]))),
-      planVersions: this.api.getCasePlanVersions(this.caseId).pipe(catchError(() => of([]))),
-      workflowStatuses: this.api.getWorkflowStatuses().pipe(catchError(() => of([]))),
-      workflowWorkItemTypes: this.api.getWorkflowWorkItemTypes().pipe(catchError(() => of([])))
-    })
-      .pipe(finalize(() => (this.loading = false)))
+    this.api
+      .getCaseById(this.caseId)
+      .pipe(
+        switchMap((details) =>
+          forkJoin({
+            details: of(details),
+            patient: details.patientId
+              ? this.api.getPatientById(details.patientId).pipe(catchError(() => of(null)))
+              : of(null),
+            workItems: this.api.getCaseWorkItems(this.caseId).pipe(catchError(() => of([]))),
+            auditLogs: this.api.getCaseAuditLogs(this.caseId).pipe(catchError(() => of([]))),
+            transitionHistory: this.api.getCaseTransitionHistory(this.caseId).pipe(catchError(() => of([]))),
+            forms: this.api.getCaseForms(this.caseId).pipe(catchError(() => of([]))),
+            attachments: this.api.getCaseAttachments(this.caseId).pipe(catchError(() => of([]))),
+            externalEvents: this.api.getCaseExternalEvents(this.caseId).pipe(catchError(() => of([]))),
+            integrationReferences: this.api.getCaseIntegrationReferences(this.caseId).pipe(catchError(() => of([]))),
+            planVersions: this.api.getCasePlanVersions(this.caseId).pipe(catchError(() => of([]))),
+            workflowStatuses: this.api.getWorkflowStatuses().pipe(catchError(() => of([]))),
+            workflowWorkItemTypes: this.api.getWorkflowWorkItemTypes().pipe(catchError(() => of([])))
+          })
+        ),
+        finalize(() => (this.loading = false))
+      )
       .subscribe({
         next: ({
           details,
+          patient,
           workItems,
           auditLogs,
           transitionHistory,
@@ -181,6 +226,7 @@ export class CaseDetailsPageComponent implements OnInit {
           workflowWorkItemTypes
         }) => {
           this.details = details;
+          this.patient = patient;
           this.workItems = workItems;
           this.auditLogs = auditLogs;
           this.transitionHistory = transitionHistory;
@@ -465,6 +511,88 @@ export class CaseDetailsPageComponent implements OnInit {
     }
 
     return `status-${status.toLowerCase()}`;
+  }
+
+  getWorkflowStageState(status: string | null | undefined, stageIndex: number): 'completed' | 'current' | 'upcoming' {
+    const current = this.getCurrentWorkflowStageIndex(status);
+    if (stageIndex < current) return 'completed';
+    if (stageIndex === current) return 'current';
+    return 'upcoming';
+  }
+
+  getCurrentWorkflowStageIndex(status: string | null | undefined): number {
+    const normalizedStatus = status ?? '';
+    const idx = this.workflowProgressStages.findIndex((stage) => stage.statuses.includes(normalizedStatus));
+    return idx === -1 ? 0 : idx;
+  }
+
+  getCurrentWorkflowStageLabel(status: string | null | undefined): string {
+    return this.workflowProgressStages[this.getCurrentWorkflowStageIndex(status)]?.label ?? 'Intake';
+  }
+
+  getWorkflowProgressPercent(status: string | null | undefined): number {
+    const stageIndex = this.getCurrentWorkflowStageIndex(status);
+    const stage = this.workflowProgressStages[stageIndex];
+    if (!stage) {
+      return 0;
+    }
+
+    const normalizedStatus = status ?? '';
+    const subStageIndex = stage.statuses.indexOf(normalizedStatus);
+    const safeSubStageIndex = subStageIndex === -1 ? 0 : subStageIndex;
+    const subStageProgress = stage.statuses.length > 0 ? (safeSubStageIndex + 1) / stage.statuses.length : 0;
+    const totalProgress = (stageIndex + subStageProgress) / this.workflowProgressStages.length;
+    return Math.round(totalProgress * 100);
+  }
+
+  getStageProgressPercent(status: string | null | undefined, stageIndex: number): number {
+    const currentStageIndex = this.getCurrentWorkflowStageIndex(status);
+    if (stageIndex < currentStageIndex) {
+      return 100;
+    }
+
+    if (stageIndex > currentStageIndex) {
+      return 0;
+    }
+
+    const stage = this.workflowProgressStages[stageIndex];
+    if (!stage) {
+      return 0;
+    }
+
+    const normalizedStatus = status ?? '';
+    const subStageIndex = stage.statuses.indexOf(normalizedStatus);
+    const safeSubStageIndex = subStageIndex === -1 ? 0 : subStageIndex;
+    return Math.round(((safeSubStageIndex + 1) / stage.statuses.length) * 100);
+  }
+
+  getSubStageState(status: string | null | undefined, stageIndex: number, subStageIndex: number): 'completed' | 'current' | 'upcoming' {
+    const currentStageIndex = this.getCurrentWorkflowStageIndex(status);
+    if (stageIndex < currentStageIndex) {
+      return 'completed';
+    }
+
+    if (stageIndex > currentStageIndex) {
+      return 'upcoming';
+    }
+
+    const stage = this.workflowProgressStages[stageIndex];
+    if (!stage) {
+      return 'upcoming';
+    }
+
+    const normalizedStatus = status ?? '';
+    const currentSubStageIndex = stage.statuses.indexOf(normalizedStatus);
+    const safeSubStageIndex = currentSubStageIndex === -1 ? 0 : currentSubStageIndex;
+    if (subStageIndex < safeSubStageIndex) {
+      return 'completed';
+    }
+
+    if (subStageIndex === safeSubStageIndex) {
+      return 'current';
+    }
+
+    return 'upcoming';
   }
 
   formatJson(value: string | null | undefined): string {
