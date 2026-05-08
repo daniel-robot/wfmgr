@@ -11,6 +11,7 @@ This document describes the internals of the `Wfmgr.Application.Workflows.V1` wo
 3. [Compensation Catalog](#3-compensation-catalog)
 4. [External Event Integration](#4-external-event-integration)
 5. [Outbox Failure Escalation](#5-outbox-failure-escalation)
+6. [Workflow Configuration](#6-workflow-configuration)
 
 ---
 
@@ -300,3 +301,168 @@ Any other action with an exhausted retry budget is marked `Failed` without escal
 ### Unit-of-work boundary
 
 Both the outbox status update (`Failed`) and the compensation side-effects (status change, work item creation) are persisted in a single `SaveChangesAsync` call inside the worker so that neither can be committed without the other.
+
+---
+
+## 6. Workflow Configuration
+
+### Purpose
+
+The workflow engine now includes a configuration layer for policy slots **S1-S8**. These slots do **not** replace the transition catalog or compensation catalog. Instead, they parameterize behavior inside existing workflow phases such as contouring, review, plan dispatch, cancellation handling, and completion checks.
+
+The runtime engine remains catalog-driven:
+
+- `WorkflowTransitionCatalog` still decides which transitions are legal.
+- `WorkflowCompensationCatalog` still decides how failures are recovered.
+- Slot configuration influences policy decisions within those transitions and side effects.
+
+### Slot model
+
+Each configurable policy is represented by a stable slot code constant in `WorkflowSlotCodes`:
+
+| Slot | Code | Purpose |
+|------|------|---------|
+| S1 | `S1_CONTOURING_STRATEGY` | Auto contour provider and fallback behavior |
+| S2 | `S2_CONTOUR_REVIEW_POLICY` | Review mode, rejection behavior, timeout |
+| S3 | `S3_PLAN_DISPATCH` | Planning assignment mode and escalation |
+| S4 | `S4_PLAN_REREVIEW_POLICY` | Optional re-review trigger and reviewer role |
+| S5 | `S5_PLAN_DOUBLE_CHECK` | Optional independent double-check policy |
+| S6 | `S6_QUEUE_AND_CANCEL_POLICY` | Queue mode and cancellation constraints |
+| S7 | `S7_TREATMENT_COMPLETION_POLICY` | Completion mode and mismatch handling |
+| S8 | `S8_EXCEPTION_HANDLING_POLICY` | Retry strategy, manual fallback, notifications |
+
+The backing persistence model remains:
+
+- `WorkflowProfileEntity` — an active/inactive scope definition for hospital / site / department
+- `WorkflowRuleEntity` — a per-slot rule with priority, enable flag, effective window, and JSON config
+
+### Runtime resolution
+
+`WorkflowProfileResolver` is the runtime entry point used by the engine and side-effect layer. For each slot it performs the following steps:
+
+```
+1. Match the most specific active profile by hospital/site/department.
+2. Within that profile, select the highest-priority rule for the slot.
+3. Ignore rules that are disabled or outside the effective window.
+4. Deserialize the slot config JSON into the typed slot model.
+5. Validate the typed config with WorkflowSlotConfigValidator.
+6. If no valid rule remains, return built-in fallback defaults.
+```
+
+Profile matching follows a four-level fallback chain:
+
+1. exact `hospitalId + siteId + departmentId`
+2. exact `hospitalId + siteId`, `departmentId = null`
+3. exact `hospitalId`, `siteId = null`, `departmentId = null`
+4. global default (`hospitalId = null`, `siteId = null`, `departmentId = null`)
+
+Important semantics:
+
+- A **disabled** rule is ignored by the resolver.
+- Disabling a rule does **not** remove a workflow phase.
+- If no enabled/effective rule is found, the engine falls back to the slot's default typed configuration.
+
+For example, disabling an S1 rule does not skip contouring. It removes that policy override, causing runtime to fall back to the default `S1ContouringStrategy` values.
+
+### Engine integration points
+
+Slots are consumed from several parts of the engine:
+
+- `CaseWorkflowService` reads S1 during CT image storage, contour completion, and manual Monaco forward decisions.
+- `GateValidationService` consults slot-driven gates such as `S4ReReviewEnabled`, `S5DoubleCheckEnabled`, and `S7CompletionRuleSatisfied`.
+- `WorkflowSideEffectService` resolves S1-S5 lazily to determine assigned roles and external dispatch targets.
+
+Representative effects by slot:
+
+- **S1** changes contour provider, auto-contour behavior, and auto-forward / manual-forward behavior.
+- **S2** changes contour review expectations and rework routing.
+- **S3** changes planning target role and dispatch behavior.
+- **S4** toggles whether plan re-review logic is enabled.
+- **S5** toggles whether double-check logic is enabled.
+- **S6** shapes queue mode and cancellation behavior.
+- **S7** shapes treatment completion checks.
+- **S8** shapes retry/backoff and exception fallback behavior.
+
+See also the generated overview diagram:
+
+- `docs/workflow/generated/workflow-slots-overview.puml`
+
+### Configuration management API
+
+The API surface for slot administration is exposed by `WorkflowConfigController` under `/api/workflow-config`.
+
+Implemented endpoints include:
+
+| Method | Route | Purpose |
+|--------|-------|---------|
+| `GET` | `/api/workflow-config/profiles` | List workflow profiles |
+| `GET` | `/api/workflow-config/profiles/{profileId}` | Get profile detail with rules |
+| `POST` | `/api/workflow-config/profiles` | Create profile |
+| `PUT` | `/api/workflow-config/profiles/{profileId}` | Update profile |
+| `POST` | `/api/workflow-config/profiles/{profileId}/activate` | Activate profile |
+| `POST` | `/api/workflow-config/profiles/{profileId}/deactivate` | Deactivate profile |
+| `GET` | `/api/workflow-config/profiles/{profileId}/rules` | List rules for a profile |
+| `POST` | `/api/workflow-config/profiles/{profileId}/rules` | Create rule |
+| `GET` | `/api/workflow-config/rules/{ruleId}` | Get rule |
+| `PUT` | `/api/workflow-config/rules/{ruleId}` | Update rule |
+| `POST` | `/api/workflow-config/rules/{ruleId}/enable` | Enable rule |
+| `POST` | `/api/workflow-config/rules/{ruleId}/disable` | Disable rule |
+| `POST` | `/api/workflow-config/rules/validate` | Validate slot rule JSON/config |
+| `GET` | `/api/workflow-config/slot-codes` | List supported slot codes |
+| `GET` | `/api/workflow-config/effective` | Preview effective resolved configuration |
+
+### Validation and conflict handling
+
+`WorkflowConfigService.ValidateRuleAsync` performs server-side validation before create/update:
+
+- slot code is required and must be one of S1-S8
+- priority must be `>= 0`
+- `effectiveTo >= effectiveFrom`
+- `configJson` must be valid JSON
+- `conditionJson`, when present, must be valid JSON
+- slot-specific typed validation is delegated to `WorkflowSlotConfigValidator`
+
+`conditionJson` is currently stored but **not interpreted** by the runtime resolver. The validation endpoint returns this as a warning rather than an error.
+
+Optimistic concurrency is implemented with a lightweight hash token:
+
+- `WorkflowProfileDto` and `WorkflowRuleDto` expose `ConcurrencyHash`
+- update / enable / disable requests accept `ExpectedHash`
+- controller endpoints return `409 Conflict` when the current hash differs from the submitted hash
+
+The hash is computed from editable fields only, not from EF-specific concurrency primitives.
+
+### Effective configuration preview
+
+`GET /api/workflow-config/effective` returns an explainable preview rather than only the winning JSON blobs. The response includes:
+
+- the input query (`hospitalId`, `siteId`, `departmentId`)
+- the matched profile, if any
+- resolved slots with source profile, rule id, priority, effective window, config JSON, and resolution reason
+- unmatched slots with a textual explanation
+- evaluated profiles showing which scope candidates were included or skipped during fallback resolution
+
+This preview does not alter runtime behavior; it is a read-only explainability surface for administrators.
+
+### Security and audit status
+
+Workflow configuration is currently an administrative feature without live RBAC enforcement. The codebase exposes a policy constant:
+
+- `WorkflowConfigPolicies.Admin = "WorkflowConfigAdmin"`
+
+but the API remains unprotected in local development. The current code intentionally leaves a TODO instead of introducing a fake or incomplete auth system.
+
+Likewise, workflow configuration mutation auditing is **deferred**. Existing audit persistence is case-centric and is not reused for configuration changes. The current implementation explicitly leaves a TODO to wire configuration changes into a future non-case-scoped audit pipeline.
+
+### Test coverage
+
+Focused integration tests now live in `Wfmgr.Api.Tests/WorkflowConfigApiTests.cs`. Covered scenarios include:
+
+- slot code enumeration endpoint
+- validation failure for unsupported slot codes
+- validation failure for invalid JSON config
+- create / update rule happy path
+- `409 Conflict` on stale concurrency hash
+- effective preview explainability payload
+
+These tests use `WebApplicationFactory<Program>` with EF Core InMemory storage and are intended to validate the workflow configuration slice without changing workflow runtime semantics.
