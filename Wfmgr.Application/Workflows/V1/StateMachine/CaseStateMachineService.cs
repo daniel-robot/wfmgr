@@ -13,7 +13,6 @@ public class CaseStateMachineService : ICaseStateMachineService
         CaseStatus.SimInProgress,
         CaseStatus.SimCompleted,
         CaseStatus.ImageStored,
-        CaseStatus.ImageForwarding,
         CaseStatus.ContouringInProgress,
         CaseStatus.ContoursReady,
         CaseStatus.ContoursUnderReview,
@@ -26,19 +25,10 @@ public class CaseStateMachineService : ICaseStateMachineService
         CaseStatus.PlanUnderReview,
         CaseStatus.PlanReviewed,
         CaseStatus.PlanReReviewOptional,
-        CaseStatus.PrescriptionGenerating,
-        CaseStatus.PrescriptionReady,
-        CaseStatus.PrescriptionSyncFailed,
         CaseStatus.PlanQAInProgress,
         CaseStatus.PlanQAApproved,
         CaseStatus.PlanQAFailed,
-        CaseStatus.PlanDoubleCheckOptional,
-        CaseStatus.ReadyForScheduling,
-        CaseStatus.SchedulingInProgress,
-        CaseStatus.Scheduled,
-        CaseStatus.OrderPending,
-        CaseStatus.OrderSubmitted,
-        CaseStatus.QueuePending
+        CaseStatus.PlanDoubleCheckOptional
     ];
 
     private readonly IWorkflowDataAccess _dataAccess;
@@ -132,13 +122,11 @@ public class CaseStateMachineService : ICaseStateMachineService
 
     private static readonly IReadOnlyList<TransitionRule> Rules =
     [
-        new() { FromStatus = CaseStatus.Submitted, ToStatus = CaseStatus.SimScheduled, TriggerName = "ScheduleSimulation", TriggerType = WorkflowTriggerType.System },
-        new() { FromStatus = CaseStatus.SimScheduled, ToStatus = CaseStatus.SimInProgress, TriggerName = "StartSimulation", TriggerType = WorkflowTriggerType.User },
-        new() { FromStatus = CaseStatus.SimInProgress, ToStatus = CaseStatus.SimCompleted, TriggerName = "CompleteSimulation", TriggerType = WorkflowTriggerType.User, GateConditions = ["SimulationRecordMustExist"], FailurePath = "SimRecordMissing" },
+        new() { FromStatus = CaseStatus.Submitted, ToStatus = CaseStatus.SimInProgress, TriggerName = "StartSimulation", TriggerType = WorkflowTriggerType.User },
+        new() { FromStatus = CaseStatus.SimInProgress, ToStatus = CaseStatus.SimCompleted, TriggerName = "CompleteSimulation", TriggerType = WorkflowTriggerType.User },
 
         new() { FromStatus = CaseStatus.SimCompleted, ToStatus = CaseStatus.ImageStored, TriggerName = "StoreImage", TriggerType = WorkflowTriggerType.ExternalEvent, GateConditions = ["ImageReferenceMustExist"], FailurePath = "ImageReferenceMissing" },
-        new() { FromStatus = CaseStatus.ImageStored, ToStatus = CaseStatus.ImageForwarding, TriggerName = "ForwardImage", TriggerType = WorkflowTriggerType.System },
-        new() { FromStatus = CaseStatus.ImageForwarding, ToStatus = CaseStatus.ContouringInProgress, TriggerName = "StartContouring", TriggerType = WorkflowTriggerType.System },
+        new() { FromStatus = CaseStatus.ImageStored, ToStatus = CaseStatus.ContouringInProgress, TriggerName = "ForwardImage", TriggerType = WorkflowTriggerType.System },
 
         new() { FromStatus = CaseStatus.ContouringInProgress, ToStatus = CaseStatus.ContoursReady, TriggerName = "ContoursReady", TriggerType = WorkflowTriggerType.System },
         new() { FromStatus = CaseStatus.ContouringInProgress, ToStatus = CaseStatus.ContourReworkRequired, TriggerName = "RequestContourRework", TriggerType = WorkflowTriggerType.User, RequiredRole = "Physician" },
@@ -157,39 +145,11 @@ public class CaseStateMachineService : ICaseStateMachineService
         new() { FromStatus = CaseStatus.PlanUnderReview, ToStatus = CaseStatus.PlanningInProgress, TriggerName = "RequestPlanChanges", TriggerType = WorkflowTriggerType.User, RequiredRole = "Physician", SideEffectsAsync = IncrementPlanVersionForReworkAsync },
         new() { FromStatus = CaseStatus.PlanUnderReview, ToStatus = CaseStatus.PlanReviewed, TriggerName = "ApprovePlan", TriggerType = WorkflowTriggerType.User, RequiredRole = "Physician" },
 
-        new() { FromStatus = CaseStatus.PlanReviewed, ToStatus = CaseStatus.PlanReReviewOptional, TriggerName = "RequestPlanRereview", TriggerType = WorkflowTriggerType.User, RequiredRole = "Physician" },
-        new() { FromStatus = CaseStatus.PlanReviewed, ToStatus = CaseStatus.PrescriptionGenerating, TriggerName = "GeneratePrescription", TriggerType = WorkflowTriggerType.System },
-        new() { FromStatus = CaseStatus.PlanReReviewOptional, ToStatus = CaseStatus.PrescriptionGenerating, TriggerName = "GeneratePrescriptionAfterRereview", TriggerType = WorkflowTriggerType.System },
-        new() { FromStatus = CaseStatus.PlanReReviewOptional, ToStatus = CaseStatus.PlanningInProgress, TriggerName = "ReturnToPlanning", TriggerType = WorkflowTriggerType.User, SideEffectsAsync = IncrementPlanVersionForReworkAsync },
-        new() { FromStatus = CaseStatus.PrescriptionGenerating, ToStatus = CaseStatus.PrescriptionReady, TriggerName = "PrescriptionReady", TriggerType = WorkflowTriggerType.System },
-        new() { FromStatus = CaseStatus.PrescriptionGenerating, ToStatus = CaseStatus.PrescriptionSyncFailed, TriggerName = "PrescriptionSyncFailed", TriggerType = WorkflowTriggerType.ExternalEvent, FailurePath = "ManualPrescriptionSync" },
-        new() { FromStatus = CaseStatus.PrescriptionSyncFailed, ToStatus = CaseStatus.PrescriptionGenerating, TriggerName = "RetryPrescriptionSync", TriggerType = WorkflowTriggerType.User },
-        new() { FromStatus = CaseStatus.PrescriptionSyncFailed, ToStatus = CaseStatus.PrescriptionReady, TriggerName = "ResolvePrescriptionSync", TriggerType = WorkflowTriggerType.User },
-
-        new() { FromStatus = CaseStatus.PrescriptionReady, ToStatus = CaseStatus.PlanQAInProgress, TriggerName = "StartPlanQa", TriggerType = WorkflowTriggerType.User, GateConditions = ["PrescriptionMustExist"], FailurePath = "PrescriptionMissing" },
+        new() { FromStatus = CaseStatus.PlanReviewed, ToStatus = CaseStatus.PlanQAInProgress, TriggerName = "StartPlanQa", TriggerType = WorkflowTriggerType.User, RequiredRole = "Physicist" },
         new() { FromStatus = CaseStatus.PlanQAInProgress, ToStatus = CaseStatus.PlanQAApproved, TriggerName = "ApproveQa", TriggerType = WorkflowTriggerType.User, RequiredRole = "Physicist" },
         new() { FromStatus = CaseStatus.PlanQAInProgress, ToStatus = CaseStatus.PlanQAFailed, TriggerName = "FailQa", TriggerType = WorkflowTriggerType.User, RequiredRole = "Physicist" },
         new() { FromStatus = CaseStatus.PlanQAFailed, ToStatus = CaseStatus.PlanningInProgress, TriggerName = "ReturnToPlanningAfterQa", TriggerType = WorkflowTriggerType.System },
         new() { FromStatus = CaseStatus.PlanQAApproved, ToStatus = CaseStatus.PlanDoubleCheckOptional, TriggerName = "RequestPlanDoubleCheck", TriggerType = WorkflowTriggerType.User, RequiredRole = "Physicist" },
-        new() { FromStatus = CaseStatus.PlanQAApproved, ToStatus = CaseStatus.ReadyForScheduling, TriggerName = "ReadyForScheduling", TriggerType = WorkflowTriggerType.System, GateConditions = ["QaApprovalMustExist"], FailurePath = "QaApprovalMissing" },
-        new() { FromStatus = CaseStatus.PlanDoubleCheckOptional, ToStatus = CaseStatus.ReadyForScheduling, TriggerName = "CompleteDoubleCheck", TriggerType = WorkflowTriggerType.User, GateConditions = ["QaApprovalMustExist"], FailurePath = "QaApprovalMissing" },
-        new() { FromStatus = CaseStatus.PlanDoubleCheckOptional, ToStatus = CaseStatus.PlanningInProgress, TriggerName = "DoubleCheckFailed", TriggerType = WorkflowTriggerType.User },
-
-        new() { FromStatus = CaseStatus.ReadyForScheduling, ToStatus = CaseStatus.SchedulingInProgress, TriggerName = "StartScheduling", TriggerType = WorkflowTriggerType.User, RequiredRole = "Scheduler" },
-        new() { FromStatus = CaseStatus.SchedulingInProgress, ToStatus = CaseStatus.Scheduled, TriggerName = "CompleteScheduling", TriggerType = WorkflowTriggerType.User, RequiredRole = "Scheduler" },
-        new() { FromStatus = CaseStatus.Scheduled, ToStatus = CaseStatus.OrderPending, TriggerName = "PrepareOrder", TriggerType = WorkflowTriggerType.System },
-        new() { FromStatus = CaseStatus.OrderPending, ToStatus = CaseStatus.OrderSubmitted, TriggerName = "SubmitOrder", TriggerType = WorkflowTriggerType.User },
-        new() { FromStatus = CaseStatus.OrderSubmitted, ToStatus = CaseStatus.QueuePending, TriggerName = "QueueForTreatment", TriggerType = WorkflowTriggerType.System },
-        new() { FromStatus = CaseStatus.QueuePending, ToStatus = CaseStatus.Treating, TriggerName = "StartTreatment", TriggerType = WorkflowTriggerType.User, GateConditions = ["OrderMustExistBeforeTreating"], FailurePath = "OrderMissing" },
-        new() { FromStatus = CaseStatus.Treating, ToStatus = CaseStatus.TreatmentPaused, TriggerName = "PauseTreatment", TriggerType = WorkflowTriggerType.User },
-        new() { FromStatus = CaseStatus.TreatmentPaused, ToStatus = CaseStatus.Treating, TriggerName = "ResumeTreatment", TriggerType = WorkflowTriggerType.User },
-        new() { FromStatus = CaseStatus.Treating, ToStatus = CaseStatus.TreatmentInterrupted, TriggerName = "InterruptTreatment", TriggerType = WorkflowTriggerType.ExternalEvent },
-        new() { FromStatus = CaseStatus.TreatmentInterrupted, ToStatus = CaseStatus.Treating, TriggerName = "ResumeAfterInterruption", TriggerType = WorkflowTriggerType.User },
-        new() { FromStatus = CaseStatus.Treating, ToStatus = CaseStatus.TreatmentCompleted, TriggerName = "CompleteTreatment", TriggerType = WorkflowTriggerType.User },
-
-        new() { FromStatus = CaseStatus.TreatmentCompleted, ToStatus = CaseStatus.PostTreatmentReviewPending, TriggerName = "StartPostTreatmentReview", TriggerType = WorkflowTriggerType.System },
-        new() { FromStatus = CaseStatus.PostTreatmentReviewPending, ToStatus = CaseStatus.PostTreatmentReviewed, TriggerName = "CompletePostTreatmentReview", TriggerType = WorkflowTriggerType.User },
-        new() { FromStatus = CaseStatus.PostTreatmentReviewed, ToStatus = CaseStatus.Archived, TriggerName = "ArchiveCase", TriggerType = WorkflowTriggerType.User, GateConditions = ["PostTreatmentReviewMustExist"], FailurePath = "PostTreatmentReviewMissing" }
     ];
 
     private static Task IncrementPlanVersionForReworkAsync(CaseData caseData, TransitionExecutionContext _, CancellationToken _2)

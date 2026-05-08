@@ -48,7 +48,7 @@ All definitions live in `WorkflowTransitionCatalog` as `static readonly` fields.
 ### Phases and codes
 
 | Phase | Code range | Transitions |
-|-------|-----------|-------------|
+| ------- | ----------- | ------------- |
 | 1 – Intake & Simulation | SIM-001 – SIM-005 | 5 |
 | 2 – Image Acquisition | IMG-001 – IMG-003 | 3 |
 | 3 – Contouring | CON-001 – CON-005 | 5 |
@@ -64,7 +64,7 @@ All definitions live in `WorkflowTransitionCatalog` as `static readonly` fields.
 
 `CaseTransitionService.ApplyTransitionAsync` runs the following steps on every call:
 
-```
+```bash
 1. Catalog lookup  — find TransitionDefinition by (triggerName, fromStatus)
 2. Role check      — RequiredRole slash-list matched against GateValidationContext.Roles
 3. Gate validation — IGateValidationService.ValidateAsync for all declared GateChecks
@@ -95,7 +95,7 @@ Gate checks are precondition validators that must all pass before a transition p
 
 `GateValidationService` initialises a `Dictionary<string, GateCheck>` in its constructor. Each entry maps a `GateCheckNames` constant to an async delegate. Aliases (different constant names sharing the same implementation) are explicitly registered as separate map entries:
 
-```
+```bash
 SimulationRequestFormValid → SimulationRequestFormValidAsync
 SimulationRecordFormValid  → SimulationRecordFormValidAsync
 SimulationScheduleExists   → SimulationScheduleExistsAsync
@@ -159,7 +159,7 @@ Several gate checks (`S4ReReviewEnabled`, `S5DoubleCheckEnabled`, …) consult t
 
 ## 3. Compensation Catalog
 
-### Structure
+### Compensation Structure
 
 Each `CompensationDefinition` record describes how to recover from a named failure:
 
@@ -180,7 +180,7 @@ public sealed record CompensationDefinition
 The catalog is `WorkflowCompensationCatalog`. Two derived collections are available:
 
 | Property | Key |
-|----------|-----|
+| ---------- | ----- |
 | `All` | ordered list |
 | `ByCode` | `Code` → `CompensationDefinition` |
 | `ByFailedStep` | `FailedStepCode` → `IReadOnlyList<CompensationDefinition>` |
@@ -188,7 +188,7 @@ The catalog is `WorkflowCompensationCatalog`. Two derived collections are availa
 ### Compensation rules (CMP-001 – CMP-020)
 
 | Code | Failed step | Condition | Recovery | Target status |
-|------|-------------|-----------|----------|---------------|
+| ------ | ------------- | ----------- | ---------- | --------------- |
 | CMP-001 | IMG-002 | Outbox send to contouring tool failed | Retry with exponential back-off; manual-forward work item after limit | `ImageForwarding` |
 | CMP-002 | IMG-003 | Contouring tool not accepting images | Keep at `ImageStored`; allow manual resend | `ImageStored` |
 | CMP-003 | CON-002 | Auto-contour result invalid or corrupt | Request manual contouring | `ContourReworkRequired` |
@@ -235,7 +235,7 @@ The catalog is `WorkflowCompensationCatalog`. Two derived collections are availa
 
 External systems (PvMed contouring, Monaco TPS, MSQ radiotherapy management) push events to `POST /api/externalevents`. The `ExternalEventsController` routes each event to `ExternalEventDispatcher.DispatchAsync`, which is implemented in `Wfmgr.Infrastructure`.
 
-```
+```bash
 ExternalEventsController
     └─ ExternalEventDispatcher.DispatchAsync(request, ct)
            ├─ resolve caseData by accession number / correlation key
@@ -275,7 +275,7 @@ Outbound calls to external systems (sending images to the contouring tool, presc
 
 `OutboxWorker` (a hosted `BackgroundService` in `Wfmgr.Api`) polls for pending outbox messages on a timer, attempts delivery, and updates the message status:
 
-```
+```bash
 Pending → (attempt delivery)
     ├─ success  → Sent      (NextRetryAt = null)
     └─ failure  → RetryCount += 1

@@ -14,26 +14,24 @@ skinparam state {
   ArrowColor #444444
 }
 
-[*] --> Draft
+[*] --> ARTCreated
 
-state "1. Intake & Simulation" as SIM {
-  state Draft
-  state Submitted
-  state SimScheduled
+state "1. ART Workflow Start" as SIM {
+  state ARTCreated
+  state SimSubmitted
   state SimInProgress
   state SimCompleted
+  state ARTStarted
 }
 
 state Cancelled #FFC0CB : ◎ terminal
 
 ' ─── Transitions ─────────────────────────
-Draft --> Submitted : SIM-001 SubmitSimulationRequest [User]\n«Doctor»
-Submitted --> SimScheduled : SIM-002 ScheduleSimulation [User]\n«SimTech/Scheduler»
-SimScheduled --> SimInProgress : SIM-003 StartSimulation [User]\n«SimTech»
-SimInProgress --> SimCompleted : SIM-004 SubmitSimulationRecord [User]\n«SimTech»
-Submitted --> Cancelled : SIM-005 CancelCase [User]\n«Doctor/Admin»
-SimScheduled --> Cancelled : SIM-005 CancelCase [User]\n«Doctor/Admin»
-SimInProgress --> Cancelled : SIM-005 CancelCase [User]\n«Doctor/Admin»
-
-
+ARTCreated--> SimSubmitted: SIM-001 SubmitSimulationRequest [User]\n«Physician»
+SimSubmitted--> SimInProgress : SIM-002 StartSimulation [Sys]
+SimInProgress --> SimCompleted : SIM-003 SubmitSimulationRecord [User]\n«SimTech»
+SimCompleted --> ARTStarted: SIM-004 StartARTWorkflowCheckDailyImgAndReferencePlan [User]\n«Physician»
+SimSubmitted--> Cancelled : SIM-005 CancelCase [User]\n«Physician»
+SimInProgress --> Cancelled : SIM-005 CancelCase [User]\n«Physician»
+SimCompleted --> Cancelled : SIM-005 CancelCase [User]\n«Physician»
 @enduml

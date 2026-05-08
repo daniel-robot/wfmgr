@@ -41,21 +41,6 @@ public class CaseTransitionGateValidator : ICaseTransitionGateValidator
         {
             await EnsurePrescriptionExistsAsync(caseData.CaseId, ct);
         }
-
-        if (rule.ToStatus == CaseStatus.ReadyForScheduling)
-        {
-            await EnsureQaApprovalExistsAsync(caseData.CaseId, ct);
-        }
-
-        if (rule.ToStatus == CaseStatus.Treating)
-        {
-            await EnsureOrderExistsBeforeTreatingAsync(caseData.CaseId, ct);
-        }
-
-        if (rule.ToStatus == CaseStatus.Archived)
-        {
-            await EnsurePostTreatmentReviewExistsAsync(caseData.CaseId, ct);
-        }
     }
 
     private async Task EnsureSimulationRecordExistsAsync(Guid caseId, CancellationToken ct)
@@ -111,37 +96,6 @@ public class CaseTransitionGateValidator : ICaseTransitionGateValidator
         if (!hasPrescriptionForm && !hasPrescriptionSync)
         {
             throw new InvalidOperationException("Prescription must exist before transitioning to PlanQAInProgress.");
-        }
-    }
-
-    private async Task EnsureQaApprovalExistsAsync(Guid caseId, CancellationToken ct)
-    {
-        var hasQaWorkItem = await _dataAccess.WorkItemExistsAsync(caseId, WorkItemTypes.PlanQA, "Approved", ct);
-        var hasQaForm = await _dataAccess.CaseFormExistsAsync(caseId, CaseFormTypes.PlanQAForm, CaseFormStatuses.Submitted, ct);
-
-        if (!hasQaWorkItem && !hasQaForm)
-        {
-            throw new InvalidOperationException("QA approval must exist before transitioning to ReadyForScheduling.");
-        }
-    }
-
-    private async Task EnsureOrderExistsBeforeTreatingAsync(Guid caseId, CancellationToken ct)
-    {
-        var hasOrderWorkItem = await _dataAccess.WorkItemExistsAsync(caseId, WorkItemTypes.TreatmentOrder, "Submitted", ct);
-        if (!hasOrderWorkItem)
-        {
-            throw new InvalidOperationException("Order must exist before transitioning to Treating.");
-        }
-    }
-
-    private async Task EnsurePostTreatmentReviewExistsAsync(Guid caseId, CancellationToken ct)
-    {
-        var hasReviewWorkItem = await _dataAccess.WorkItemExistsAsync(caseId, WorkItemTypes.PostTreatmentReview, "Reviewed", ct);
-        var hasReviewForm = await _dataAccess.CaseFormExistsAsync(caseId, CaseFormTypes.PostTreatmentReviewForm, CaseFormStatuses.Submitted, ct);
-
-        if (!hasReviewWorkItem && !hasReviewForm)
-        {
-            throw new InvalidOperationException("Post-treatment review must exist before transitioning to Archived.");
         }
     }
 }

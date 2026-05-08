@@ -151,21 +151,6 @@ public class CaseFormService : ICaseFormService
             await EnsureSubmittedFormExistsAsync(caseId, CaseFormTypes.PlanQAForm, ct);
         }
 
-        if (toStatus == CaseStatus.ReadyForScheduling)
-        {
-            await EnsureSubmittedFormExistsAsync(caseId, CaseFormTypes.PlanDoubleCheckForm, ct);
-        }
-
-        if (toStatus == CaseStatus.OrderSubmitted)
-        {
-            await EnsureSubmittedFormExistsAsync(caseId, CaseFormTypes.TreatmentOrderForm, ct);
-        }
-
-        if (toStatus == CaseStatus.PostTreatmentReviewed || toStatus == CaseStatus.Archived)
-        {
-            await EnsureSubmittedFormExistsAsync(caseId, CaseFormTypes.PostTreatmentReviewForm, ct);
-        }
-
         if (toStatus == CaseStatus.Cancelled)
         {
             await EnsureSubmittedFormExistsAsync(caseId, CaseFormTypes.CancellationForm, ct);
@@ -208,161 +193,6 @@ public class CaseFormService : ICaseFormService
                 }
                 break;
             }
-
-            case CaseFormTypes.PlanEvaluationForm:
-                if (caseData.CurrentStatus == CaseStatus.PlanUnderReview)
-                {
-                    if (IsApproved(form.PayloadJson))
-                    {
-                        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanReviewed, BuildContext("ApprovePlan", WorkflowTriggerType.User, request, form, "Physician"), ct);
-
-                        var policy = await _profileResolver.ResolveS4PlanReReviewPolicyAsync(
-                            caseData.HospitalId,
-                            caseData.SiteId,
-                            caseData.DepartmentId,
-                            ct);
-
-                        if (ShouldRequirePlanReReview(form.PayloadJson, policy))
-                        {
-                            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanReReviewOptional, BuildContext("RequestPlanRereview", WorkflowTriggerType.User, request, form, "Physician"), ct);
-
-                            var openReReview = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.PlanReReview, ct);
-                            if (openReReview is null)
-                            {
-                                await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
-                                {
-                                    CaseId = caseData.CaseId,
-                                    Type = WorkItemTypes.PlanReReview,
-                                    AssignedRole = policy.ReviewRole,
-                                    PayloadJson = JsonSerializer.Serialize(new
-                                    {
-                                        source = "PlanEvaluationForm",
-                                        policy.Trigger
-                                    }),
-                                    CreatedAtUtc = DateTimeOffset.UtcNow
-                                }, ct);
-                            }
-                        }
-                        else
-                        {
-                            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PrescriptionGenerating, BuildContext("GeneratePrescription", WorkflowTriggerType.System, request, form), ct);
-                        }
-                    }
-                    else
-                    {
-                        await _caseWorkflowService.RejectPlanReviewAsync(caseData.CaseId, request.Reason ?? "Plan evaluation rejected", request.SubmittedBy, ct);
-                    }
-                }
-                break;
-
-            case CaseFormTypes.PlanReReviewForm:
-                if (caseData.CurrentStatus == CaseStatus.PlanReReviewOptional)
-                {
-                    if (IsApproved(form.PayloadJson))
-                    {
-                        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PrescriptionGenerating, BuildContext("GeneratePrescriptionAfterRereview", WorkflowTriggerType.User, request, form), ct);
-                    }
-                    else
-                    {
-                        await _caseWorkflowService.RejectPlanReReviewAsync(caseData.CaseId, request.Reason ?? "Plan re-review rejected", request.SubmittedBy, ct);
-                    }
-                }
-                break;
-
-            case CaseFormTypes.PlanQAForm:
-                if (caseData.CurrentStatus == CaseStatus.PlanQAInProgress)
-                {
-                    if (IsApproved(form.PayloadJson))
-                    {
-                        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanQAApproved, BuildContext("ApproveQa", WorkflowTriggerType.User, request, form, "Physicist"), ct);
-
-                        var policy = await _profileResolver.ResolveS5PlanDoubleCheckPolicyAsync(
-                            caseData.HospitalId,
-                            caseData.SiteId,
-                            caseData.DepartmentId,
-                            ct);
-
-                        if (policy.Enabled)
-                        {
-                            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanDoubleCheckOptional, BuildContext("RequestPlanDoubleCheck", WorkflowTriggerType.User, request, form, "Physicist"), ct);
-
-                            var openDoubleCheck = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.PlanDoubleCheck, ct);
-                            if (openDoubleCheck is null)
-                            {
-                                var requiresDifferentUserFromId = await ResolveReferencedWorkItemIdAsync(
-                                    caseData.CaseId,
-                                    policy.RequiresDifferentUserFrom,
-                                    ct);
-
-                                await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
-                                {
-                                    CaseId = caseData.CaseId,
-                                    Type = WorkItemTypes.PlanDoubleCheck,
-                                    AssignedRole = policy.WorkItemRole,
-                                    SlaMinutes = 240,
-                                    RequiresDifferentUserFrom = requiresDifferentUserFromId,
-                                    PayloadJson = JsonSerializer.Serialize(new { source = "PlanQAForm", policy.RequiresDifferentUserFrom }),
-                                    CreatedAtUtc = DateTimeOffset.UtcNow
-                                }, ct);
-                            }
-                        }
-                        else
-                        {
-                            await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ReadyForScheduling, BuildContext("ReadyForScheduling", WorkflowTriggerType.System, request, form), ct);
-                        }
-                    }
-                    else
-                    {
-                        await _caseWorkflowService.FailQaAsync(caseData.CaseId, request.Reason ?? "QA failed", request.SubmittedBy, ct);
-                    }
-                }
-                break;
-
-            case CaseFormTypes.PlanDoubleCheckForm:
-                if (caseData.CurrentStatus == CaseStatus.PlanDoubleCheckOptional)
-                {
-                    if (IsApproved(form.PayloadJson))
-                    {
-                        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ReadyForScheduling, BuildContext("CompleteDoubleCheck", WorkflowTriggerType.User, request, form), ct);
-                    }
-                    else
-                    {
-                        await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanningInProgress, BuildContext("DoubleCheckFailed", WorkflowTriggerType.User, request, form), ct);
-                    }
-                }
-                break;
-
-            case CaseFormTypes.TreatmentOrderForm:
-                if (caseData.CurrentStatus == CaseStatus.OrderPending)
-                {
-                    await ValidateRequiredFormsBeforeTransitionAsync(caseData.CaseId, CaseStatus.OrderSubmitted, ct);
-                    await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.OrderSubmitted, BuildContext("SubmitOrder", WorkflowTriggerType.User, request, form), ct);
-                }
-                break;
-
-            case CaseFormTypes.PostTreatmentReviewForm:
-                if (caseData.CurrentStatus == CaseStatus.TreatmentCompleted)
-                {
-                    await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PostTreatmentReviewPending, BuildContext("StartPostTreatmentReview", WorkflowTriggerType.User, request, form), ct);
-                }
-
-                if (caseData.CurrentStatus == CaseStatus.PostTreatmentReviewPending)
-                {
-                    await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PostTreatmentReviewed, BuildContext("CompletePostTreatmentReview", WorkflowTriggerType.User, request, form), ct);
-                }
-                break;
-
-            case CaseFormTypes.CancellationForm:
-                if (IsTreatingState(caseData.CurrentStatus))
-                {
-                    await _caseWorkflowService.InterruptTreatmentAsync(caseData.CaseId, request.Reason ?? "Cancelled while in treatment", request.SubmittedBy, ct);
-                }
-                else
-                {
-                    await ValidateRequiredFormsBeforeTransitionAsync(caseData.CaseId, CaseStatus.Cancelled, ct);
-                    await _caseWorkflowService.CancelCaseAsync(caseData.CaseId, request.Reason ?? "Cancelled by form submission", request.SubmittedBy, ct);
-                }
-                break;
 
             default:
                 throw new InvalidOperationException($"Unsupported form type '{form.FormType}'.");
@@ -498,11 +328,6 @@ public class CaseFormService : ICaseFormService
         CaseFormTypes.PostTreatmentReviewForm,
         CaseFormTypes.CancellationForm
     ];
-
-    private static bool IsTreatingState(CaseStatus status)
-    {
-        return status is CaseStatus.Treating or CaseStatus.TreatmentPaused or CaseStatus.TreatmentInterrupted;
-    }
 
     private async Task EnsurePlanningDispatchWorkItemAsync(CaseData caseData, CancellationToken ct)
     {

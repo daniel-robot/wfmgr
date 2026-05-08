@@ -14,14 +14,6 @@ public interface ICaseWorkflowService
     Task RejectContourReviewAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
     Task RejectPlanReviewAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
     Task RejectPlanReReviewAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
-    Task HandlePrescriptionSyncFailureAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
-    Task RetryPrescriptionSyncAsync(Guid caseId, string triggeredBy, CancellationToken ct);
-    Task ResolvePrescriptionSyncAsync(Guid caseId, string triggeredBy, CancellationToken ct);
     Task FailQaAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
-    Task HandleSchedulingFailureAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
-    Task RetrySchedulingAsync(Guid caseId, string triggeredBy, CancellationToken ct);
-    Task PauseTreatmentAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
-    Task InterruptTreatmentAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
-    Task ResumeTreatmentAsync(Guid caseId, string triggeredBy, CancellationToken ct);
     Task CancelCaseAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
 }
