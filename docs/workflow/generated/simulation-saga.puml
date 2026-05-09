@@ -21,7 +21,7 @@ state "1. ART Workflow Start" as SIM {
   state SimSubmitted
   state SimInProgress
   state SimCompleted
-  state ARTStarted
+  state ImageStored
 }
 
 state Cancelled #FFC0CB : ◎ terminal
@@ -30,7 +30,7 @@ state Cancelled #FFC0CB : ◎ terminal
 ARTCreated--> SimSubmitted: SIM-001 SubmitSimulationRequest [User]\n«Physician»
 SimSubmitted--> SimInProgress : SIM-002 StartSimulation [Sys]
 SimInProgress --> SimCompleted : SIM-003 SubmitSimulationRecord [User]\n«SimTech»
-SimCompleted --> ARTStarted: SIM-004 StartARTWorkflowCheckDailyImgAndReferencePlan [User]\n«Physician»
+SimCompleted --> ImageStored: SIM-004 CheckDailyImgAndReferencePlan [Sys]
 SimSubmitted--> Cancelled : SIM-005 CancelCase [User]\n«Physician»
 SimInProgress --> Cancelled : SIM-005 CancelCase [User]\n«Physician»
 SimCompleted --> Cancelled : SIM-005 CancelCase [User]\n«Physician»
