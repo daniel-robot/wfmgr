@@ -6,6 +6,14 @@ public static class WorkItemTypes
     public const string SimulationSchedule = nameof(SimulationSchedule);
     public const string SimulationRecord = nameof(SimulationRecord);
 
+    /// <summary>
+    /// Daily CT image scan task assigned to a SimTech, executed on the XVI CT image device.
+    /// Created automatically when a new case is submitted; completion advances the case
+    /// from <see cref="Wfmgr.Domain.Enums.CaseStatus.SimInProgress"/> to
+    /// <see cref="Wfmgr.Domain.Enums.CaseStatus.SimCompleted"/>.
+    /// </summary>
+    public const string DailyImageScan = nameof(DailyImageScan);
+
     public const string ImageValidation = nameof(ImageValidation);
     public const string ImageForwardToContourTool = nameof(ImageForwardToContourTool);
     public const string AutoContourMonitor = nameof(AutoContourMonitor);

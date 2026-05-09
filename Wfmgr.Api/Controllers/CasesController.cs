@@ -102,11 +102,28 @@ public class CasesController : ControllerBase
         return CreatedAtAction(nameof(CreateCase), new { caseId }, new { caseId });
     }
 
-    [HttpPost("{caseId:guid}/sim-record")]
-    public async Task<IActionResult> SubmitSimRecord(Guid caseId, [FromBody] SubmitSimRecordRequest request, CancellationToken ct)
+    [HttpPost("{caseId:guid}/actions/complete-daily-image-scan")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CompleteDailyImageScan(
+        Guid caseId,
+        [FromBody] WorkflowActionRequest? request,
+        CancellationToken ct)
     {
-        await _workflowService.SubmitSimRecordAsync(caseId, request, ct);
-        return NoContent();
+        try
+        {
+            await _workflowService.CompleteDailyImageScanAsync(caseId, request?.TriggeredBy, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost("{caseId}/forward/monaco")]

@@ -51,12 +51,6 @@ export class CaseDetailsPageComponent implements OnInit {
   actionMessage = '';
   infoMessage = '';
 
-  readonly simForm = this.fb.group({
-    ctMachineId: ['CT-01', Validators.required],
-    simulatedAt: [new Date().toISOString(), Validators.required],
-    recordFormJson: ['{"operator":"sim-tech"}', Validators.required]
-  });
-
   readonly ctEventForm = this.fb.group({
     externalEventId: [crypto.randomUUID(), Validators.required],
     accessionNumber: ['', Validators.required],
@@ -248,21 +242,6 @@ export class CaseDetailsPageComponent implements OnInit {
     return this.workItems.filter((w) => w.status === 'Pending');
   }
 
-  submitSimRecord(): void {
-    if (this.simForm.invalid || !this.caseId) {
-      this.simForm.markAllAsTouched();
-      return;
-    }
-
-    this.runAction(() =>
-      this.api.submitSimRecord(this.caseId, {
-        ctMachineId: this.simForm.value.ctMachineId!,
-        simulatedAt: this.simForm.value.simulatedAt!,
-        recordFormJson: this.simForm.value.recordFormJson!
-      })
-    );
-  }
-
   simulateCtImageStored(): void {
     if (!this.isCtEventEnabled()) {
       this.error = this.getCtEventHint();
@@ -371,6 +350,20 @@ export class CaseDetailsPageComponent implements OnInit {
     }
 
     this.runAction(() => this.api.completeManualContouring(this.caseId));
+  }
+
+  completeDailyImageScan(): void {
+    if (!this.caseId) {
+      return;
+    }
+
+    const triggeredBy = this.advancedActionForm.value.triggeredBy || 'ui-tester';
+    this.runAction(() =>
+      this.api.completeDailyImageScan(this.caseId, {
+        triggeredBy,
+        reason: 'Daily image scan completed via UI'
+      })
+    );
   }
 
   createAndSubmitForm(): void {

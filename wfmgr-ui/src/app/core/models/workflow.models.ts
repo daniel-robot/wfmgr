@@ -7,12 +7,6 @@ export interface CreateCaseRequest {
   notes?: string | null;
 }
 
-export interface SubmitSimRecordRequest {
-  ctMachineId: string;
-  simulatedAt: string;
-  recordFormJson: string;
-}
-
 export interface CtImageStoredRequest {
   externalEventId: string;
   accessionNumber: string;

@@ -20,7 +20,6 @@ import {
   PvMedEventRequest,
   StartWorkflowRequest,
   SubmitCaseFormRequest,
-  SubmitSimRecordRequest,
   TransitionHistoryItem,
   UpdateWorkflowProfileRequest,
   ToggleWorkflowProfileRequest,
@@ -56,10 +55,6 @@ export class WorkflowApiService {
     return this.http.post<{ caseId: string }>(`${this.baseUrl}/api/cases`, request);
   }
 
-  submitSimRecord(caseId: string, request: SubmitSimRecordRequest): Observable<void> {
-    return this.http.post<void>(`${this.baseUrl}/api/cases/${caseId}/sim-record`, request);
-  }
-
   forwardToMonaco(caseId: string): Observable<void> {
     const normalizedCaseId = this.normalizeCaseId(caseId);
     return this.http.post<void>(`${this.baseUrl}/api/cases/${normalizedCaseId}/forward/monaco`, {});
@@ -67,6 +62,13 @@ export class WorkflowApiService {
 
   completeManualContouring(caseId: string): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/api/cases/${caseId}/actions/complete-manual-contouring`, {});
+  }
+
+  completeDailyImageScan(caseId: string, request: WorkflowActionRequest): Observable<void> {
+    return this.http.post<void>(
+      `${this.baseUrl}/api/cases/${caseId}/actions/complete-daily-image-scan`,
+      request
+    );
   }
 
   simulateCtImageStored(request: CtImageStoredRequest): Observable<void> {

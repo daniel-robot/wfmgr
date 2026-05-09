@@ -83,8 +83,8 @@
               <strong>{{ item.type }}</strong>
               <span class="meta">Role: {{ item.assignedRole }} &mdash; Created: {{ item.createdAt | date: 'yyyy-MM-dd HH:mm' }}</span>
             </div>
-            @if (item.type === 'SimulationSchedule') {
-              <button [disabled]="busy" (click)="submitSimRecord()">Submit Sim Record</button>
+            @if (item.type === 'DailyImageScan') {
+              <button [disabled]="busy" (click)="completeDailyImageScan()">Complete Daily Image Scan</button>
             }
             @if (item.type === 'ManualContouring') {
               <button [disabled]="busy" (click)="completeManualContouring()">Complete Manual Contouring</button>
@@ -98,17 +98,7 @@
     </div>
     }
 
-    <div class="grid two-col">
-      <div class="card">
-        <h2>Submit Sim Record</h2>
-        <form [formGroup]="simForm" (ngSubmit)="submitSimRecord()">
-          <label>CtMachineId <input formControlName="ctMachineId" /></label>
-          <label>SimulatedAt <input type="datetime-local" [value]="simForm.value.simulatedAt?.slice(0,16)" (input)="simForm.patchValue({ simulatedAt: $any($event.target).value + ':00.000Z' })" /></label>
-          <label>RecordFormJson <textarea rows="4" formControlName="recordFormJson"></textarea></label>
-          <button type="submit" [disabled]="busy">Submit Sim Record</button>
-        </form>
-      </div>
-
+    <div class="grid">
       <div class="card">
         <h2>Simulate CT Image Stored</h2>
         <p class="meta">{{ getCtEventHint() }}</p>

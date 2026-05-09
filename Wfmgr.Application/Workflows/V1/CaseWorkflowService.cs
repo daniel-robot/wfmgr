@@ -99,89 +99,67 @@ public class CaseWorkflowService : ICaseWorkflowService
         await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
         {
             CaseId = caseId,
-            Type = WorkItemTypes.SimulationRequest,
+            Type = WorkItemTypes.DailyImageScan,
             AssignedRole = WorkflowRoles.SimTech,
-            PayloadJson = request.Notes,
+            ExternalCorrelationId = "XVI",
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                device = "XVI",
+                deviceType = "CT",
+                request.AccessionNumber,
+                notes = request.Notes
+            }),
             CreatedAtUtc = now
         }, ct);
 
-        // // Immediately advance to SimScheduled — the image scan work item is ready.
-        // await ApplyAsync(item, CaseStatus.SimScheduled, new TransitionExecutionContext
-        // {
-        //     TriggerName = "ScheduleSimulation",
-        //     TriggerType = WorkflowTriggerType.System,
-        //     TriggeredBy = "System",
-        //     ActorRoles = ["System"]
-        // }, ct);
+        // System auto-starts simulation immediately after case creation: the SimTech
+        // begins acquiring the daily image scan on the XVI CT device.
+        await ApplyAsync(item, CaseStatus.SimInProgress, new TransitionExecutionContext
+        {
+            TriggerName = "AutoStartSimulation",
+            TriggerType = WorkflowTriggerType.System,
+            TriggeredBy = WorkflowRoles.System,
+            ActorRoles = [WorkflowRoles.System]
+        }, ct);
 
         await _dataAccess.SaveChangesAsync(ct);
 
         return caseId;
     }
 
-    public async Task SubmitSimRecordAsync(Guid caseId, SubmitSimRecordRequest request, CancellationToken ct)
+    public async Task CompleteDailyImageScanAsync(Guid caseId, string? completedBy, CancellationToken ct)
     {
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
             ?? throw new InvalidOperationException("Case not found.");
 
-        if (caseData.CurrentStatus == CaseStatus.SimCompleted)
+        // Idempotent: scan already completed (or case advanced past simulation).
+        if (caseData.CurrentStatus >= CaseStatus.SimCompleted)
         {
             return;
         }
 
-        // Idempotency: if the case already progressed beyond simulation, treat this as a no-op.
-        if (caseData.CurrentStatus > CaseStatus.SimCompleted)
+        if (caseData.CurrentStatus != CaseStatus.SimInProgress)
         {
-            return;
-        }
-
-        if (caseData.CurrentStatus is not (CaseStatus.Submitted or CaseStatus.SimScheduled or CaseStatus.SimInProgress))
-        {
-            throw new InvalidOperationException($"Case must be in Submitted, SimScheduled, or SimInProgress status. Current status is '{caseData.CurrentStatus}'.");
+            throw new InvalidOperationException(
+                $"Daily image scan can only be completed while case is in '{CaseStatus.SimInProgress}'. Current status is '{caseData.CurrentStatus}'.");
         }
 
         var now = DateTimeOffset.UtcNow;
-        var simWorkItem = await _dataAccess.GetOpenWorkItemAsync(caseId, WorkItemTypes.SimulationRecord, ct);
-        if (simWorkItem is not null)
-        {
-            _workItemLifecycleService.CompleteWorkItem(simWorkItem, completedBy: WorkflowRoles.SimTech, resultCode: "Recorded", completedAtUtc: now);
-        }
+        var workItem = await _dataAccess.GetOpenWorkItemAsync(caseId, WorkItemTypes.DailyImageScan, ct)
+            ?? throw new InvalidOperationException("No open Daily Image Scan work item exists for this case.");
 
-        if (caseData.CurrentStatus == CaseStatus.Submitted)
-        {
-            await ApplyAsync(caseData, CaseStatus.SimScheduled, new TransitionExecutionContext
-            {
-                TriggerName = "ScheduleSimulation",
-                TriggerType = WorkflowTriggerType.User,
-                TriggeredBy = WorkflowRoles.SimTech,
-                ActorRoles = [WorkflowRoles.SimTech],
-                Metadata = request
-            }, ct);
-        }
+        var actor = string.IsNullOrWhiteSpace(completedBy) ? WorkflowRoles.SimTech : completedBy!;
+        _workItemLifecycleService.CompleteWorkItem(workItem, completedBy: actor, resultCode: "Scanned", completedAtUtc: now);
 
-        if (caseData.CurrentStatus == CaseStatus.SimScheduled)
+        await ApplyAsync(caseData, CaseStatus.SimCompleted, new TransitionExecutionContext
         {
-            await ApplyAsync(caseData, CaseStatus.SimInProgress, new TransitionExecutionContext
-            {
-                TriggerName = "StartSimulation",
-                TriggerType = WorkflowTriggerType.User,
-                TriggeredBy = WorkflowRoles.SimTech,
-                ActorRoles = [WorkflowRoles.SimTech],
-                Metadata = request
-            }, ct);
-        }
-
-        if (caseData.CurrentStatus == CaseStatus.SimInProgress)
-        {
-            await ApplyAsync(caseData, CaseStatus.SimCompleted, new TransitionExecutionContext
-            {
-                TriggerName = "CompleteSimulation",
-                TriggerType = WorkflowTriggerType.User,
-                TriggeredBy = WorkflowRoles.SimTech,
-                ActorRoles = [WorkflowRoles.SimTech],
-                Metadata = request
-            }, ct);
-        }
+            // TODO RBAC: confirm caller actually holds the SimTech role once auth/authz
+            // is wired. For now we trust the controller-supplied identity.
+            TriggerName = "CompleteDailyImageScan",
+            TriggerType = WorkflowTriggerType.User,
+            TriggeredBy = actor,
+            ActorRoles = [WorkflowRoles.SimTech]
+        }, ct);
 
         await _dataAccess.SaveChangesAsync(ct);
     }

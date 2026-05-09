@@ -37,6 +37,25 @@ public static class WorkflowTransitionCatalog
         FailureActions = ["StayInSubmitted"],
     };
 
+    /// <summary>
+    /// System auto-starts simulation immediately after case creation, in flows that
+    /// skip the scheduled-appointment step (e.g. daily image scan walk-ins).  Pairs
+    /// with the <see cref="WorkItemTypes.DailyImageScan"/> work item created at the
+    /// same time on the XVI CT device.
+    /// </summary>
+    public static readonly TransitionDefinition SIM_001A = new()
+    {
+        Code = "SIM-001A",
+        FromStatuses = [CaseStatus.Submitted],
+        ToStatus = CaseStatus.SimInProgress,
+        TriggerName = "AutoStartSimulation",
+        TriggerType = WorkflowTriggerType.System,
+        GateChecks = ["CaseActiveNotCancelled"],
+        SuccessActions = ["Audit", "RecordTransitionHistory"],
+        FailureActions = ["StayInSubmitted"],
+        WorkItemsToCreate = [WorkItemTypes.DailyImageScan],
+    };
+
     /// <summary>Simulation technologist or scheduler books the CT simulation appointment.</summary>
     public static readonly TransitionDefinition SIM_002 = new()
     {
@@ -79,6 +98,26 @@ public static class WorkflowTransitionCatalog
         SuccessActions = ["SaveForm", "CompleteSimulationRecord"],
         FailureActions = ["StayInSimInProgress"],
         WorkItemsToCreate = [WorkItemTypes.ImageValidation],
+    };
+
+    /// <summary>
+    /// Simulation technologist completes the <see cref="WorkItemTypes.DailyImageScan"/>
+    /// work item on the XVI CT device, advancing the case from
+    /// <see cref="CaseStatus.SimInProgress"/> to <see cref="CaseStatus.SimCompleted"/>.
+    /// Variant of <see cref="SIM_004"/> for the daily-image-scan flow that does not
+    /// require a SimulationRecordForm.
+    /// </summary>
+    public static readonly TransitionDefinition SIM_004A = new()
+    {
+        Code = "SIM-004A",
+        FromStatuses = [CaseStatus.SimInProgress],
+        ToStatus = CaseStatus.SimCompleted,
+        TriggerName = "CompleteDailyImageScan",
+        TriggerType = WorkflowTriggerType.User,
+        RequiredRole = "SimTech",
+        GateChecks = ["CaseActiveNotCancelled"],
+        SuccessActions = ["Audit", "RecordTransitionHistory"],
+        FailureActions = ["StayInSimInProgress"],
     };
 
     /// <summary>
@@ -562,7 +601,7 @@ public static class WorkflowTransitionCatalog
     public static readonly IReadOnlyList<TransitionDefinition> All = new ReadOnlyCollection<TransitionDefinition>(
     [
         // Intake & Simulation
-        SIM_001, SIM_002, SIM_003, SIM_004, SIM_005,
+        SIM_001, SIM_001A, SIM_002, SIM_003, SIM_004, SIM_004A, SIM_005,
         // Image Acquisition
         IMG_001,
         // Contouring
