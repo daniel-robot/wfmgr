@@ -174,25 +174,10 @@ public class CaseFormService : ICaseFormService
                 break;
 
             case CaseFormTypes.ContourReviewForm:
-            {
-                if (caseData.CurrentStatus == CaseStatus.ContoursReady)
-                {
-                    await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.ContoursUnderReview, BuildContext("StartContourReview", WorkflowTriggerType.User, request, form, "Physician"), ct);
-                }
-
-                var approved = IsApproved(form.PayloadJson);
-                if (approved)
-                {
-                    await ValidateRequiredFormsBeforeTransitionAsync(caseData.CaseId, CaseStatus.PlanningPending, ct);
-                    await _caseStateMachineService.ApplyTransitionAsync(caseData, CaseStatus.PlanningPending, BuildContext("ApproveContours", WorkflowTriggerType.User, request, form, "Physician"), ct);
-                    await EnsurePlanningDispatchWorkItemAsync(caseData, ct);
-                }
-                else
-                {
-                    await _caseWorkflowService.RejectContourReviewAsync(caseData.CaseId, request.Reason ?? "Contour review rejected", request.SubmittedBy, ct);
-                }
+                // Contour review/rework loop has been removed from the live workflow.
+                // The form is still accepted for archival/audit purposes but no
+                // longer drives a transition.
                 break;
-            }
 
             default:
                 throw new InvalidOperationException($"Unsupported form type '{form.FormType}'.");

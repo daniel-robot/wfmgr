@@ -10,8 +10,6 @@ public interface ICaseWorkflowService
     Task HandlePvMedEventAsync(PvMedEventRequest request, CancellationToken ct);
     Task ForwardToMonacoAsync(Guid caseId, CancellationToken ct);
     Task CompleteManualContouringAsync(Guid caseId, CancellationToken ct);
-    Task RestartContouringAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
-    Task RejectContourReviewAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
     Task RejectPlanReviewAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
     Task RejectPlanReReviewAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);
     Task FailQaAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct);

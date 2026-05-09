@@ -140,20 +140,6 @@ public class CasesController : ControllerBase
         return NoContent();
     }
 
-    [HttpPost("{caseId:guid}/actions/restart-contouring")]
-    public async Task<IActionResult> RestartContouring(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
-    {
-        await _workflowService.RestartContouringAsync(caseId, request.Reason ?? "Manual restart", request.TriggeredBy, ct);
-        return NoContent();
-    }
-
-    [HttpPost("{caseId:guid}/actions/reject-contour-review")]
-    public async Task<IActionResult> RejectContourReview(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
-    {
-        await _workflowService.RejectContourReviewAsync(caseId, request.Reason ?? "Manual rejection", request.TriggeredBy, ct);
-        return NoContent();
-    }
-
     [HttpPost("{caseId:guid}/actions/reject-plan-review")]
     public async Task<IActionResult> RejectPlanReview(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
     {

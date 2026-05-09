@@ -171,6 +171,144 @@ public static class WorkflowTransitionCatalog
     // Phase 3 – Contouring
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── Granular contouring sub-phase (Auto → Manual → Ready) ────────────────
+    // These transitions split the legacy single-bucket "ContouringInProgress"
+    // state into explicit Auto/Manual sub-states so that progress driven by
+    // third-party systems (e.g. PvMed) can be observed by the application.
+    // The legacy CON-001..CON-005 transitions remain in place for backward
+    // compatibility.
+
+    /// <summary>
+    /// System automatically dispatches images to the third-party auto-contouring
+    /// provider (e.g. PvMed) immediately after image storage and moves the case
+    /// into the auto-contouring sub-phase.
+    /// </summary>
+    public static readonly TransitionDefinition CON_010 = new()
+    {
+        Code = "CON-010",
+        FromStatuses = [CaseStatus.ImageStored],
+        ToStatus = CaseStatus.AutoContouringInProgress,
+        TriggerName = "StartAutoContouring",
+        TriggerType = WorkflowTriggerType.System,
+        GateChecks = ["ImageRefsValid"],
+        SuccessActions = ["EnqueueSendImagesToContourTool", "Audit"],
+        FailureActions = ["StayInImageStored"],
+        WorkItemsToCreate = [WorkItemTypes.AutoContourMonitor],
+        ConfigSlot = WorkflowSlotCodes.S1ContouringStrategy,
+    };
+
+    /// <summary>
+    /// Auto-contouring tool reports incremental progress; idempotent self-transition.
+    /// </summary>
+    public static readonly TransitionDefinition CON_011 = new()
+    {
+        Code = "CON-011",
+        FromStatuses = [CaseStatus.AutoContouringInProgress],
+        ToStatus = CaseStatus.AutoContouringInProgress,
+        TriggerName = "AutoContourProgressUpdated",
+        TriggerType = WorkflowTriggerType.ExternalEvent,
+        GateChecks = ["EventIdempotent"],
+        SuccessActions = ["UpdateProgress", "Audit"],
+        FailureActions = ["IgnoreDuplicate"],
+    };
+
+    /// <summary>
+    /// Auto-contouring completed successfully. RTStruct references are saved and the
+    /// case moves to the AutoContouringCompleted state. Manual contouring is then
+    /// always entered (S2 manual phase always runs after auto).
+    /// </summary>
+    public static readonly TransitionDefinition CON_012 = new()
+    {
+        Code = "CON-012",
+        FromStatuses = [CaseStatus.AutoContouringInProgress],
+        ToStatus = CaseStatus.AutoContouringCompleted,
+        TriggerName = "AutoContourCompleted",
+        TriggerType = WorkflowTriggerType.ExternalEvent,
+        GateChecks = ["ContourResultRefsValid"],
+        SuccessActions = ["SaveRTStructRefs", "CloseAutoContourMonitor"],
+        FailureActions = ["StayInAutoContouring"],
+    };
+
+    /// <summary>
+    /// Auto-contouring failed. Case skips the AutoContouringCompleted state and goes
+    /// directly into manual contouring as a recovery.
+    /// </summary>
+    public static readonly TransitionDefinition CON_013 = new()
+    {
+        Code = "CON-013",
+        FromStatuses = [CaseStatus.AutoContouringInProgress],
+        ToStatus = CaseStatus.ManualContouringInProgress,
+        TriggerName = "AutoContourFailed",
+        TriggerType = WorkflowTriggerType.ExternalEvent,
+        SuccessActions = ["AuditFailure"],
+        FailureActions = ["RetryIfConfigured"],
+        ConfigSlot = WorkflowSlotCodes.S8ExceptionHandlingPolicy,
+    };
+
+    /// <summary>
+    /// System auto-starts manual contouring after auto-contouring completes
+    /// (manual phase always runs after auto in this workflow).
+    /// </summary>
+    public static readonly TransitionDefinition CON_014 = new()
+    {
+        Code = "CON-014",
+        FromStatuses = [CaseStatus.AutoContouringCompleted],
+        ToStatus = CaseStatus.ManualContouringInProgress,
+        TriggerName = "StartManualContouring",
+        TriggerType = WorkflowTriggerType.System,
+        GateChecks = ["ContourResultRefsValid"],
+        SuccessActions = ["Audit"],
+        FailureActions = ["StayInAutoContouringCompleted"],
+    };
+
+    /// <summary>
+    /// Doctor / SimTech completes the manual contouring work item.
+    /// </summary>
+    public static readonly TransitionDefinition CON_015 = new()
+    {
+        Code = "CON-015",
+        FromStatuses = [CaseStatus.ManualContouringInProgress],
+        ToStatus = CaseStatus.ManualContouringCompleted,
+        TriggerName = "CompleteManualContouring",
+        TriggerType = WorkflowTriggerType.User,
+        RequiredRole = "Doctor/SimTech",
+        SuccessActions = ["SaveContourRefs", "CloseManualContouringWorkItem"],
+        FailureActions = ["StayInManualContouring"],
+    };
+
+    /// <summary>
+    /// System promotes the case from ManualContouringCompleted to ContoursReady so the
+    /// existing review pipeline (REV-*) can take over.
+    /// </summary>
+    public static readonly TransitionDefinition CON_016 = new()
+    {
+        Code = "CON-016",
+        FromStatuses = [CaseStatus.ManualContouringCompleted],
+        ToStatus = CaseStatus.ContoursReady,
+        TriggerName = "PromoteContoursReady",
+        TriggerType = WorkflowTriggerType.System,
+        GateChecks = ["ContourResultRefsValid"],
+        SuccessActions = ["Audit"],
+        FailureActions = ["StayInManualContouringCompleted"],
+    };
+
+    /// <summary>
+    /// System auto-promotes the case from ContoursReady to PlanningPending. The
+    /// contour-review and rework loop has been removed from the live workflow.
+    /// </summary>
+    public static readonly TransitionDefinition CON_020 = new()
+    {
+        Code = "CON-020",
+        FromStatuses = [CaseStatus.ContoursReady],
+        ToStatus = CaseStatus.PlanningPending,
+        TriggerName = "PromotePlanningPending",
+        TriggerType = WorkflowTriggerType.System,
+        SuccessActions = ["Audit", "DispatchPlanning"],
+        WorkItemsToCreate = [WorkItemTypes.PlanAssignment],
+    };
+
+    // ── Legacy contouring transitions (retained for backward compatibility) ──
+
     /// <summary>
     /// Contouring tool reports incremental progress on the auto-contouring job.
     /// This is an idempotent self-transition; duplicate events are safely ignored.
@@ -604,10 +742,8 @@ public static class WorkflowTransitionCatalog
         SIM_001, SIM_001A, SIM_002, SIM_003, SIM_004, SIM_004A, SIM_005,
         // Image Acquisition
         IMG_001,
-        // Contouring
-        CON_001, CON_002, CON_003, CON_004, CON_005,
-        // Contour Review
-        REV_001, REV_002, REV_003, REV_004,
+        // Contouring (granular sub-phase) — review/rework loop removed
+        CON_010, CON_011, CON_012, CON_013, CON_014, CON_015, CON_016, CON_020,
         // Treatment Planning
         PLN_001, PLN_002, PLN_003, PLN_004, PLN_005, PLN_006,
         // Re-review & Prescription

@@ -23,7 +23,7 @@
           <button class="secondary" (click)="loadCase()" [disabled]="loading || busy">Refresh</button>
         </div>
         <div class="info-grid" role="list">
-          <div class="info-item" role="listitem"><span class="info-label">Status</span><span class="info-value"><span class="status-badge" [class]="'status-badge ' + getStatusClass(details.currentStatus)">{{ details.currentStatus }}</span></span></div>
+          <div class="info-item" role="listitem"><span class="info-label">Status</span><span class="info-value"><span class="status-badge" [class]="'status-badge ' + getStatusClass(details.currentStatus)">{{ getStatusLabel(details.currentStatus) }}</span></span></div>
           <div class="info-item" role="listitem"><span class="info-label">Accession Number</span><span class="info-value">{{ details.accessionNumber }}</span></div>
           <div class="info-item" role="listitem"><span class="info-label">Hospital / Site / Dept</span><span class="info-value">{{ details.hospitalId }} / {{ details.siteId }} / {{ details.departmentId }}</span></div>
           <div class="info-item" role="listitem"><span class="info-label">Case Created</span><span class="info-value">{{ details.createdAt | date: 'yyyy-MM-dd HH:mm' }}</span></div>
@@ -37,7 +37,7 @@
       <div class="workflow-progress">
         <div class="workflow-progress-header">
           <h2>Workflow Progress</h2>
-          <span class="status-badge" [class]="'status-badge ' + getStatusClass(details.currentStatus)">{{ details.currentStatus }}</span>
+          <span class="status-badge" [class]="'status-badge ' + getStatusClass(details.currentStatus)">{{ getStatusLabel(details.currentStatus) }}</span>
         </div>
         <div
           class="progress-track"
@@ -63,7 +63,7 @@
               </div>
               <div class="stage-statuses">
                 @for (subStage of stage.statuses; track subStage; let j = $index) {
-                  <span [class]="'stage-status-chip ' + getSubStageState(details.currentStatus, i, j)">{{ subStage }}</span>
+                  <span [class]="'stage-status-chip ' + getSubStageState(details.currentStatus, i, j)" [title]="subStage">{{ getStatusLabel(subStage) }}</span>
                 }
               </div>
             </div>
@@ -150,14 +150,12 @@
     <div class="card">
       <h2>Advanced Workflow Actions</h2>
       <p class="meta">Trigger failure, retry, rework, pause/resume, and cancellation pathways from the UI.</p>
-      <p class="meta">Current Status: <strong>{{ details.currentStatus }}</strong></p>
+      <p class="meta">Current Status: <strong>{{ getStatusLabel(details.currentStatus) }}</strong></p>
       <form [formGroup]="advancedActionForm" class="grid three-col">
         <label>TriggeredBy <input formControlName="triggeredBy" /></label>
         <label class="full-width">Reason <input formControlName="reason" /></label>
       </form>
       <div class="actions">
-        <button [disabled]="busy || !isActionEnabled('restart-contouring')" [title]="'Allowed: ' + getAllowedStatusesText('restart-contouring')" (click)="runAdvancedAction('restart-contouring')">Restart Contouring</button>
-        <button [disabled]="busy || !isActionEnabled('reject-contour-review')" [title]="'Allowed: ' + getAllowedStatusesText('reject-contour-review')" (click)="runAdvancedAction('reject-contour-review')">Reject Contour Review</button>
         <button [disabled]="busy || !isActionEnabled('reject-plan-review')" [title]="'Allowed: ' + getAllowedStatusesText('reject-plan-review')" (click)="runAdvancedAction('reject-plan-review')">Reject Plan Review</button>
         <button [disabled]="busy || !isActionEnabled('reject-plan-rereview')" [title]="'Allowed: ' + getAllowedStatusesText('reject-plan-rereview')" (click)="runAdvancedAction('reject-plan-rereview')">Reject Plan Re-review</button>
         <button [disabled]="busy || !isActionEnabled('prescription-sync-failed')" [title]="'Allowed: ' + getAllowedStatusesText('prescription-sync-failed')" (click)="runAdvancedAction('prescription-sync-failed')">Mark Prescription Sync Failed</button>

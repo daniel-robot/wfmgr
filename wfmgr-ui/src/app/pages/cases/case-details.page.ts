@@ -85,8 +85,6 @@ export class CaseDetailsPageComponent implements OnInit {
   });
 
   private readonly advancedActionGuards: Record<string, string[]> = {
-    'restart-contouring': ['ContourReworkRequired', 'ContoursRejected'],
-    'reject-contour-review': ['ContoursUnderReview'],
     'reject-plan-review': ['PlanUnderReview'],
     'reject-plan-rereview': ['PlanReReviewOptional'],
     'prescription-sync-failed': ['PrescriptionGenerating'],
@@ -105,11 +103,12 @@ export class CaseDetailsPageComponent implements OnInit {
       'SimCompleted',
       'ImageStored',
       'ImageForwarding',
+      'AutoContouringInProgress',
+      'AutoContouringCompleted',
+      'ManualContouringInProgress',
+      'ManualContouringCompleted',
       'ContouringInProgress',
       'ContoursReady',
-      'ContoursUnderReview',
-      'ContoursRejected',
-      'ContourReworkRequired',
       'PlanningPending',
       'PlanningAssigned',
       'PlanningInProgress',
@@ -133,6 +132,36 @@ export class CaseDetailsPageComponent implements OnInit {
     ]
   };
 
+  /**
+   * Friendly display labels for case statuses. Falls back to the raw enum name
+   * via getStatusLabel() when no friendly label is registered.
+   */
+  private readonly statusLabels: Record<string, string> = {
+    Submitted: 'Submitted',
+    SimScheduled: 'Sim Scheduled',
+    SimInProgress: 'Sim In Progress',
+    SimCompleted: 'Sim Completed',
+    ImageStored: 'Image Stored',
+    AutoContouringInProgress: 'Auto Contouring',
+    AutoContouringCompleted: 'Auto Contouring Done',
+    ManualContouringInProgress: 'Manual Contouring',
+    ManualContouringCompleted: 'Manual Contouring Done',
+    ContouringInProgress: 'Contouring',
+    ContoursReady: 'Contours Ready',
+    PlanningPending: 'Planning Pending',
+    PlanningAssigned: 'Planning Assigned',
+    PlanningInProgress: 'Planning',
+    PlanReady: 'Plan Ready',
+    PlanUnderReview: 'Plan Under Review',
+    PlanReviewed: 'Plan Reviewed',
+    PlanReReviewOptional: 'Plan Re-review',
+    PlanQAInProgress: 'Plan QA',
+    PlanQAApproved: 'Plan QA Approved',
+    PlanQAFailed: 'Plan QA Failed',
+    PlanDoubleCheckOptional: 'Plan Double Check',
+    Cancelled: 'Cancelled'
+  };
+
   readonly workflowProgressStages = [
     {
       id: 'intake',
@@ -150,7 +179,14 @@ export class CaseDetailsPageComponent implements OnInit {
       id: 'contouring',
       label: 'Contouring',
       colorClass: 'stage-contouring',
-      statuses: ['ContouringInProgress', 'ContoursReady', 'ContoursUnderReview', 'ContoursRejected', 'ContourReworkRequired']
+      statuses: [
+        'AutoContouringInProgress',
+        'AutoContouringCompleted',
+        'ManualContouringInProgress',
+        'ManualContouringCompleted',
+        'ContouringInProgress',
+        'ContoursReady'
+      ]
     },
     {
       id: 'planning',
@@ -293,9 +329,6 @@ export class CaseDetailsPageComponent implements OnInit {
       status === 'ImageForwarding' ||
       status === 'ContouringInProgress' ||
       status === 'ContoursReady' ||
-      status === 'ContoursUnderReview' ||
-      status === 'ContoursRejected' ||
-      status === 'ContourReworkRequired' ||
       status === 'PlanningPending'
     ) {
       return `CT image event already processed for this case (current status: ${status}).`;
@@ -413,12 +446,6 @@ export class CaseDetailsPageComponent implements OnInit {
     };
 
     switch (action) {
-      case 'restart-contouring':
-        this.runAction(() => this.api.restartContouring(this.caseId, request));
-        break;
-      case 'reject-contour-review':
-        this.runAction(() => this.api.rejectContourReview(this.caseId, request));
-        break;
       case 'reject-plan-review':
         this.runAction(() => this.api.rejectPlanReview(this.caseId, request));
         break;
@@ -504,6 +531,14 @@ export class CaseDetailsPageComponent implements OnInit {
     }
 
     return `status-${status.toLowerCase()}`;
+  }
+
+  getStatusLabel(status: string | null | undefined): string {
+    if (!status) {
+      return '';
+    }
+
+    return this.statusLabels[status] ?? status;
   }
 
   getWorkflowStageState(status: string | null | undefined, stageIndex: number): 'completed' | 'current' | 'upcoming' {

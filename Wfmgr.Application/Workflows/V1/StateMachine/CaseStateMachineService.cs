@@ -13,11 +13,12 @@ public class CaseStateMachineService : ICaseStateMachineService
         CaseStatus.SimInProgress,
         CaseStatus.SimCompleted,
         CaseStatus.ImageStored,
+        CaseStatus.AutoContouringInProgress,
+        CaseStatus.AutoContouringCompleted,
+        CaseStatus.ManualContouringInProgress,
+        CaseStatus.ManualContouringCompleted,
         CaseStatus.ContouringInProgress,
         CaseStatus.ContoursReady,
-        CaseStatus.ContoursUnderReview,
-        CaseStatus.ContoursRejected,
-        CaseStatus.ContourReworkRequired,
         CaseStatus.PlanningPending,
         CaseStatus.PlanningAssigned,
         CaseStatus.PlanningInProgress,
@@ -128,15 +129,19 @@ public class CaseStateMachineService : ICaseStateMachineService
         new() { FromStatus = CaseStatus.SimCompleted, ToStatus = CaseStatus.ImageStored, TriggerName = "StoreImage", TriggerType = WorkflowTriggerType.ExternalEvent, GateConditions = ["ImageReferenceMustExist"], FailurePath = "ImageReferenceMissing" },
         new() { FromStatus = CaseStatus.ImageStored, ToStatus = CaseStatus.ContouringInProgress, TriggerName = "ForwardImage", TriggerType = WorkflowTriggerType.System },
 
-        new() { FromStatus = CaseStatus.ContouringInProgress, ToStatus = CaseStatus.ContoursReady, TriggerName = "ContoursReady", TriggerType = WorkflowTriggerType.System },
-        new() { FromStatus = CaseStatus.ContouringInProgress, ToStatus = CaseStatus.ContourReworkRequired, TriggerName = "RequestContourRework", TriggerType = WorkflowTriggerType.User, RequiredRole = "Physician" },
-        new() { FromStatus = CaseStatus.ContourReworkRequired, ToStatus = CaseStatus.ContouringInProgress, TriggerName = "RestartContouring", TriggerType = WorkflowTriggerType.System },
-        new() { FromStatus = CaseStatus.ContourReworkRequired, ToStatus = CaseStatus.ContoursReady, TriggerName = "ReworkedContoursReady", TriggerType = WorkflowTriggerType.User },
+        // ── Granular contouring sub-phase (Auto → Manual → Ready) ────────────
+        // These rules pair with WorkflowTransitionCatalog.CON-010..CON-017 and
+        // split the legacy single-bucket "ContouringInProgress" state.
+        new() { FromStatus = CaseStatus.ImageStored, ToStatus = CaseStatus.AutoContouringInProgress, TriggerName = "StartAutoContouring", TriggerType = WorkflowTriggerType.System },
+        new() { FromStatus = CaseStatus.AutoContouringInProgress, ToStatus = CaseStatus.AutoContouringInProgress, TriggerName = "AutoContourProgressUpdated", TriggerType = WorkflowTriggerType.ExternalEvent },
+        new() { FromStatus = CaseStatus.AutoContouringInProgress, ToStatus = CaseStatus.AutoContouringCompleted, TriggerName = "AutoContourCompleted", TriggerType = WorkflowTriggerType.ExternalEvent, GateConditions = ["ContourResultRefsValid"], FailurePath = "StayInAutoContouring" },
+        new() { FromStatus = CaseStatus.AutoContouringInProgress, ToStatus = CaseStatus.ManualContouringInProgress, TriggerName = "AutoContourFailed", TriggerType = WorkflowTriggerType.ExternalEvent },
+        new() { FromStatus = CaseStatus.AutoContouringCompleted, ToStatus = CaseStatus.ManualContouringInProgress, TriggerName = "StartManualContouring", TriggerType = WorkflowTriggerType.System },
+        new() { FromStatus = CaseStatus.ManualContouringInProgress, ToStatus = CaseStatus.ManualContouringCompleted, TriggerName = "CompleteManualContouring", TriggerType = WorkflowTriggerType.User },
+        new() { FromStatus = CaseStatus.ManualContouringCompleted, ToStatus = CaseStatus.ContoursReady, TriggerName = "PromoteContoursReady", TriggerType = WorkflowTriggerType.System },
+        new() { FromStatus = CaseStatus.ContoursReady, ToStatus = CaseStatus.PlanningPending, TriggerName = "PromotePlanningPending", TriggerType = WorkflowTriggerType.System },
 
-        new() { FromStatus = CaseStatus.ContoursReady, ToStatus = CaseStatus.ContoursUnderReview, TriggerName = "StartContourReview", TriggerType = WorkflowTriggerType.User, RequiredRole = "Physician" },
-        new() { FromStatus = CaseStatus.ContoursUnderReview, ToStatus = CaseStatus.PlanningPending, TriggerName = "ApproveContours", TriggerType = WorkflowTriggerType.User, RequiredRole = "Physician", GateConditions = ["ContourReviewApprovalMustExist"], FailurePath = "ContourReviewNotApproved" },
-        new() { FromStatus = CaseStatus.ContoursUnderReview, ToStatus = CaseStatus.ContoursRejected, TriggerName = "RejectContours", TriggerType = WorkflowTriggerType.User, RequiredRole = "Physician" },
-        new() { FromStatus = CaseStatus.ContoursRejected, ToStatus = CaseStatus.ContouringInProgress, TriggerName = "ReopenContouring", TriggerType = WorkflowTriggerType.System },
+        new() { FromStatus = CaseStatus.ContouringInProgress, ToStatus = CaseStatus.ContoursReady, TriggerName = "ContoursReady", TriggerType = WorkflowTriggerType.System },
 
         new() { FromStatus = CaseStatus.PlanningPending, ToStatus = CaseStatus.PlanningAssigned, TriggerName = "AssignPlanning", TriggerType = WorkflowTriggerType.User, RequiredRole = "Dosimetrist" },
         new() { FromStatus = CaseStatus.PlanningAssigned, ToStatus = CaseStatus.PlanningInProgress, TriggerName = "StartPlanning", TriggerType = WorkflowTriggerType.User, RequiredRole = "Dosimetrist" },

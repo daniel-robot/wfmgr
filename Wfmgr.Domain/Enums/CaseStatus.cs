@@ -21,9 +21,19 @@ public enum CaseStatus
     // ── Image Acquisition ────────────────────────────────────────────────────
     /// <summary>CT images have been stored in the DICOM repository.</summary>
     ImageStored = 50,
-    
-    // ── Contouring ────────────────────────────────────────────────────────────
-    /// <summary>Auto-contouring or manual contouring is underway.</summary>
+
+    // ── Contouring (granular) ────────────────────────────────────────────────
+    /// <summary>Third-party auto-contouring (e.g. PvMed) is currently running.</summary>
+    AutoContouringInProgress = 52,
+    /// <summary>Third-party auto-contouring has finished and RTStruct refs are available.</summary>
+    AutoContouringCompleted = 54,
+    /// <summary>Manual contouring touch-up / fallback is in progress.</summary>
+    ManualContouringInProgress = 56,
+    /// <summary>Manual contouring is complete; ready to be promoted to <see cref="ContoursReady"/>.</summary>
+    ManualContouringCompleted = 58,
+
+    // ── Contouring (legacy) ──────────────────────────────────────────────────
+    /// <summary>Legacy single-bucket contouring state. Retained for backward compatibility.</summary>
     ContouringInProgress = 70,
     /// <summary>Contours have been generated and are ready for review.</summary>
     ContoursReady = 80,

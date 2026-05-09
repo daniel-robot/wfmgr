@@ -234,14 +234,6 @@ export class WorkflowApiService {
     return this.http.get<CaseFormItem>(`${this.baseUrl}/api/cases/${caseId}/forms/latest/${encodeURIComponent(formType)}`);
   }
 
-  restartContouring(caseId: string, request: WorkflowActionRequest): Observable<void> {
-    return this.postCaseAction(caseId, 'restart-contouring', request);
-  }
-
-  rejectContourReview(caseId: string, request: WorkflowActionRequest): Observable<void> {
-    return this.postCaseAction(caseId, 'reject-contour-review', request);
-  }
-
   rejectPlanReview(caseId: string, request: WorkflowActionRequest): Observable<void> {
     return this.postCaseAction(caseId, 'reject-plan-review', request);
   }

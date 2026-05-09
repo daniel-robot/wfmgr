@@ -240,18 +240,14 @@ public class CaseWorkflowService : ICaseWorkflowService
         }
         else
         {
-            await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
-            {
-                CaseId = caseData.CaseId,
-                Type = WorkItemTypes.ManualContouring,
-                AssignedRole = strategy.Fallback.ManualWorkItemRole,
-                CreatedAtUtc = now
-            }, ct);
+            // AutoContour disabled: no pending ManualContouring work item is
+            // pre-created. The work item is recorded at completion time in
+            // CompleteManualContouringAsync.
         }
 
-        await ApplyAsync(caseData, CaseStatus.ContouringInProgress, new TransitionExecutionContext
+        await ApplyAsync(caseData, CaseStatus.AutoContouringInProgress, new TransitionExecutionContext
         {
-            TriggerName = "StartContouring",
+            TriggerName = "StartAutoContouring",
             TriggerType = WorkflowTriggerType.System,
             TriggeredBy = WorkflowRoles.System,
             Metadata = request
@@ -295,86 +291,70 @@ public class CaseWorkflowService : ICaseWorkflowService
 
         if (string.Equals(request.Type, "PVMED_AUTOCONTOUR_COMPLETED", StringComparison.OrdinalIgnoreCase))
         {
-            if (caseData.CurrentStatus != CaseStatus.ContouringInProgress)
+            // Idempotency: ignore if we've already moved past auto-contouring.
+            if (caseData.CurrentStatus > CaseStatus.AutoContouringCompleted
+                && caseData.CurrentStatus != CaseStatus.ContouringInProgress)
             {
-                throw new InvalidOperationException("Case must be in ContouringInProgress status.");
+                await AddAuditAsync(caseData.CaseId, "HandlePvMedCompletedIgnored", caseData.CurrentStatus, null, request, ct);
             }
-
-            caseData.RtStructSeriesInstanceUid = request.PvMedResult?.RtStructLocation.SeriesInstanceUid;
-
-            var autoContourMonitor = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.AutoContourMonitor, ct);
-            if (autoContourMonitor is not null)
+            else if (caseData.CurrentStatus is not (CaseStatus.AutoContouringInProgress or CaseStatus.ContouringInProgress))
             {
-                _workItemLifecycleService.CompleteWorkItem(
-                    autoContourMonitor,
-                    completedBy: "PVMED",
-                    resultCode: WorkItemResultCodes.Approved,
-                    completedAtUtc: now);
+                throw new InvalidOperationException(
+                    $"Case must be in AutoContouringInProgress (or legacy ContouringInProgress) status. Current status is '{caseData.CurrentStatus}'.");
             }
-
-            await ApplyAsync(caseData, CaseStatus.ContoursReady, new TransitionExecutionContext
+            else
             {
-                TriggerName = "ContoursReady",
-                TriggerType = WorkflowTriggerType.ExternalEvent,
-                TriggeredBy = "PVMED",
-                Metadata = request
-            }, ct);
+                caseData.RtStructSeriesInstanceUid = request.PvMedResult?.RtStructLocation.SeriesInstanceUid;
 
-            if (strategy.OnAutoContourComplete.AutoForwardToMonaco)
-            {
-                await _dataAccess.AddOutboxMessageAsync(new OutboxMessageData
+                var autoContourMonitor = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.AutoContourMonitor, ct);
+                if (autoContourMonitor is not null)
                 {
-                    MessageId = Guid.NewGuid(),
-                    CaseId = caseData.CaseId,
-                    TargetSystem = "Monaco",
-                    Action = OutboxActions.SendToMonacoImport,
-                    PayloadJson = JsonSerializer.Serialize(new
+                    _workItemLifecycleService.CompleteWorkItem(
+                        autoContourMonitor,
+                        completedBy: "PVMED",
+                        resultCode: WorkItemResultCodes.Approved,
+                        completedAtUtc: now);
+                }
+
+                if (caseData.CurrentStatus == CaseStatus.ContouringInProgress)
+                {
+                    // Legacy single-bucket path: jump straight to ContoursReady to preserve
+                    // backward compatibility with any in-flight cases on the old flow.
+                    await ApplyAsync(caseData, CaseStatus.ContoursReady, new TransitionExecutionContext
                     {
-                        caseData.CaseId,
-                        request.PvMedResult,
-                        caseData.AccessionNumber
-                    }),
-                    Status = OutboxStatus.New,
-                    RetryCount = 0,
-                    CreatedAt = now
-                }, ct);
-
-                await EnsureContourApprovalEvidenceAsync(caseData.CaseId, now, WorkflowRoles.System, request, ct);
-
-                await ApplyAsync(caseData, CaseStatus.ContoursUnderReview, new TransitionExecutionContext
+                        TriggerName = "ContoursReady",
+                        TriggerType = WorkflowTriggerType.ExternalEvent,
+                        TriggeredBy = "PVMED",
+                        Metadata = request
+                    }, ct);
+                }
+                else
                 {
-                    TriggerName = "StartContourReview",
-                    TriggerType = WorkflowTriggerType.System,
-                    TriggeredBy = WorkflowRoles.System,
-                    ActorRoles = [WorkflowRoles.Physician],
-                    Metadata = request
-                }, ct);
+                    // New granular path: AutoContouringInProgress → AutoContouringCompleted
+                    // → ManualContouringInProgress (manual phase always runs after auto).
+                    await ApplyAsync(caseData, CaseStatus.AutoContouringCompleted, new TransitionExecutionContext
+                    {
+                        TriggerName = "AutoContourCompleted",
+                        TriggerType = WorkflowTriggerType.ExternalEvent,
+                        TriggeredBy = "PVMED",
+                        Metadata = request
+                    }, ct);
 
-                await ApplyAsync(caseData, CaseStatus.PlanningPending, new TransitionExecutionContext
-                {
-                    TriggerName = "ApproveContours",
-                    TriggerType = WorkflowTriggerType.System,
-                    TriggeredBy = WorkflowRoles.System,
-                    ActorRoles = [WorkflowRoles.Physician],
-                    Metadata = request
-                }, ct);
+                    await ApplyAsync(caseData, CaseStatus.ManualContouringInProgress, new TransitionExecutionContext
+                    {
+                        TriggerName = "StartManualContouring",
+                        TriggerType = WorkflowTriggerType.System,
+                        TriggeredBy = WorkflowRoles.System,
+                        Metadata = request
+                    }, ct);
 
-                await EnsurePlanningDispatchWorkItemAsync(caseData, ct);
-            }
-            else if (strategy.OnAutoContourComplete.AllowManualForward)
-            {
-                await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
-                {
-                    CaseId = caseData.CaseId,
-                    Type = WorkItemTypes.ManualForwardToMonaco,
-                    AssignedRole = strategy.Fallback.ManualWorkItemRole,
-                    CreatedAtUtc = now
-                }, ct);
+                    await EnsureManualContouringWorkItemAsync(caseData, strategy, now, source: "PVMED_AUTOCONTOUR_COMPLETED", ct);
+                }
             }
         }
         else if (string.Equals(request.Type, "PVMED_AUTOCONTOUR_FAILED", StringComparison.OrdinalIgnoreCase))
         {
-            if (caseData.CurrentStatus == CaseStatus.ContouringInProgress)
+            if (caseData.CurrentStatus is CaseStatus.AutoContouringInProgress or CaseStatus.ContouringInProgress)
             {
                 var autoContourMonitor = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.AutoContourMonitor, ct);
                 if (autoContourMonitor is not null)
@@ -387,27 +367,20 @@ public class CaseWorkflowService : ICaseWorkflowService
                         completedAtUtc: now);
                 }
 
-                await ApplyAsync(caseData, CaseStatus.ContourReworkRequired, new TransitionExecutionContext
+                // Both new and legacy source states fall back into manual contouring;
+                // the contour-rework loop has been removed.
+                await ApplyAsync(caseData, CaseStatus.ManualContouringInProgress, new TransitionExecutionContext
                 {
                     TriggerName = "AutoContourFailed",
                     TriggerType = WorkflowTriggerType.ExternalEvent,
                     TriggeredBy = "PVMED",
                     Reason = request.Type,
-                    ActorRoles = [WorkflowRoles.Physician],
                     Metadata = request
                 }, ct);
 
                 if (strategy.Fallback.OnFailureCreateManualWorkItem)
                 {
-                    await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
-                    {
-                        CaseId = caseData.CaseId,
-                        ParentWorkItemId = autoContourMonitor?.WorkItemId,
-                        Type = WorkItemTypes.ContourRework,
-                        AssignedRole = strategy.Fallback.ManualWorkItemRole,
-                        PayloadJson = JsonSerializer.Serialize(new { request.Type, request.ExternalEventId }),
-                        CreatedAtUtc = now
-                    }, ct);
+                    await EnsureManualContouringWorkItemAsync(caseData, strategy, now, source: "PVMED_AUTOCONTOUR_FAILED", ct);
                 }
             }
 
@@ -431,85 +404,6 @@ public class CaseWorkflowService : ICaseWorkflowService
             ProcessedAt = now,
             ProcessStatus = "Processed"
         }, ct);
-
-        await _dataAccess.SaveChangesAsync(ct);
-    }
-
-    public async Task RestartContouringAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct)
-    {
-        var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
-            ?? throw new InvalidOperationException("Case not found.");
-
-        var toStatus = caseData.CurrentStatus switch
-        {
-            CaseStatus.ContourReworkRequired => CaseStatus.ContouringInProgress,
-            CaseStatus.ContoursRejected => CaseStatus.ContouringInProgress,
-            _ => throw new InvalidOperationException("Case must be in ContourReworkRequired or ContoursRejected status.")
-        };
-
-        await ApplyAsync(caseData, toStatus, new TransitionExecutionContext
-        {
-            TriggerName = caseData.CurrentStatus == CaseStatus.ContourReworkRequired ? "RestartContouring" : "ReopenContouring",
-            TriggerType = WorkflowTriggerType.User,
-            TriggeredBy = triggeredBy,
-            ActorRoles = [WorkflowRoles.Dosimetrist, WorkflowRoles.Physician],
-            Reason = reason,
-            Metadata = new { caseId, reason }
-        }, ct);
-
-        await _dataAccess.SaveChangesAsync(ct);
-    }
-
-    public async Task RejectContourReviewAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct)
-    {
-        var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
-            ?? throw new InvalidOperationException("Case not found.");
-
-        if (caseData.CurrentStatus != CaseStatus.ContoursUnderReview)
-        {
-            throw new InvalidOperationException("Case must be in ContoursUnderReview status.");
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        var policy = await _profileResolver.ResolveS2ContourReviewPolicyAsync(
-            caseData.HospitalId,
-            caseData.SiteId,
-            caseData.DepartmentId,
-            ct);
-
-        var review = await _dataAccess.GetOpenWorkItemAsync(caseId, WorkItemTypes.ContourReview, ct);
-        if (review is not null)
-        {
-            _workItemLifecycleService.RejectWorkItem(
-                review,
-                completedBy: triggeredBy,
-                resultCode: WorkItemResultCodes.Rejected,
-                remarks: reason,
-                completedAtUtc: now);
-        }
-
-        await ApplyAsync(caseData, CaseStatus.ContoursRejected, new TransitionExecutionContext
-        {
-            TriggerName = "RejectContours",
-            TriggerType = WorkflowTriggerType.User,
-            TriggeredBy = triggeredBy,
-            ActorRoles = [WorkflowRoles.Physician],
-            Reason = reason,
-            Metadata = new { caseId, reason }
-        }, ct);
-
-        if (policy.OnReject.CreateReworkWorkItem)
-        {
-            await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
-            {
-                CaseId = caseId,
-                ParentWorkItemId = review?.WorkItemId,
-                Type = WorkItemTypes.ContourRework,
-                AssignedRole = policy.OnReject.ReworkWorkItemRole,
-                PayloadJson = JsonSerializer.Serialize(new { reason }),
-                CreatedAtUtc = now
-            }, ct);
-        }
 
         await _dataAccess.SaveChangesAsync(ct);
     }
@@ -704,14 +598,34 @@ public class CaseWorkflowService : ICaseWorkflowService
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
             ?? throw new InvalidOperationException("Case not found.");
 
-        if (caseData.CurrentStatus != CaseStatus.ContouringInProgress)
+        if (caseData.CurrentStatus is not (CaseStatus.ManualContouringInProgress or CaseStatus.ContouringInProgress))
         {
-            throw new InvalidOperationException("Case must be in ContouringInProgress status.");
+            throw new InvalidOperationException(
+                $"Case must be in ManualContouringInProgress (or legacy ContouringInProgress). Current status is '{caseData.CurrentStatus}'.");
         }
 
         var now = DateTimeOffset.UtcNow;
 
+        // Close the pending ManualContouring work item that was created when the
+        // case entered ManualContouringInProgress (after AutoContouringCompleted or
+        // an auto-contour failure). If for any reason it is missing, create it now
+        // and close it immediately so the audit trail still records the work.
         var manualContourItem = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.ManualContouring, ct);
+        if (manualContourItem is null)
+        {
+            await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
+            {
+                CaseId = caseData.CaseId,
+                Type = WorkItemTypes.ManualContouring,
+                AssignedRole = WorkflowRoles.Doctor,
+                PayloadJson = JsonSerializer.Serialize(new { source = "CompleteManualContouring" }),
+                CreatedAtUtc = now
+            }, ct);
+
+            await _dataAccess.SaveChangesAsync(ct);
+            manualContourItem = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.ManualContouring, ct);
+        }
+
         if (manualContourItem is not null)
         {
             _workItemLifecycleService.CompleteWorkItem(
@@ -721,13 +635,43 @@ public class CaseWorkflowService : ICaseWorkflowService
                 completedAtUtc: now);
         }
 
-        await ApplyAsync(caseData, CaseStatus.ContoursReady, new TransitionExecutionContext
+        if (caseData.CurrentStatus is CaseStatus.ManualContouringInProgress)
         {
-            TriggerName = "ManualContourCompleted",
-            TriggerType = WorkflowTriggerType.User,
-            TriggeredBy = WorkflowRoles.Doctor,
-            ActorRoles = [WorkflowRoles.Doctor]
+            await ApplyAsync(caseData, CaseStatus.ManualContouringCompleted, new TransitionExecutionContext
+            {
+                TriggerName = "CompleteManualContouring",
+                TriggerType = WorkflowTriggerType.User,
+                TriggeredBy = WorkflowRoles.Doctor,
+                ActorRoles = [WorkflowRoles.Doctor]
+            }, ct);
+
+            await ApplyAsync(caseData, CaseStatus.ContoursReady, new TransitionExecutionContext
+            {
+                TriggerName = "PromoteContoursReady",
+                TriggerType = WorkflowTriggerType.System,
+                TriggeredBy = WorkflowRoles.System
+            }, ct);
+        }
+        else
+        {
+            // Legacy flow: ContouringInProgress → ContoursReady
+            await ApplyAsync(caseData, CaseStatus.ContoursReady, new TransitionExecutionContext
+            {
+                TriggerName = "ContoursReady",
+                TriggerType = WorkflowTriggerType.System,
+                TriggeredBy = WorkflowRoles.System
+            }, ct);
+        }
+
+        // Review/rework loop has been removed: auto-promote directly to PlanningPending.
+        await ApplyAsync(caseData, CaseStatus.PlanningPending, new TransitionExecutionContext
+        {
+            TriggerName = "PromotePlanningPending",
+            TriggerType = WorkflowTriggerType.System,
+            TriggeredBy = WorkflowRoles.System
         }, ct);
+
+        await EnsurePlanningDispatchWorkItemAsync(caseData, ct);
 
         await _dataAccess.SaveChangesAsync(ct);
     }
@@ -871,6 +815,34 @@ public class CaseWorkflowService : ICaseWorkflowService
             AssignedRole = policy.ManualFallback.WorkItemRole,
             PayloadJson = JsonSerializer.Serialize(new { reason }),
             CreatedAtUtc = DateTimeOffset.UtcNow
+        }, ct);
+    }
+
+    private async Task EnsureManualContouringWorkItemAsync(
+        CaseData caseData,
+        S1ContouringStrategy strategy,
+        DateTimeOffset now,
+        string source,
+        CancellationToken ct)
+    {
+        // Idempotent: if an open ManualContouring item already exists, do nothing.
+        var existing = await _dataAccess.GetOpenWorkItemAsync(caseData.CaseId, WorkItemTypes.ManualContouring, ct);
+        if (existing is not null)
+        {
+            return;
+        }
+
+        var role = string.IsNullOrWhiteSpace(strategy.Fallback.ManualWorkItemRole)
+            ? WorkflowRoles.Doctor
+            : strategy.Fallback.ManualWorkItemRole;
+
+        await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest
+        {
+            CaseId = caseData.CaseId,
+            Type = WorkItemTypes.ManualContouring,
+            AssignedRole = role,
+            PayloadJson = JsonSerializer.Serialize(new { source }),
+            CreatedAtUtc = now
         }, ct);
     }
 
