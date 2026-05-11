@@ -1,5 +1,9 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -7,6 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Tokens;
 using Wfmgr.Application.Workflows.V1;
 using Wfmgr.Application.Workflows.V1.Config;
 using Wfmgr.Infrastructure.Persistence;
@@ -20,9 +25,10 @@ public class WorkflowConfigApiTests
     public async Task GetSlotCodes_ReturnsKnownSlots()
     {
         using var factory = new TestApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient("admin");
 
         var response = await client.GetAsync("/api/workflow-config/slot-codes");
+        await PrintResponseForDebugAsync(response);
         var payload = await response.Content.ReadFromJsonAsync<List<WorkflowSlotCodeDto>>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -35,7 +41,7 @@ public class WorkflowConfigApiTests
     public async Task ValidateRule_WithInvalidSlotCode_ReturnsInvalid()
     {
         using var factory = new TestApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient("admin");
 
         var request = new ValidateWorkflowRuleRequest(
             SlotCode: "NOT_A_SLOT",
@@ -58,7 +64,7 @@ public class WorkflowConfigApiTests
     public async Task ValidateRule_WithInvalidConfigJson_ReturnsInvalid()
     {
         using var factory = new TestApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient("admin");
 
         var request = new ValidateWorkflowRuleRequest(
             SlotCode: WorkflowSlotCodes.S1ContouringStrategy,
@@ -81,7 +87,7 @@ public class WorkflowConfigApiTests
     public async Task CreateAndUpdateRule_HappyPath_ReturnsOk()
     {
         using var factory = new TestApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient("admin");
 
         var profile = await CreateProfileAsync(client, "Happy path profile");
 
@@ -125,7 +131,7 @@ public class WorkflowConfigApiTests
     public async Task UpdateRule_WithStaleExpectedHash_ReturnsConflict()
     {
         using var factory = new TestApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient("admin");
 
         var profile = await CreateProfileAsync(client, "Conflict profile");
         var createdRule = await CreateRuleAsync(client, profile.Id);
@@ -166,7 +172,7 @@ public class WorkflowConfigApiTests
     public async Task EffectivePreview_ReturnsExplainabilitySections()
     {
         using var factory = new TestApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient("admin");
 
         var profile = await CreateProfileAsync(client, "Explainability profile", "H100", "S200", null);
         await CreateRuleAsync(client, profile.Id);
@@ -180,6 +186,38 @@ public class WorkflowConfigApiTests
         Assert.NotNull(payload.ResolvedSlots);
         Assert.NotNull(payload.UnmatchedSlots);
         Assert.NotNull(payload.EvaluatedProfiles);
+    }
+
+    [Fact]
+    public async Task UnauthenticatedRequest_ReturnsUnauthorized()
+    {
+        using var factory = new TestApiFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/workflow-config/slot-codes");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task NonAdminUser_ReturnsForbidden()
+    {
+        using var factory = new TestApiFactory();
+        using var client = factory.CreateAuthenticatedClient("SimTech");
+
+        var response = await client.GetAsync("/api/workflow-config/slot-codes");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    private static async Task PrintResponseForDebugAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+        {
+            await Console.Out.WriteLineAsync($"=== FAILED: {(int)response.StatusCode} {response.StatusCode} ===");
+            await Console.Out.WriteLineAsync(body.Length > 500 ? body[..500] : body);
+        }
     }
 
     private static async Task<WorkflowProfileDto> CreateProfileAsync(
@@ -199,6 +237,10 @@ public class WorkflowConfigApiTests
             ChangeReason: "integration-test");
 
         var response = await client.PostAsJsonAsync("/api/workflow-config/profiles", request);
+        if (!response.IsSuccessStatusCode)
+        {
+            await PrintResponseForDebugAsync(response);
+        }
         response.EnsureSuccessStatusCode();
         var profile = await response.Content.ReadFromJsonAsync<WorkflowProfileDto>();
         return profile!;
@@ -229,10 +271,56 @@ public class WorkflowConfigApiTests
     {
         private readonly string _dbName = $"wfmgr-tests-{Guid.NewGuid():N}";
         private readonly InMemoryDatabaseRoot _dbRoot = new();
+        private static readonly string TestSecret = "wfmgr-test-signing-key-at-least-32-chars!!";
+        private static readonly SymmetricSecurityKey TestSigningKey = new(Encoding.UTF8.GetBytes(TestSecret));
+
+        public HttpClient CreateAuthenticatedClient(string role = "Admin")
+        {
+            var token = GenerateToken(role);
+            var client = CreateClient();
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", token);
+            return client;
+        }
+
+        private static string GenerateToken(string role)
+        {
+            var claims = new List<Claim>
+            {
+                new(JwtRegisteredClaimNames.Sub, "test-runner"),
+                new(JwtRegisteredClaimNames.Name, "Test Runner"),
+                new(ClaimTypes.Role, role),
+            };
+
+            if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase))
+            {
+                claims.Add(new("permission", "workflow-config.edit"));
+            }
+
+            var credentials = new SigningCredentials(TestSigningKey, SecurityAlgorithms.HmacSha256);
+
+            var token = new JwtSecurityToken(
+                issuer: "wfmgr-dev",
+                audience: "wfmgr-api",
+                claims: claims,
+                expires: DateTime.UtcNow.AddHours(1),
+                signingCredentials: credentials);
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
+            builder.UseSetting("Authentication:Jwt:Secret", TestSecret);
+            builder.UseSetting("Authentication:Jwt:Issuer", "wfmgr-dev");
+            builder.UseSetting("Authentication:Jwt:Audience", "wfmgr-api");
+
+            // Set JWT config via builder.UseSetting — these take highest priority
+            // and override appsettings.json / appsettings.Development.json values.
+            builder.UseSetting("Authentication:Jwt:Secret", TestSecret);
+            builder.UseSetting("Authentication:Jwt:Issuer", "wfmgr-dev");
+            builder.UseSetting("Authentication:Jwt:Audience", "wfmgr-api");
 
             builder.ConfigureServices(services =>
             {

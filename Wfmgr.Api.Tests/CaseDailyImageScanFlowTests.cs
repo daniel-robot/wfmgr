@@ -1,5 +1,9 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -7,6 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Tokens;
 using Wfmgr.Application.Workflows.V1;
 using Wfmgr.Application.Workflows.V1.Dtos;
 using Wfmgr.Domain.Enums;
@@ -28,7 +33,7 @@ public class CaseDailyImageScanFlowTests
     public async Task CreateCase_AutoCreatesDailyImageScanWorkItem_AndAdvancesToSimInProgress()
     {
         using var factory = new TestApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient();
 
         var caseId = await CreateCaseAsync(client);
 
@@ -47,7 +52,7 @@ public class CaseDailyImageScanFlowTests
     public async Task CompleteDailyImageScan_AdvancesCaseToSimCompleted_AndClosesWorkItem()
     {
         using var factory = new TestApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient();
 
         var caseId = await CreateCaseAsync(client);
 
@@ -69,7 +74,7 @@ public class CaseDailyImageScanFlowTests
     public async Task CompleteDailyImageScan_WhenAlreadyCompleted_IsIdempotent()
     {
         using var factory = new TestApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient();
 
         var caseId = await CreateCaseAsync(client);
 
@@ -91,7 +96,7 @@ public class CaseDailyImageScanFlowTests
     public async Task CompleteDailyImageScan_WhenCaseMissing_Returns404()
     {
         using var factory = new TestApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient();
 
         var response = await client.PostAsJsonAsync(
             $"/api/cases/{Guid.NewGuid()}/actions/complete-daily-image-scan",
@@ -125,10 +130,46 @@ public class CaseDailyImageScanFlowTests
     {
         private readonly string _dbName = $"wfmgr-tests-{Guid.NewGuid():N}";
         private readonly InMemoryDatabaseRoot _dbRoot = new();
+        private static readonly string TestSecret = "wfmgr-test-signing-key-at-least-32-chars!!";
+        private static readonly SymmetricSecurityKey TestSigningKey = new(Encoding.UTF8.GetBytes(TestSecret));
+
+        public HttpClient CreateAuthenticatedClient()
+        {
+            var token = GenerateToken();
+            var client = CreateClient();
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", token);
+            return client;
+        }
+
+        private static string GenerateToken()
+        {
+            var claims = new List<Claim>
+            {
+                new(JwtRegisteredClaimNames.Sub, "test-runner"),
+                new(JwtRegisteredClaimNames.Name, "Test Runner"),
+                new(ClaimTypes.Role, "SimTech"),
+            };
+
+            var credentials = new SigningCredentials(TestSigningKey, SecurityAlgorithms.HmacSha256);
+
+            var token = new JwtSecurityToken(
+                issuer: "wfmgr-dev",
+                audience: "wfmgr-api",
+                claims: claims,
+                expires: DateTime.UtcNow.AddHours(1),
+                signingCredentials: credentials);
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
+
+            builder.UseSetting("Authentication:Jwt:Secret", TestSecret);
+            builder.UseSetting("Authentication:Jwt:Issuer", "wfmgr-dev");
+            builder.UseSetting("Authentication:Jwt:Audience", "wfmgr-api");
 
             builder.ConfigureServices(services =>
             {

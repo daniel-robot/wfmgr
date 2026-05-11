@@ -6,6 +6,7 @@ namespace Wfmgr.Api.Controllers;
 
 [ApiController]
 [Route("api/integration/pvmed")]
+// TODO: Add API key or mTLS authentication for external system callbacks before production.
 public class PvMedIntegrationController : ControllerBase
 {
     private readonly ICaseWorkflowService _workflowService;

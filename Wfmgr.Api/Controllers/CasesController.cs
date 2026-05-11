@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Wfmgr.Api.Auth;
 using Wfmgr.Application.Workflows.V1;
 using Wfmgr.Application.Workflows.V1.Dtos;
 
@@ -6,6 +8,7 @@ namespace Wfmgr.Api.Controllers;
 
 [ApiController]
 [Route("api/cases")]
+[Authorize]
 public class CasesController : ControllerBase
 {
     private readonly ICaseWorkflowService _workflowService;
@@ -113,7 +116,8 @@ public class CasesController : ControllerBase
     {
         try
         {
-            await _workflowService.CompleteDailyImageScanAsync(caseId, request?.TriggeredBy, ct);
+            var actor = ActorInfo.FromPrincipal(User);
+            await _workflowService.CompleteDailyImageScanAsync(caseId, request?.TriggeredBy, ct, actor.Roles);
             return NoContent();
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
@@ -136,35 +140,40 @@ public class CasesController : ControllerBase
     [HttpPost("{caseId:guid}/actions/complete-manual-contouring")]
     public async Task<IActionResult> CompleteManualContouring(Guid caseId, CancellationToken ct)
     {
-        await _workflowService.CompleteManualContouringAsync(caseId, ct);
+        var actor = ActorInfo.FromPrincipal(User);
+        await _workflowService.CompleteManualContouringAsync(caseId, ct, actor.Roles);
         return NoContent();
     }
 
     [HttpPost("{caseId:guid}/actions/reject-plan-review")]
     public async Task<IActionResult> RejectPlanReview(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
     {
-        await _workflowService.RejectPlanReviewAsync(caseId, request.Reason ?? "Manual rejection", request.TriggeredBy, ct);
+        var actor = ActorInfo.FromPrincipal(User);
+        await _workflowService.RejectPlanReviewAsync(caseId, request.Reason ?? "Manual rejection", request.TriggeredBy, ct, actor.Roles);
         return NoContent();
     }
 
     [HttpPost("{caseId:guid}/actions/reject-plan-rereview")]
     public async Task<IActionResult> RejectPlanReReview(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
     {
-        await _workflowService.RejectPlanReReviewAsync(caseId, request.Reason ?? "Manual rejection", request.TriggeredBy, ct);
+        var actor = ActorInfo.FromPrincipal(User);
+        await _workflowService.RejectPlanReReviewAsync(caseId, request.Reason ?? "Manual rejection", request.TriggeredBy, ct, actor.Roles);
         return NoContent();
     }
 
     [HttpPost("{caseId:guid}/actions/fail-qa")]
     public async Task<IActionResult> FailQa(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
     {
-        await _workflowService.FailQaAsync(caseId, request.Reason ?? "Manual failure", request.TriggeredBy, ct);
+        var actor = ActorInfo.FromPrincipal(User);
+        await _workflowService.FailQaAsync(caseId, request.Reason ?? "Manual failure", request.TriggeredBy, ct, actor.Roles);
         return NoContent();
     }
 
     [HttpPost("{caseId:guid}/actions/cancel")]
     public async Task<IActionResult> CancelCase(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
     {
-        await _workflowService.CancelCaseAsync(caseId, request.Reason ?? "Manual cancellation", request.TriggeredBy, ct);
+        var actor = ActorInfo.FromPrincipal(User);
+        await _workflowService.CancelCaseAsync(caseId, request.Reason ?? "Manual cancellation", request.TriggeredBy, ct, actor.Roles);
         return NoContent();
     }
 }

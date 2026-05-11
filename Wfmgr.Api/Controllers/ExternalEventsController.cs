@@ -6,6 +6,7 @@ namespace Wfmgr.Api.Controllers;
 
 [ApiController]
 [Route("api/integration/events")]
+// TODO: Add API key or mTLS authentication for external system callbacks before production.
 public class ExternalEventsController : ControllerBase
 {
     private readonly IExternalEventDispatcher _dispatcher;

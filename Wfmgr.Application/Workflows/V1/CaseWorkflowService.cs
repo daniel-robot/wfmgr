@@ -127,7 +127,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         return caseId;
     }
 
-    public async Task CompleteDailyImageScanAsync(Guid caseId, string? completedBy, CancellationToken ct)
+    public async Task CompleteDailyImageScanAsync(Guid caseId, string? completedBy, CancellationToken ct, IReadOnlyCollection<string>? actorRoles = null)
     {
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
             ?? throw new InvalidOperationException("Case not found.");
@@ -153,12 +153,10 @@ public class CaseWorkflowService : ICaseWorkflowService
 
         await ApplyAsync(caseData, CaseStatus.SimCompleted, new TransitionExecutionContext
         {
-            // TODO RBAC: confirm caller actually holds the SimTech role once auth/authz
-            // is wired. For now we trust the controller-supplied identity.
             TriggerName = "CompleteDailyImageScan",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = actor,
-            ActorRoles = [WorkflowRoles.SimTech]
+            ActorRoles = actorRoles ?? [WorkflowRoles.SimTech]
         }, ct);
 
         await _dataAccess.SaveChangesAsync(ct);
@@ -408,7 +406,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         await _dataAccess.SaveChangesAsync(ct);
     }
 
-    public async Task RejectPlanReviewAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct)
+    public async Task RejectPlanReviewAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct, IReadOnlyCollection<string>? actorRoles = null)
     {
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
             ?? throw new InvalidOperationException("Case not found.");
@@ -423,7 +421,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "RequestPlanChanges",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = triggeredBy,
-            ActorRoles = [WorkflowRoles.Physician],
+            ActorRoles = actorRoles ?? [WorkflowRoles.Physician],
             Reason = reason,
             Metadata = new { caseId, reason }
         }, ct);
@@ -440,7 +438,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         await _dataAccess.SaveChangesAsync(ct);
     }
 
-    public async Task RejectPlanReReviewAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct)
+    public async Task RejectPlanReReviewAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct, IReadOnlyCollection<string>? actorRoles = null)
     {
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
             ?? throw new InvalidOperationException("Case not found.");
@@ -488,7 +486,7 @@ public class CaseWorkflowService : ICaseWorkflowService
     }
 
 
-    public async Task FailQaAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct)
+    public async Task FailQaAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct, IReadOnlyCollection<string>? actorRoles = null)
     {
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
             ?? throw new InvalidOperationException("Case not found.");
@@ -515,7 +513,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "FailQa",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = triggeredBy,
-            ActorRoles = [WorkflowRoles.Physicist],
+            ActorRoles = actorRoles ?? [WorkflowRoles.Physicist],
             Reason = reason,
             Metadata = new { caseId, reason }
         }, ct);
@@ -532,7 +530,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         await _dataAccess.SaveChangesAsync(ct);
     }
 
-    public async Task CancelCaseAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct)
+    public async Task CancelCaseAsync(Guid caseId, string reason, string triggeredBy, CancellationToken ct, IReadOnlyCollection<string>? actorRoles = null)
     {
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
             ?? throw new InvalidOperationException("Case not found.");
@@ -553,6 +551,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "CancelCase",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = triggeredBy,
+            ActorRoles = actorRoles ?? [WorkflowRoles.System],
             Reason = reason,
             Metadata = new
             {
@@ -593,7 +592,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         await _dataAccess.SaveChangesAsync(ct);
     }
 
-    public async Task CompleteManualContouringAsync(Guid caseId, CancellationToken ct)
+    public async Task CompleteManualContouringAsync(Guid caseId, CancellationToken ct, IReadOnlyCollection<string>? actorRoles = null)
     {
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
             ?? throw new InvalidOperationException("Case not found.");
@@ -642,7 +641,7 @@ public class CaseWorkflowService : ICaseWorkflowService
                 TriggerName = "CompleteManualContouring",
                 TriggerType = WorkflowTriggerType.User,
                 TriggeredBy = WorkflowRoles.Doctor,
-                ActorRoles = [WorkflowRoles.Doctor]
+                ActorRoles = actorRoles ?? [WorkflowRoles.Doctor]
             }, ct);
 
             await ApplyAsync(caseData, CaseStatus.ContoursReady, new TransitionExecutionContext

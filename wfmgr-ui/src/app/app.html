@@ -1,8 +1,29 @@
 <div class="app-shell">
   <header class="topbar">
-    <div class="title">wfmgr-ui</div>
-    <div class="subtitle">Radiotherapy Workflow Testing Console</div>
+    <div class="topbar-left">
+      <div class="title">wfmgr-ui</div>
+      <div class="subtitle">Radiotherapy Workflow Testing Console</div>
+    </div>
+    <div class="topbar-right">
+      @if (isAuthenticated() && currentUser(); as user) {
+        <span class="user-info">
+          {{ user.displayName }}
+          <span class="user-role-badge">{{ user.role }}</span>
+        </span>
+        <button class="btn-logout" (click)="logout()">Logout</button>
+      } @else {
+        <a routerLink="/login" class="btn-login">Sign In</a>
+      }
+    </div>
   </header>
+
+  @if (currentUser(); as user) {
+    @if (user.role !== 'Admin') {
+      <div class="rbac-warning">
+        ⚠ Workflow configuration is an administrative feature. RBAC protection must be enabled before production use.
+      </div>
+    }
+  }
 
   <nav class="nav">
     <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
