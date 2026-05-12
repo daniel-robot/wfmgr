@@ -409,12 +409,11 @@ CROSS JOIN (
         ),
         (
                 '30000000-0000-0000-0000-000000000006'::uuid,
-                'S6_QUEUE_AND_CANCEL_POLICY',
+                'S6_CANCEL_POLICY',
                 1,
                 NULL,
                 $$
                 {
-                    "queueMode": "MsqDriven",
                     "allowCancel": true,
                     "cancelAllowedBeforeStatus": "Treating",
                     "requireCancelReason": true,
@@ -586,12 +585,11 @@ CROSS JOIN (
         ),
         (
                 '30000000-0000-0000-0000-000000000106'::uuid,
-                'S6_QUEUE_AND_CANCEL_POLICY',
+                'S6_CANCEL_POLICY',
                 1,
                 NULL,
                 $$
                 {
-                    "queueMode": "MsqDriven",
                     "allowCancel": true,
                     "cancelAllowedBeforeStatus": "Treating",
                     "requireCancelReason": true,
@@ -667,7 +665,7 @@ BEGIN
                 ('S3_PLAN_DISPATCH'),
                 ('S4_PLAN_REREVIEW_POLICY'),
                 ('S5_PLAN_DOUBLE_CHECK'),
-                ('S6_QUEUE_AND_CANCEL_POLICY'),
+                ('S6_CANCEL_POLICY'),
                 ('S7_TREATMENT_COMPLETION_POLICY'),
                 ('S8_EXCEPTION_HANDLING_POLICY')
         ) AS s("SlotCode")
@@ -699,7 +697,7 @@ BEGIN
                 ('S3_PLAN_DISPATCH'),
                 ('S4_PLAN_REREVIEW_POLICY'),
                 ('S5_PLAN_DOUBLE_CHECK'),
-                ('S6_QUEUE_AND_CANCEL_POLICY'),
+                ('S6_CANCEL_POLICY'),
                 ('S7_TREATMENT_COMPLETION_POLICY'),
                 ('S8_EXCEPTION_HANDLING_POLICY')
         ) AS s("SlotCode")

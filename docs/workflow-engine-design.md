@@ -327,7 +327,7 @@ Each configurable policy is represented by a stable slot code constant in `Workf
 | S3 | `S3_PLAN_DISPATCH` | Planning assignment mode and escalation |
 | S4 | `S4_PLAN_REREVIEW_POLICY` | Optional re-review trigger and reviewer role |
 | S5 | `S5_PLAN_DOUBLE_CHECK` | Optional independent double-check policy |
-| S6 | `S6_QUEUE_AND_CANCEL_POLICY` | Queue mode and cancellation constraints |
+| S6 | `S6_CANCEL_POLICY` | Cancellation constraints and fallback behavior |
 | S7 | `S7_TREATMENT_COMPLETION_POLICY` | Completion mode and mismatch handling |
 | S8 | `S8_EXCEPTION_HANDLING_POLICY` | Retry strategy, manual fallback, notifications |
 

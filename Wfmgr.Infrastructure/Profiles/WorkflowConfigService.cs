@@ -301,7 +301,7 @@ public class WorkflowConfigService : IWorkflowConfigService
             new WorkflowSlotCodeDto(WorkflowSlotCodes.S3PlanDispatch, "S3 Plan Dispatch", "Assignment mode and escalation policy for planning."),
             new WorkflowSlotCodeDto(WorkflowSlotCodes.S4PlanReReviewPolicy, "S4 Plan Re-review Policy", "Optional re-review trigger and reviewer role."),
             new WorkflowSlotCodeDto(WorkflowSlotCodes.S5PlanDoubleCheck, "S5 Plan Double Check", "Optional independent double-check policy."),
-            new WorkflowSlotCodeDto(WorkflowSlotCodes.S6QueueAndCancelPolicy, "S6 Queue and Cancel Policy", "Queue mode and cancellation constraints."),
+            new WorkflowSlotCodeDto(WorkflowSlotCodes.S6CancelPolicy, "S6 Cancel Policy", "Cancellation constraints and fallback behavior."),
             new WorkflowSlotCodeDto(WorkflowSlotCodes.S7TreatmentCompletionPolicy, "S7 Treatment Completion Policy", "Completion mode and mismatch handling."),
             new WorkflowSlotCodeDto(WorkflowSlotCodes.S8ExceptionHandlingPolicy, "S8 Exception Handling Policy", "Retry strategy, fallback work item, and notifications."),
         };
@@ -495,7 +495,7 @@ public class WorkflowConfigService : IWorkflowConfigService
                 WorkflowSlotCodes.S3PlanDispatch => JsonSerializer.Deserialize<S3PlanDispatchPolicy>(json, JsonOptions),
                 WorkflowSlotCodes.S4PlanReReviewPolicy => JsonSerializer.Deserialize<S4PlanReReviewPolicy>(json, JsonOptions),
                 WorkflowSlotCodes.S5PlanDoubleCheck => JsonSerializer.Deserialize<S5PlanDoubleCheckPolicy>(json, JsonOptions),
-                WorkflowSlotCodes.S6QueueAndCancelPolicy => JsonSerializer.Deserialize<S6QueueAndCancelPolicy>(json, JsonOptions),
+                WorkflowSlotCodes.S6CancelPolicy => JsonSerializer.Deserialize<S6CancelPolicy>(json, JsonOptions),
                 WorkflowSlotCodes.S7TreatmentCompletionPolicy => JsonSerializer.Deserialize<S7TreatmentCompletionPolicy>(json, JsonOptions),
                 WorkflowSlotCodes.S8ExceptionHandlingPolicy => JsonSerializer.Deserialize<S8ExceptionHandlingPolicy>(json, JsonOptions),
                 _ => null
@@ -533,7 +533,7 @@ public class WorkflowConfigService : IWorkflowConfigService
                 WorkflowSlotCodes.S3PlanDispatch,
                 WorkflowSlotCodes.S4PlanReReviewPolicy,
                 WorkflowSlotCodes.S5PlanDoubleCheck,
-                WorkflowSlotCodes.S6QueueAndCancelPolicy,
+                WorkflowSlotCodes.S6CancelPolicy,
                 WorkflowSlotCodes.S7TreatmentCompletionPolicy,
                 WorkflowSlotCodes.S8ExceptionHandlingPolicy,
             },

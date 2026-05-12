@@ -79,7 +79,7 @@ public class WorkflowProfileResolver : IWorkflowProfileResolver
             () => new S5PlanDoubleCheckPolicy(),
             ct);
 
-    public async Task<S6QueueAndCancelPolicy> ResolveS6QueueAndCancelPolicyAsync(
+    public async Task<S6CancelPolicy> ResolveS6CancelPolicyAsync(
         string hospitalId,
         string siteId,
         string departmentId,
@@ -88,8 +88,8 @@ public class WorkflowProfileResolver : IWorkflowProfileResolver
             hospitalId,
             siteId,
             departmentId,
-            WorkflowSlotCodes.S6QueueAndCancelPolicy,
-            () => new S6QueueAndCancelPolicy(),
+            WorkflowSlotCodes.S6CancelPolicy,
+            () => new S6CancelPolicy(),
             ct);
 
     public async Task<S7TreatmentCompletionPolicy> ResolveS7TreatmentCompletionPolicyAsync(

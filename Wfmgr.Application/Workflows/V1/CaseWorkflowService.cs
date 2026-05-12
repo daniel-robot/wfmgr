@@ -535,7 +535,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         var caseData = await _dataAccess.GetCaseByIdAsync(caseId, ct)
             ?? throw new InvalidOperationException("Case not found.");
 
-        var policy = await _profileResolver.ResolveS6QueueAndCancelPolicyAsync(
+        var policy = await _profileResolver.ResolveS6CancelPolicyAsync(
             caseData.HospitalId,
             caseData.SiteId,
             caseData.DepartmentId,
@@ -556,7 +556,6 @@ public class CaseWorkflowService : ICaseWorkflowService
             Metadata = new
             {
                 reason,
-                policy.QueueMode,
                 policy.CancelAllowedBeforeStatus,
                 policy.OnCancel.FinalStatus
             }
@@ -583,7 +582,6 @@ public class CaseWorkflowService : ICaseWorkflowService
             {
                 triggeredBy,
                 reason,
-                policy.QueueMode,
                 policy.CancelAllowedBeforeStatus,
                 policy.OnCancel.FinalStatus
             }, ct);

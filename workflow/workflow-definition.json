@@ -649,7 +649,7 @@
       "successActions": ["StartScheduleWatch"],
       "failureActions": ["RetryOrManual"],
       "workItemsToCreate": ["ScheduleSync"],
-      "configSlot": "S6QueueAndCancelPolicy"
+      "configSlot": "S6CancelPolicy"
     },
     {
       "code": "TRT-002",
@@ -664,7 +664,7 @@
       "successActions": ["SaveScheduleRef"],
       "failureActions": ["RetryOrManualSync"],
       "workItemsToCreate": ["TreatmentOrder"],
-      "configSlot": "S6QueueAndCancelPolicy"
+      "configSlot": "S6CancelPolicy"
     },
     {
       "code": "TRT-003",
@@ -709,7 +709,7 @@
       "successActions": ["SaveQueueRef"],
       "failureActions": ["RetryOrLocalFallback"],
       "workItemsToCreate": ["QueueCall"],
-      "configSlot": "S6QueueAndCancelPolicy"
+      "configSlot": "S6CancelPolicy"
     },
     {
       "code": "TRT-006",

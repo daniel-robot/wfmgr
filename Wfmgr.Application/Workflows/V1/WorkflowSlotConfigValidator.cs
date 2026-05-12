@@ -13,7 +13,7 @@ public static class WorkflowSlotConfigValidator
             WorkflowSlotCodes.S3PlanDispatch when config is S3PlanDispatchPolicy s3 => ValidateS3(s3),
             WorkflowSlotCodes.S4PlanReReviewPolicy when config is S4PlanReReviewPolicy s4 => ValidateS4(s4),
             WorkflowSlotCodes.S5PlanDoubleCheck when config is S5PlanDoubleCheckPolicy s5 => ValidateS5(s5),
-            WorkflowSlotCodes.S6QueueAndCancelPolicy when config is S6QueueAndCancelPolicy s6 => ValidateS6(s6),
+            WorkflowSlotCodes.S6CancelPolicy when config is S6CancelPolicy s6 => ValidateS6(s6),
             WorkflowSlotCodes.S7TreatmentCompletionPolicy when config is S7TreatmentCompletionPolicy s7 => ValidateS7(s7),
             WorkflowSlotCodes.S8ExceptionHandlingPolicy when config is S8ExceptionHandlingPolicy s8 => ValidateS8(s8),
             _ => ["Unsupported slot code or config type."]
@@ -89,10 +89,9 @@ public static class WorkflowSlotConfigValidator
         return errors;
     }
 
-    private static IReadOnlyList<string> ValidateS6(S6QueueAndCancelPolicy config)
+    private static IReadOnlyList<string> ValidateS6(S6CancelPolicy config)
     {
         var errors = new List<string>();
-        ValidateOneOf(config.QueueMode, ["MsqDriven", "ManualQueue"], "queueMode", errors);
         ValidateNotEmpty(config.CancelAllowedBeforeStatus, "cancelAllowedBeforeStatus", errors);
         if (!Enum.TryParse<CaseStatus>(config.CancelAllowedBeforeStatus, ignoreCase: true, out _))
         {

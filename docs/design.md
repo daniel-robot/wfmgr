@@ -390,7 +390,7 @@ WorkflowProfile 按三层解析：
 * S3_PLAN_DISPATCH
 * S4_PLAN_REREVIEW_POLICY
 * S5_PLAN_DOUBLE_CHECK
-* S6_QUEUE_AND_CANCEL_POLICY
+* S6_CANCEL_POLICY
 * S7_TREATMENT_COMPLETION_POLICY
 * S8_EXCEPTION_HANDLING_POLICY
 
@@ -502,13 +502,12 @@ WorkflowProfile 按三层解析：
 }
 ```
 
-#### S6_QUEUE_AND_CANCEL_POLICY（排队与取消策略）
+#### S6_CANCEL_POLICY（取消策略）
 
-触发时机：进入排队、叫号、取消时，控制可取消边界与取消后动作。
+触发时机：取消操作时，控制可取消边界与取消后动作。
 
 ```json
 {
-  "queueMode": "MsqDriven",
   "allowCancel": true,
   "cancelAllowedBeforeStatus": "Treating",
   "requireCancelReason": true,
@@ -639,11 +638,10 @@ WorkflowProfile 按三层解析：
 | onFailBackTo | string(enum) | 否 | PlanQAInProgress | 复核失败后回退状态 |
 | maxRetry | int | 否 | 1 | 最大重试次数 |
 
-#### S6_QUEUE_AND_CANCEL_POLICY
+#### S6_CANCEL_POLICY
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |---|---|---|---|---|
-| queueMode | string(enum) | 是 | MsqDriven | 排队模式：MsqDriven/ManualQueue |
 | allowCancel | bool | 否 | true | 是否允许取消 |
 | cancelAllowedBeforeStatus | string(enum) | 否 | Treating | 仅允许在该状态之前取消 |
 | requireCancelReason | bool | 否 | true | 取消是否必须填写原因 |

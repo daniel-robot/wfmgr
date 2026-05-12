@@ -62,7 +62,7 @@ package "Phase 6-7: Re-review and QA" {
 }
 
 package "Phase 8-9: Scheduling, Treatment, Completion" {
-  rectangle "S6\nQueue and Cancel Policy\nCode: S6_QUEUE_AND_CANCEL_POLICY\nPurpose: queue mode and cancellation constraints\nAffects: queue handling, cancel window, cancel final status\nIf disabled or unmatched: fallback S6 defaults apply\nDefault effect: QueueMode=MsqDriven, AllowCancel=true,\nCancelAllowedBeforeStatus=Treating" as S6
+  rectangle "S6\nCancel Policy\nCode: S6_CANCEL_POLICY\nPurpose: cancellation constraints and fallback behavior\nAffects: cancel window, cancel reason requirement, final status\nIf disabled or unmatched: fallback S6 defaults apply\nDefault effect: AllowCancel=true,\nCancelAllowedBeforeStatus=Treating" as S6
 
   rectangle "S7\nTreatment Completion Policy\nCode: S7_TREATMENT_COMPLETION_POLICY\nPurpose: completion mode and mismatch handling\nAffects: how completion is decided and mismatch escalation\nIf disabled or unmatched: fallback S7 defaults apply\nDefault effect: ByCourseCompletedEvent, mismatch creates\nexception work item for Therapist" as S7
 
@@ -74,7 +74,7 @@ Engine --> S2 : contour review decisions
 Engine --> S3 : planning dispatch decisions
 Engine --> S4 : re-review decisions
 Engine --> S5 : double-check decisions
-Engine --> S6 : queue and cancel decisions
+Engine --> S6 : cancel decisions
 Engine --> S7 : treatment completion decisions
 Engine --> S8 : exception handling decisions
 

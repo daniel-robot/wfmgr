@@ -77,16 +77,15 @@ public class S5PlanDoubleCheckPolicy
     public int MaxRetry { get; set; } = 1;
 }
 
-public class S6QueueAndCancelPolicy
+public class S6CancelPolicy
 {
-    public string QueueMode { get; set; } = "MsqDriven";
     public bool AllowCancel { get; set; } = true;
     public string CancelAllowedBeforeStatus { get; set; } = "Treating";
     public bool RequireCancelReason { get; set; } = true;
-    public S6OnCancelConfig OnCancel { get; set; } = new();
+    public S6CancelConfig OnCancel { get; set; } = new();
 }
 
-public class S6OnCancelConfig
+public class S6CancelConfig
 {
     public bool CloseOpenWorkItems { get; set; } = true;
     public bool CreateAudit { get; set; } = true;
