@@ -5,7 +5,7 @@
       Manage WorkflowProfile and WorkflowRule slot configuration (S1-S8). This admin MVP edits stored profile/rule records only.
       Runtime transition and compensation catalogs remain unchanged.
     </p>
-    <p class="todo-note">Workflow configuration is an administrative feature. RBAC protection must be enabled before production use.</p>
+    <p class="todo-note">Workflow configuration is an administrative feature. Only users with the Admin role can access this page.</p>
   </header>
 
   <div *ngIf="pageError" class="alert error">{{ pageError }}</div>
