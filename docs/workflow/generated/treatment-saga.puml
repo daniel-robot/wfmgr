@@ -42,17 +42,17 @@ state Archived #D0F0D0 : ◎ terminal
 ReadyForScheduling --> SchedulingInProgress : TRT-001 StartScheduleSync [Sys]
 SchedulingInProgress --> Scheduled : TRT-002 ScheduleSynced [Ext]
 Scheduled --> OrderPending : TRT-003 PrepareTreatmentOrder [Sys]
-OrderPending --> OrderSubmitted : TRT-004 SubmitTreatmentOrder [User]\n«Doctor»
+OrderPending --> OrderSubmitted : TRT-004 SubmitTreatmentOrder [User]\n«Physician»
 OrderSubmitted --> QueuePending : TRT-005 QueueCreated [Ext]
 QueuePending --> Treating : TRT-006 TreatmentStarted [Ext]
 Treating --> Treating : TRT-007 TreatmentFractionCompleted [Ext]
 Treating --> TreatmentPaused : TRT-008 PauseTreatment [User]\n«Therapist/System»
 TreatmentPaused --> Treating : TRT-009 ResumeTreatment [User]\n«Therapist/System»
-Treating --> TreatmentInterrupted : TRT-010 InterruptTreatment [User]\n«Therapist/Doctor/System»
-TreatmentInterrupted --> Treating : TRT-011 ResumeAfterInterruption [User]\n«Doctor/Therapist»
+Treating --> TreatmentInterrupted : TRT-010 InterruptTreatment [User]\n«Therapist/Physician/System»
+TreatmentInterrupted --> Treating : TRT-011 ResumeAfterInterruption [User]\n«Physician/Therapist»
 Treating --> TreatmentCompleted : TRT-012 CompleteTreatmentCourse [Ext]
 TreatmentCompleted --> PostTreatmentReviewPending : POST-001 StartPostTreatmentReview [Sys]
-PostTreatmentReviewPending --> PostTreatmentReviewed : POST-002 SubmitPostTreatmentReview [User]\n«Doctor»
+PostTreatmentReviewPending --> PostTreatmentReviewed : POST-002 SubmitPostTreatmentReview [User]\n«Physician»
 PostTreatmentReviewed --> Archived : POST-003 ArchiveCase [Sys]\n«System/Admin»
 
 

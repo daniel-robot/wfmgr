@@ -629,23 +629,23 @@ falls back to a static default-role table covering all 23 supported work item ty
 | `ImageValidation` | `SimTech/Physicist` | — |
 | `ImageForwardToContourTool` | `System` | S1 (manual role) |
 | `AutoContourMonitor` | `System` | — |
-| `ManualContouring` | `Doctor/ThirdPartyOperator` | S1 (manual role) |
-| `ContourReview` | `Doctor` | — |
-| `ContourSecondReview` | `Doctor/Physicist` | — |
-| `ContourRework` | `Doctor/ThirdPartyOperator` | S2 (rework role) |
+| `ManualContouring` | `Physician/ThirdPartyOperator` | S1 (manual role) |
+| `ContourReview` | `Physician` | — |
+| `ContourSecondReview` | `Physician/Physicist` | — |
+| `ContourRework` | `Physician/ThirdPartyOperator` | S2 (rework role) |
 | `PlanAssignment` | `Scheduler/System` | S3 (target role) |
 | `PlanDesign` | `Dosimetrist` | S3 (target role) |
-| `PlanEvaluation` | `Physicist/Doctor` | — |
-| `PlanReReview` | `ChiefDoctor/SeniorPhysicist` | S4 (review role) |
+| `PlanEvaluation` | `Physicist/Physician` | — |
+| `PlanReReview` | `Physician/Physicist` | S4 (review role) |
 | `PrescriptionSync` | `Physicist/System` | — |
 | `PlanQA` | `Physicist/QAReviewer` | — |
-| `PlanDoubleCheck` | `SeniorPhysicist` | S5 (work item role) |
+| `PlanDoubleCheck` | `Physicist` | S5 (work item role) |
 | `ScheduleSync` | `Scheduler/System` | — |
-| `TreatmentOrder` | `Doctor` | — |
+| `TreatmentOrder` | `Physician` | — |
 | `QueueCall` | `System` | — |
 | `TreatmentMonitor` | `System` | — |
 | `TreatmentExceptionHandling` | `Admin` | — |
-| `PostTreatmentReview` | `Doctor` | — |
+| `PostTreatmentReview` | `Physician` | — |
 | `ArchiveReview` | `System/Admin` | — |
 
 #### Outbox dispatch

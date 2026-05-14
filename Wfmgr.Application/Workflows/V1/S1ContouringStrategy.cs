@@ -20,7 +20,7 @@ public class FallbackConfig
 {
     public bool OnFailureCreateManualWorkItem { get; set; } = true;
     public string ManualWorkItemType { get; set; } = "ManualContouring";
-    public string ManualWorkItemRole { get; set; } = WorkflowRoles.Doctor;
+    public string ManualWorkItemRole { get; set; } = WorkflowRoles.Physician;
 }
 
 public class S2ContourReviewPolicy
@@ -35,7 +35,7 @@ public class S2OnRejectConfig
 {
     public string TargetStatus { get; set; } = "ContourReworkRequired";
     public bool CreateReworkWorkItem { get; set; } = true;
-    public string ReworkWorkItemRole { get; set; } = WorkflowRoles.Doctor;
+    public string ReworkWorkItemRole { get; set; } = WorkflowRoles.Physician;
 }
 
 public class S3PlanDispatchPolicy
@@ -51,14 +51,14 @@ public class S3EscalationConfig
 {
     public bool Enabled { get; set; }
     public int AfterMinutes { get; set; } = 180;
-    public string EscalateToRole { get; set; } = WorkflowRoles.ChiefDoctor;
+    public string EscalateToRole { get; set; } = WorkflowRoles.Physician;
 }
 
 public class S4PlanReReviewPolicy
 {
     public bool Enabled { get; set; }
     public S4TriggerConfig Trigger { get; set; } = new();
-    public string ReviewRole { get; set; } = WorkflowRoles.SeniorPhysicist;
+    public string ReviewRole { get; set; } = WorkflowRoles.Physicist;
     public string OnRejectBackTo { get; set; } = "PlanningInProgress";
 }
 

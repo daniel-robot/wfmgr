@@ -46,9 +46,9 @@ ResolutionRules .. Resolver
 Resolver --> Engine : resolved slot config
 
 package "Phase 2-4: Imaging, Contouring, Review" {
-  rectangle "S1\nContouring Strategy\nCode: S1_CONTOURING_STRATEGY\nPurpose: auto contour provider and fallback behavior\nAffects: contour provider, auto-contour monitoring,\nauto-forward-to-Monaco, manual contour fallback\nIf disabled or unmatched: fallback S1 defaults apply\nDefault effect: AutoContourEnabled=false, Provider=PvMed,\nAutoForwardToMonaco=false, AllowManualForward=true,\nManualWorkItemRole=Doctor" as S1
+  rectangle "S1\nContouring Strategy\nCode: S1_CONTOURING_STRATEGY\nPurpose: auto contour provider and fallback behavior\nAffects: contour provider, auto-contour monitoring,\nauto-forward-to-Monaco, manual contour fallback\nIf disabled or unmatched: fallback S1 defaults apply\nDefault effect: AutoContourEnabled=false, Provider=PvMed,\nAutoForwardToMonaco=false, AllowManualForward=true,\nManualWorkItemRole=Physician" as S1
 
-  rectangle "S2\nContour Review Policy\nCode: S2_CONTOUR_REVIEW_POLICY\nPurpose: review mode, rejection behavior, timeout\nAffects: review expectations and contour rework routing\nIf disabled or unmatched: fallback S2 defaults apply\nDefault effect: single review, contour rework target\nremains enabled, Doctor handles rework" as S2
+  rectangle "S2\nContour Review Policy\nCode: S2_CONTOUR_REVIEW_POLICY\nPurpose: review mode, rejection behavior, timeout\nAffects: review expectations and contour rework routing\nIf disabled or unmatched: fallback S2 defaults apply\nDefault effect: single review, contour rework target\nremains enabled, Physician handles rework" as S2
 }
 
 package "Phase 5: Planning" {
@@ -56,7 +56,7 @@ package "Phase 5: Planning" {
 }
 
 package "Phase 6-7: Re-review and QA" {
-  rectangle "S4\nPlan Re-review Policy\nCode: S4_PLAN_REREVIEW_POLICY\nPurpose: optional re-review trigger and reviewer role\nAffects: whether re-review is enabled and who reviews\nIf disabled or unmatched: fallback S4 defaults apply\nDefault effect: Enabled=false, reviewer role SeniorPhysicist" as S4
+  rectangle "S4\nPlan Re-review Policy\nCode: S4_PLAN_REREVIEW_POLICY\nPurpose: optional re-review trigger and reviewer role\nAffects: whether re-review is enabled and who reviews\nIf disabled or unmatched: fallback S4 defaults apply\nDefault effect: Enabled=false, reviewer role Physicist" as S4
 
   rectangle "S5\nPlan Double Check\nCode: S5_PLAN_DOUBLE_CHECK\nPurpose: optional independent double-check policy\nAffects: whether double-check is enabled and who performs it\nIf disabled or unmatched: fallback S5 defaults apply\nDefault effect: Enabled=false, work item role QAReviewer" as S5
 }

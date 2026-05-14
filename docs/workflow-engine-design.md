@@ -29,7 +29,7 @@ public sealed record TransitionDefinition
     CaseStatus   ToStatus;            // target status on success
     string   TriggerName;             // human-readable trigger key
     WorkflowTriggerType TriggerType;  // User | System | ExternalEvent
-    string?  RequiredRole;            // slash-delimited, e.g. "Doctor/Admin"
+    string?  RequiredRole;            // slash-delimited, e.g. "Physician/Admin"
     string[] GateChecks;              // ordered list of gate check names
     string[] SuccessActions;          // documentary labels (executed by side-effect layer)
     string[] FailureActions;          // documentary labels

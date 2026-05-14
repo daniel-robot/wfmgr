@@ -614,7 +614,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             {
                 CaseId = caseData.CaseId,
                 Type = WorkItemTypes.ManualContouring,
-                AssignedRole = WorkflowRoles.Doctor,
+                AssignedRole = WorkflowRoles.Physician,
                 PayloadJson = JsonSerializer.Serialize(new { source = "CompleteManualContouring" }),
                 CreatedAtUtc = now
             }, ct);
@@ -627,7 +627,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         {
             _workItemLifecycleService.CompleteWorkItem(
                 manualContourItem,
-                completedBy: WorkflowRoles.Doctor,
+                completedBy: WorkflowRoles.Physician,
                 resultCode: WorkItemResultCodes.Approved,
                 completedAtUtc: now);
         }
@@ -638,8 +638,8 @@ public class CaseWorkflowService : ICaseWorkflowService
             {
                 TriggerName = "CompleteManualContouring",
                 TriggerType = WorkflowTriggerType.User,
-                TriggeredBy = WorkflowRoles.Doctor,
-                ActorRoles = actorRoles ?? [WorkflowRoles.Doctor]
+                TriggeredBy = WorkflowRoles.Physician,
+                ActorRoles = actorRoles ?? [WorkflowRoles.Physician]
             }, ct);
 
             await ApplyAsync(caseData, CaseStatus.ContoursReady, new TransitionExecutionContext
@@ -720,7 +720,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "StartContourReview",
             TriggerType = WorkflowTriggerType.System,
             TriggeredBy = WorkflowRoles.System,
-            ActorRoles = [WorkflowRoles.Doctor, WorkflowRoles.ChiefDoctor]
+            ActorRoles = [WorkflowRoles.Physician]
         }, ct);
 
         await ApplyAsync(caseData, CaseStatus.PlanningPending, new TransitionExecutionContext
@@ -728,7 +728,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "ApproveContours",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = "User",
-            ActorRoles = [WorkflowRoles.Doctor, WorkflowRoles.ChiefDoctor]
+            ActorRoles = [WorkflowRoles.Physician]
         }, ct);
 
         await EnsurePlanningDispatchWorkItemAsync(caseData, ct);
@@ -830,7 +830,7 @@ public class CaseWorkflowService : ICaseWorkflowService
         }
 
         var role = string.IsNullOrWhiteSpace(strategy.Fallback.ManualWorkItemRole)
-            ? WorkflowRoles.Doctor
+            ? WorkflowRoles.Physician
             : strategy.Fallback.ManualWorkItemRole;
 
         await _workItemLifecycleService.CreatePendingWorkItemAsync(new CreatePendingWorkItemRequest

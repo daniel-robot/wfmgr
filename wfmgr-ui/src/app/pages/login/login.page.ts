@@ -21,11 +21,9 @@ export class LoginPageComponent {
 
   readonly roleOptions: RoleOption[] = [
     { value: 'Admin', label: 'Admin (full access)' },
-    { value: 'Doctor', label: 'Doctor' },
-    { value: 'ChiefDoctor', label: 'ChiefDoctor' },
     { value: 'Physician', label: 'Physician' },
     { value: 'Physicist', label: 'Physicist' },
-    { value: 'SeniorPhysicist', label: 'SeniorPhysicist' },
+    { value: 'Physicist', label: 'Physicist' },
     { value: 'Dosimetrist', label: 'Dosimetrist' },
     { value: 'SimTech', label: 'SimTech' },
     { value: 'Scheduler', label: 'Scheduler' },

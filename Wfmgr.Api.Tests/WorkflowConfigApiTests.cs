@@ -265,7 +265,7 @@ public class WorkflowConfigApiTests
     }
 
     private const string ValidS1ConfigJson =
-        "{\"autoContourEnabled\":true,\"provider\":\"PvMed\",\"onAutoContourComplete\":{\"autoForwardToMonaco\":false,\"allowManualForward\":true},\"fallback\":{\"onFailureCreateManualWorkItem\":true,\"manualWorkItemType\":\"ManualContouring\",\"manualWorkItemRole\":\"Doctor\"}}";
+        "{\"autoContourEnabled\":true,\"provider\":\"PvMed\",\"onAutoContourComplete\":{\"autoForwardToMonaco\":false,\"allowManualForward\":true},\"fallback\":{\"onFailureCreateManualWorkItem\":true,\"manualWorkItemType\":\"ManualContouring\",\"manualWorkItemRole\":\"Physician\"}}";
 
     private sealed class TestApiFactory : WebApplicationFactory<Program>
     {

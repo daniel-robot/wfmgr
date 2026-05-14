@@ -405,7 +405,7 @@ WorkflowProfile 按三层解析：
   },
   "fallback": {
     "onFailureCreateManualWorkItem": true,
-    "manualWorkItemRole": "Doctor"
+    "manualWorkItemRole": "Physician"
   }
 }
 ```
@@ -445,7 +445,7 @@ WorkflowProfile 按三层解析：
   "fallback": {
     "onFailureCreateManualWorkItem": true,
     "manualWorkItemType": "ManualContouring",
-    "manualWorkItemRole": "Doctor"
+    "manualWorkItemRole": "Physician"
   }
 }
 ```
@@ -467,7 +467,7 @@ WorkflowProfile 按三层解析：
   "escalation": {
     "enabled": true,
     "afterMinutes": 180,
-    "escalateToRole": "ChiefDoctor"
+    "escalateToRole": "Physician"
   }
 }
 ```
@@ -483,7 +483,7 @@ WorkflowProfile 按三层解析：
     "riskLevelIn": ["High"],
     "doseDeltaPercentGte": 5
   },
-  "reviewRole": "SeniorPhysicist",
+  "reviewRole": "Physicist",
   "onRejectBackTo": "PlanningInProgress"
 }
 ```
@@ -590,7 +590,7 @@ WorkflowProfile 按三层解析：
 | fallback | object | 否 | {} | 失败兜底策略 |
 | fallback.onFailureCreateManualWorkItem | bool | 否 | true | 自动勾画失败是否创建人工任务 |
 | fallback.manualWorkItemType | string(enum) | 否 | ManualContouring | 人工兜底任务类型 |
-| fallback.manualWorkItemRole | string(enum) | 否 | Doctor | 人工兜底任务角色 |
+| fallback.manualWorkItemRole | string(enum) | 否 | Physician | 人工兜底任务角色 |
 
 #### S2_CONTOUR_REVIEW_POLICY
 
@@ -601,7 +601,7 @@ WorkflowProfile 按三层解析：
 | onReject | object | 否 | {} | 驳回回退策略 |
 | onReject.targetStatus | string(enum) | 否 | ContourReworkRequired | 驳回后的目标状态 |
 | onReject.createReworkWorkItem | bool | 否 | true | 驳回后是否创建返工任务 |
-| onReject.reworkWorkItemRole | string(enum) | 否 | Doctor | 返工任务角色 |
+| onReject.reworkWorkItemRole | string(enum) | 否 | Physician | 返工任务角色 |
 | timeoutHours | int | 否 | 24 | 审核超时小时数 |
 
 #### S3_PLAN_DISPATCH
@@ -615,7 +615,7 @@ WorkflowProfile 按三层解析：
 | escalation | object | 否 | {} | 超时升级策略 |
 | escalation.enabled | bool | 否 | false | 是否启用升级 |
 | escalation.afterMinutes | int | 否 | 180 | 多久后触发升级 |
-| escalation.escalateToRole | string(enum) | 否 | ChiefDoctor | 升级目标角色 |
+| escalation.escalateToRole | string(enum) | 否 | Physician | 升级目标角色 |
 
 #### S4_PLAN_REREVIEW_POLICY
 
@@ -625,7 +625,7 @@ WorkflowProfile 按三层解析：
 | trigger | object | 否 | {} | 触发条件 |
 | trigger.riskLevelIn | string[] | 否 | [] | 指定风险等级集合时触发 |
 | trigger.doseDeltaPercentGte | number | 否 | null | 剂量偏差大于等于阈值时触发 |
-| reviewRole | string(enum) | 否 | SeniorPhysicist | 复审角色 |
+| reviewRole | string(enum) | 否 | Physicist | 复审角色 |
 | onRejectBackTo | string(enum) | 否 | PlanningInProgress | 复审驳回后回退状态 |
 
 #### S5_PLAN_DOUBLE_CHECK
@@ -1136,12 +1136,12 @@ wfmgr-ui 用于测试和验证工作流，不是生产最终 UI。
 建议接入统一身份认证系统。
 后端按角色进行授权：
 
-* Doctor
-* ChiefDoctor
+* Physician
+* Physician
 * SimTech
 * Dosimetrist
 * Physicist
-* SeniorPhysicist
+* Physicist
 * Therapist
 * QAReviewer
 * Scheduler

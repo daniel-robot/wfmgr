@@ -39,7 +39,7 @@ public sealed class TransitionDefinition
     /// <summary>
     /// Role that the actor must hold to perform this transition.
     /// <c>null</c> means the transition is not role-gated (typically system-initiated transitions).
-    /// When multiple roles are acceptable the value is a slash-separated list (e.g. "Doctor/Admin").
+    /// When multiple roles are acceptable the value is a slash-separated list (e.g. "Physician/Admin").
     /// </summary>
     public string? RequiredRole { get; init; }
 

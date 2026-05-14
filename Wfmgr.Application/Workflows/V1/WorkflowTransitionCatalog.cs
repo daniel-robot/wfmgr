@@ -121,7 +121,7 @@ public static class WorkflowTransitionCatalog
     };
 
     /// <summary>
-    /// Doctor or admin cancels the case before treatment has started.
+    /// Physician or admin cancels the case before treatment has started.
     /// Valid from multiple pre-treatment statuses.
     /// Governed by <see cref="WorkflowSlotCodes.S8ExceptionHandlingPolicy"/>.
     /// </summary>
@@ -137,7 +137,7 @@ public static class WorkflowTransitionCatalog
         ToStatus = CaseStatus.Cancelled,
         TriggerName = "CancelCase",
         TriggerType = WorkflowTriggerType.User,
-        RequiredRole = "Doctor/Admin",
+        RequiredRole = "Physician/Admin",
         GateChecks = ["TreatmentNotStarted"],
         SuccessActions = ["SaveCancellationForm", "CloseOpenTasks"],
         FailureActions = ["RejectCancellation"],
@@ -262,7 +262,7 @@ public static class WorkflowTransitionCatalog
     };
 
     /// <summary>
-    /// Doctor / SimTech completes the manual contouring work item.
+    /// Physician / SimTech completes the manual contouring work item.
     /// </summary>
     public static readonly TransitionDefinition CON_015 = new()
     {
@@ -271,7 +271,7 @@ public static class WorkflowTransitionCatalog
         ToStatus = CaseStatus.ManualContouringCompleted,
         TriggerName = "CompleteManualContouring",
         TriggerType = WorkflowTriggerType.User,
-        RequiredRole = "Doctor/SimTech",
+        RequiredRole = "Physician/SimTech",
         SuccessActions = ["SaveContourRefs", "CloseManualContouringWorkItem"],
         FailureActions = ["StayInManualContouring"],
     };
@@ -366,7 +366,7 @@ public static class WorkflowTransitionCatalog
     };
 
     /// <summary>
-    /// Doctor or system restarts the auto-contouring job after a rework decision.
+    /// Physician or system restarts the auto-contouring job after a rework decision.
     /// Governed by <see cref="WorkflowSlotCodes.S1ContouringStrategy"/>.
     /// </summary>
     public static readonly TransitionDefinition CON_004 = new()
@@ -376,7 +376,7 @@ public static class WorkflowTransitionCatalog
         ToStatus = CaseStatus.ContouringInProgress,
         TriggerName = "RestartContouring",
         TriggerType = WorkflowTriggerType.User,
-        RequiredRole = "Doctor/System",
+        RequiredRole = "Physician/System",
         GateChecks = ["RetryAllowed"],
         SuccessActions = ["CreateOutboxRestartContouring"],
         FailureActions = ["StayInContourRework"],
@@ -385,7 +385,7 @@ public static class WorkflowTransitionCatalog
     };
 
     /// <summary>
-    /// Doctor or third-party operator submits manual contour results, bypassing auto-contouring.
+    /// Physician or third-party operator submits manual contour results, bypassing auto-contouring.
     /// Whether a second review is created depends on <see cref="WorkflowSlotCodes.S2ContourReviewPolicy"/>.
     /// </summary>
     public static readonly TransitionDefinition CON_005 = new()
@@ -395,7 +395,7 @@ public static class WorkflowTransitionCatalog
         ToStatus = CaseStatus.ContoursReady,
         TriggerName = "SubmitManualContourResult",
         TriggerType = WorkflowTriggerType.User,
-        RequiredRole = "Doctor/ThirdPartyOperator",
+        RequiredRole = "Physician/ThirdPartyOperator",
         GateChecks = ["ManualContourPayloadValid"],
         SuccessActions = ["SaveContourRefs"],
         FailureActions = ["StayInContourRework"],
@@ -426,7 +426,7 @@ public static class WorkflowTransitionCatalog
     };
 
     /// <summary>
-    /// Doctor or chief doctor approves the contours, advancing the case to planning.
+    /// Physician or physician approves the contours, advancing the case to planning.
     /// Governed by <see cref="WorkflowSlotCodes.S2ContourReviewPolicy"/>.
     /// </summary>
     public static readonly TransitionDefinition REV_002 = new()
@@ -436,7 +436,7 @@ public static class WorkflowTransitionCatalog
         ToStatus = CaseStatus.PlanningPending,
         TriggerName = "ApproveContours",
         TriggerType = WorkflowTriggerType.User,
-        RequiredRole = "Doctor/ChiefDoctor",
+        RequiredRole = "Physician",
         GateChecks = ["MinimumApprovalsReached"],
         SuccessActions = ["CompleteReviewTasks"],
         FailureActions = ["RejectTransition"],
@@ -445,7 +445,7 @@ public static class WorkflowTransitionCatalog
     };
 
     /// <summary>
-    /// Doctor or chief doctor rejects the contours; a rework work item is created.
+    /// Physician or physician rejects the contours; a rework work item is created.
     /// Governed by <see cref="WorkflowSlotCodes.S2ContourReviewPolicy"/>.
     /// </summary>
     public static readonly TransitionDefinition REV_003 = new()
@@ -455,7 +455,7 @@ public static class WorkflowTransitionCatalog
         ToStatus = CaseStatus.ContoursRejected,
         TriggerName = "RejectContours",
         TriggerType = WorkflowTriggerType.User,
-        RequiredRole = "Doctor/ChiefDoctor",
+        RequiredRole = "Physician",
         GateChecks = ["RejectionReasonRequired"],
         SuccessActions = ["SaveReviewForm"],
         FailureActions = ["RejectTransition"],
@@ -464,7 +464,7 @@ public static class WorkflowTransitionCatalog
     };
 
     /// <summary>
-    /// Doctor or system resubmits revised contours for another review cycle.
+    /// Physician or system resubmits revised contours for another review cycle.
     /// Governed by <see cref="WorkflowSlotCodes.S8ExceptionHandlingPolicy"/>.
     /// </summary>
     public static readonly TransitionDefinition REV_004 = new()
@@ -474,7 +474,7 @@ public static class WorkflowTransitionCatalog
         ToStatus = CaseStatus.ContouringInProgress,
         TriggerName = "ResubmitContours",
         TriggerType = WorkflowTriggerType.User,
-        RequiredRole = "Doctor/System",
+        RequiredRole = "Physician/System",
         GateChecks = ["RevisedContourExists"],
         SuccessActions = ["ClearStaleReviewTasks"],
         FailureActions = ["StayInContoursRejected"],
@@ -557,7 +557,7 @@ public static class WorkflowTransitionCatalog
     };
 
     /// <summary>
-    /// Physicist or doctor rejects the plan, sending it back for redesign.
+    /// Physicist or physician rejects the plan, sending it back for redesign.
     /// </summary>
     public static readonly TransitionDefinition PLN_005 = new()
     {
@@ -566,7 +566,7 @@ public static class WorkflowTransitionCatalog
         ToStatus = CaseStatus.PlanningInProgress,
         TriggerName = "RejectPlan",
         TriggerType = WorkflowTriggerType.User,
-        RequiredRole = "Physicist/Doctor",
+        RequiredRole = "Physicist/Physician",
         GateChecks = ["RejectionReasonRequired"],
         SuccessActions = ["IncrementPlanVersionContext"],
         FailureActions = ["StayInPlanReview"],
@@ -574,7 +574,7 @@ public static class WorkflowTransitionCatalog
     };
 
     /// <summary>
-    /// Physicist or doctor approves the plan review, completing the planning phase.
+    /// Physicist or physician approves the plan review, completing the planning phase.
     /// An optional re-review may be required depending on <see cref="WorkflowSlotCodes.S4PlanReReviewPolicy"/>.
     /// </summary>
     public static readonly TransitionDefinition PLN_006 = new()
@@ -584,7 +584,7 @@ public static class WorkflowTransitionCatalog
         ToStatus = CaseStatus.PlanReviewed,
         TriggerName = "ApprovePlanReview",
         TriggerType = WorkflowTriggerType.User,
-        RequiredRole = "Physicist/Doctor",
+        RequiredRole = "Physicist/Physician",
         GateChecks = ["EvaluationApproved"],
         SuccessActions = ["Audit"],
         FailureActions = ["RejectTransition"],
@@ -616,7 +616,7 @@ public static class WorkflowTransitionCatalog
     };
     
     /// <summary>
-    /// Chief doctor or senior physicist rejects the re-review, sending the plan back for rework.
+    /// Chief physician or physicist rejects the re-review, sending the plan back for rework.
     /// Governed by <see cref="WorkflowSlotCodes.S4PlanReReviewPolicy"/>.
     /// </summary>
     public static readonly TransitionDefinition RX_004 = new()
@@ -626,7 +626,7 @@ public static class WorkflowTransitionCatalog
         ToStatus = CaseStatus.PlanningInProgress,
         TriggerName = "RejectPlanReReview",
         TriggerType = WorkflowTriggerType.User,
-        RequiredRole = "ChiefDoctor/SeniorPhysicist",
+        RequiredRole = "Physician/Physicist",
         GateChecks = ["ReasonRequired"],
         SuccessActions = ["PlanBackToRework"],
         FailureActions = ["StayInReReview"],
@@ -721,7 +721,7 @@ public static class WorkflowTransitionCatalog
         ToStatus = CaseStatus.PlanningInProgress,
         TriggerName = "RejectDoubleCheck",
         TriggerType = WorkflowTriggerType.User,
-        RequiredRole = "SeniorPhysicist",
+        RequiredRole = "Physicist",
         GateChecks = ["ReasonRequired"],
         SuccessActions = ["ReopenPlanning"],
         FailureActions = ["StayInDoubleCheck"],
