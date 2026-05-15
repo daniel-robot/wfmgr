@@ -59,6 +59,7 @@ public class WorkflowConfigService : IWorkflowConfigService
 
     public async Task<WorkflowProfileDto> CreateProfileAsync(CreateWorkflowProfileRequest request, string? actorId, CancellationToken ct)
     {
+        var now = DateTimeOffset.UtcNow;
         var entity = new WorkflowProfileEntity
         {
             ProfileId = Guid.NewGuid(),
@@ -68,21 +69,32 @@ public class WorkflowConfigService : IWorkflowConfigService
             SiteId = Normalize(request.SiteId),
             DepartmentId = Normalize(request.DepartmentId),
             IsActive = request.IsActive,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = now,
+            CreatedBy = actorId,
+            UpdatedBy = actorId,
         };
 
         await _dbContext.WorkflowProfiles.AddAsync(entity, ct);
+        WriteChangeLog("Profile", entity.ProfileId, entity.ProfileId, "Create", actorId, now, request.ChangeReason, SerializeProfileSnapshot(entity));
         await _dbContext.SaveChangesAsync(ct);
 
         return ToDto(entity);
     }
 
-    public async Task<WorkflowProfileDto?> UpdateProfileAsync(Guid profileId, UpdateWorkflowProfileRequest request, string? actorId, CancellationToken ct)
+    public async Task<WorkflowProfileMutationResult> UpdateProfileAsync(Guid profileId, UpdateWorkflowProfileRequest request, string? actorId, CancellationToken ct)
     {
         var entity = await _dbContext.WorkflowProfiles.FirstOrDefaultAsync(x => x.ProfileId == profileId, ct);
         if (entity is null)
         {
-            return null;
+            return WorkflowProfileMutationResult.NotFoundResult();
+        }
+
+        var currentHash = ComputeProfileHash(entity);
+        if (IsHashConflict(request.ExpectedHash, currentHash))
+        {
+            return WorkflowProfileMutationResult.ConflictResult(new WorkflowMutationConflictDto(
+                "The profile was changed by another user. Reload before saving.",
+                currentHash));
         }
 
         if (request.Name is not null)
@@ -115,22 +127,61 @@ public class WorkflowConfigService : IWorkflowConfigService
             entity.IsActive = request.IsActive.Value;
         }
 
-        await _dbContext.SaveChangesAsync(ct);
-        return ToDto(entity);
+        var now = DateTimeOffset.UtcNow;
+        entity.UpdatedAt = now;
+        entity.UpdatedBy = actorId;
+
+        WriteChangeLog("Profile", entity.ProfileId, entity.ProfileId, "Update", actorId, now, request.ChangeReason, SerializeProfileSnapshot(entity));
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return WorkflowProfileMutationResult.ConflictResult(new WorkflowMutationConflictDto(
+                "The profile was modified concurrently. Reload before saving.",
+                null));
+        }
+
+        return WorkflowProfileMutationResult.Success(ToDto(entity));
     }
 
-    public async Task<WorkflowProfileDto?> SetProfileActiveAsync(Guid profileId, bool isActive, ToggleWorkflowProfileRequest request, string? actorId, CancellationToken ct)
+    public async Task<WorkflowProfileMutationResult> SetProfileActiveAsync(Guid profileId, bool isActive, ToggleWorkflowProfileRequest request, string? actorId, CancellationToken ct)
     {
         var entity = await _dbContext.WorkflowProfiles.FirstOrDefaultAsync(x => x.ProfileId == profileId, ct);
         if (entity is null)
         {
-            return null;
+            return WorkflowProfileMutationResult.NotFoundResult();
+        }
+
+        var currentHash = ComputeProfileHash(entity);
+        if (IsHashConflict(request.ExpectedHash, currentHash))
+        {
+            return WorkflowProfileMutationResult.ConflictResult(new WorkflowMutationConflictDto(
+                "The profile was changed by another user. Reload before saving.",
+                currentHash));
         }
 
         entity.IsActive = isActive;
+        var now = DateTimeOffset.UtcNow;
+        entity.UpdatedAt = now;
+        entity.UpdatedBy = actorId;
 
-        await _dbContext.SaveChangesAsync(ct);
-        return ToDto(entity);
+        WriteChangeLog("Profile", entity.ProfileId, entity.ProfileId, isActive ? "Activate" : "Deactivate", actorId, now, request.ChangeReason, SerializeProfileSnapshot(entity));
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return WorkflowProfileMutationResult.ConflictResult(new WorkflowMutationConflictDto(
+                "The profile was modified concurrently. Reload before saving.",
+                null));
+        }
+
+        return WorkflowProfileMutationResult.Success(ToDto(entity));
     }
 
     public async Task<IReadOnlyList<WorkflowRuleDto>> GetRulesAsync(Guid profileId, string? slotCode, bool? enabled, CancellationToken ct)
@@ -167,14 +218,28 @@ public class WorkflowConfigService : IWorkflowConfigService
         return entity is null ? null : ToDto(entity);
     }
 
-    public async Task<WorkflowRuleDto?> CreateRuleAsync(Guid profileId, CreateWorkflowRuleRequest request, string? actorId, CancellationToken ct)
+    public async Task<WorkflowRuleMutationResult> CreateRuleAsync(Guid profileId, CreateWorkflowRuleRequest request, string? actorId, CancellationToken ct)
     {
+        var validation = await ValidateRuleAsync(new ValidateWorkflowRuleRequest(
+            request.SlotCode,
+            request.ConfigJson,
+            request.ConditionJson,
+            request.EffectiveFrom,
+            request.EffectiveTo,
+            request.Priority), ct);
+
+        if (!validation.IsValid)
+        {
+            return WorkflowRuleMutationResult.Invalid(validation);
+        }
+
         var profileExists = await _dbContext.WorkflowProfiles.AnyAsync(x => x.ProfileId == profileId, ct);
         if (!profileExists)
         {
-            return null;
+            return WorkflowRuleMutationResult.NotFoundResult();
         }
 
+        var now = DateTimeOffset.UtcNow;
         var entity = new WorkflowRuleEntity
         {
             RuleId = Guid.NewGuid(),
@@ -186,20 +251,45 @@ public class WorkflowConfigService : IWorkflowConfigService
             ConfigJson = request.ConfigJson,
             EffectiveFrom = request.EffectiveFrom,
             EffectiveTo = request.EffectiveTo,
+            CreatedAt = now,
+            CreatedBy = actorId,
+            UpdatedBy = actorId,
         };
 
         await _dbContext.WorkflowRules.AddAsync(entity, ct);
+        WriteChangeLog("Rule", entity.RuleId, entity.ProfileId, "Create", actorId, now, request.ChangeReason, SerializeRuleSnapshot(entity));
         await _dbContext.SaveChangesAsync(ct);
 
-        return ToDto(entity);
+        return WorkflowRuleMutationResult.Success(ToDto(entity));
     }
 
-    public async Task<WorkflowRuleDto?> UpdateRuleAsync(Guid ruleId, UpdateWorkflowRuleRequest request, string? actorId, CancellationToken ct)
+    public async Task<WorkflowRuleMutationResult> UpdateRuleAsync(Guid ruleId, UpdateWorkflowRuleRequest request, string? actorId, CancellationToken ct)
     {
+        var validation = await ValidateRuleAsync(new ValidateWorkflowRuleRequest(
+            request.SlotCode,
+            request.ConfigJson,
+            request.ConditionJson,
+            request.EffectiveFrom,
+            request.EffectiveTo,
+            request.Priority), ct);
+
+        if (!validation.IsValid)
+        {
+            return WorkflowRuleMutationResult.Invalid(validation);
+        }
+
         var entity = await _dbContext.WorkflowRules.FirstOrDefaultAsync(x => x.RuleId == ruleId, ct);
         if (entity is null)
         {
-            return null;
+            return WorkflowRuleMutationResult.NotFoundResult();
+        }
+
+        var currentHash = ComputeRuleHash(entity);
+        if (IsHashConflict(request.ExpectedHash, currentHash))
+        {
+            return WorkflowRuleMutationResult.ConflictResult(new WorkflowMutationConflictDto(
+                "The rule was changed by another user. Reload before saving.",
+                currentHash));
         }
 
         entity.SlotCode = request.SlotCode.Trim();
@@ -209,23 +299,59 @@ public class WorkflowConfigService : IWorkflowConfigService
         entity.ConfigJson = request.ConfigJson;
         entity.EffectiveFrom = request.EffectiveFrom;
         entity.EffectiveTo = request.EffectiveTo;
+        var now = DateTimeOffset.UtcNow;
+        entity.UpdatedAt = now;
+        entity.UpdatedBy = actorId;
 
-        await _dbContext.SaveChangesAsync(ct);
-        return ToDto(entity);
+        WriteChangeLog("Rule", entity.RuleId, entity.ProfileId, "Update", actorId, now, request.ChangeReason, SerializeRuleSnapshot(entity));
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return WorkflowRuleMutationResult.ConflictResult(new WorkflowMutationConflictDto(
+                "The rule was modified concurrently. Reload before saving.",
+                null));
+        }
+        return WorkflowRuleMutationResult.Success(ToDto(entity));
     }
 
-    public async Task<WorkflowRuleDto?> SetRuleEnabledAsync(Guid ruleId, bool enabled, ToggleWorkflowRuleRequest request, string? actorId, CancellationToken ct)
+    public async Task<WorkflowRuleMutationResult> SetRuleEnabledAsync(Guid ruleId, bool enabled, ToggleWorkflowRuleRequest request, string? actorId, CancellationToken ct)
     {
         var entity = await _dbContext.WorkflowRules.FirstOrDefaultAsync(x => x.RuleId == ruleId, ct);
         if (entity is null)
         {
-            return null;
+            return WorkflowRuleMutationResult.NotFoundResult();
+        }
+
+        var currentHash = ComputeRuleHash(entity);
+        if (IsHashConflict(request.ExpectedHash, currentHash))
+        {
+            return WorkflowRuleMutationResult.ConflictResult(new WorkflowMutationConflictDto(
+                "The rule was changed by another user. Reload before saving.",
+                currentHash));
         }
 
         entity.IsEnabled = enabled;
+        var now = DateTimeOffset.UtcNow;
+        entity.UpdatedAt = now;
+        entity.UpdatedBy = actorId;
 
-        await _dbContext.SaveChangesAsync(ct);
-        return ToDto(entity);
+        WriteChangeLog("Rule", entity.RuleId, entity.ProfileId, enabled ? "Enable" : "Disable", actorId, now, request.ChangeReason, SerializeRuleSnapshot(entity));
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return WorkflowRuleMutationResult.ConflictResult(new WorkflowMutationConflictDto(
+                "The rule was modified concurrently. Reload before saving.",
+                null));
+        }
+        return WorkflowRuleMutationResult.Success(ToDto(entity));
     }
 
     public Task<ValidateWorkflowRuleResponse> ValidateRuleAsync(ValidateWorkflowRuleRequest request, CancellationToken ct)
@@ -553,7 +679,7 @@ public class WorkflowConfigService : IWorkflowConfigService
             entity.IsActive,
             ComputeProfileHash(entity),
             entity.CreatedAt,
-            null);
+            entity.UpdatedAt);
     }
 
     private static WorkflowRuleDto ToDto(WorkflowRuleEntity entity)
@@ -569,8 +695,8 @@ public class WorkflowConfigService : IWorkflowConfigService
             entity.ConfigJson,
             entity.EffectiveFrom,
             entity.EffectiveTo,
-            null,
-            null);
+            entity.CreatedAt,
+            entity.UpdatedAt);
     }
 
     private static string ComputeProfileHash(WorkflowProfileEntity entity)
@@ -629,5 +755,99 @@ public class WorkflowConfigService : IWorkflowConfigService
         }
 
         return value;
+    }
+
+    // ── Concurrency, audit log, and changelog helpers ─────────────────────────
+
+    private static bool IsHashConflict(string? expectedHash, string currentHash)
+    {
+        return !string.IsNullOrWhiteSpace(expectedHash)
+               && !string.Equals(expectedHash, currentHash, StringComparison.Ordinal);
+    }
+
+    private void WriteChangeLog(
+        string entityType,
+        Guid entityId,
+        Guid profileId,
+        string action,
+        string? actorId,
+        DateTimeOffset now,
+        string? changeReason,
+        string? snapshotJson)
+    {
+        _dbContext.WorkflowConfigChangeLogs.Add(new WorkflowConfigChangeLogEntity
+        {
+            EntityType = entityType,
+            EntityId = entityId,
+            ProfileId = profileId,
+            Action = action,
+            ActorId = actorId,
+            CreatedAt = now,
+            ChangeReason = changeReason,
+            SnapshotJson = snapshotJson,
+        });
+    }
+
+    private static string SerializeProfileSnapshot(WorkflowProfileEntity entity) => JsonSerializer.Serialize(new
+    {
+        entity.ProfileId,
+        entity.Name,
+        entity.Version,
+        entity.HospitalId,
+        entity.SiteId,
+        entity.DepartmentId,
+        entity.IsActive,
+        entity.CreatedAt,
+        entity.UpdatedAt,
+        entity.CreatedBy,
+        entity.UpdatedBy,
+    });
+
+    private static string SerializeRuleSnapshot(WorkflowRuleEntity entity) => JsonSerializer.Serialize(new
+    {
+        entity.RuleId,
+        entity.ProfileId,
+        entity.SlotCode,
+        entity.Priority,
+        entity.IsEnabled,
+        entity.ConditionJson,
+        entity.ConfigJson,
+        entity.EffectiveFrom,
+        entity.EffectiveTo,
+        entity.CreatedAt,
+        entity.UpdatedAt,
+        entity.CreatedBy,
+        entity.UpdatedBy,
+    });
+
+    public async Task<IReadOnlyList<WorkflowConfigChangeLogDto>> GetChangeLogAsync(Guid profileId, int limit, CancellationToken ct)
+    {
+        if (limit <= 0)
+        {
+            limit = 100;
+        }
+        if (limit > 1000)
+        {
+            limit = 1000;
+        }
+
+        var rows = await _dbContext.WorkflowConfigChangeLogs
+            .AsNoTracking()
+            .Where(x => x.ProfileId == profileId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.ChangeLogId)
+            .Take(limit)
+            .ToListAsync(ct);
+
+        return rows.Select(x => new WorkflowConfigChangeLogDto(
+            x.ChangeLogId,
+            x.EntityType,
+            x.EntityId,
+            x.ProfileId,
+            x.Action,
+            x.ActorId,
+            x.CreatedAt,
+            x.ChangeReason,
+            x.SnapshotJson)).ToList();
     }
 }

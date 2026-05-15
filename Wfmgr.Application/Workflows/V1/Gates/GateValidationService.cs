@@ -34,7 +34,7 @@ public sealed class GateValidationService : IGateValidationService
 
     private readonly IReadOnlyDictionary<string, GateCheck> _checks;
 
-    // Case statuses from which cancellation is permitted (mirrors CaseStateMachineService).
+    // Case statuses from which cancellation is permitted.
     private static readonly HashSet<CaseStatus> CancellableStatuses =
     [
         CaseStatus.SimScheduled,

@@ -21,12 +21,12 @@ public static class DependencyInjection
         services.AddScoped<ICaseQueryService, CaseQueryService>();
         services.AddScoped<ICaseFormService, CaseFormService>();
         services.AddScoped<IWorkItemLifecycleService, WorkItemLifecycleService>();
-        services.AddScoped<ICaseTransitionGateValidator, CaseTransitionGateValidator>();
         services.AddScoped<ICaseStateMachineService, CaseStateMachineService>();
         services.AddScoped<IGateValidationService, GateValidationService>();
         services.AddScoped<IWorkflowSideEffectService, WorkflowSideEffectService>();
         services.AddScoped<ICaseTransitionService, CaseTransitionService>();
         services.AddScoped<IWorkflowCompensationService, WorkflowCompensationService>();
+        services.AddScoped<IWorkflowExplainService, WorkflowExplainService>();
 
         return services;
     }

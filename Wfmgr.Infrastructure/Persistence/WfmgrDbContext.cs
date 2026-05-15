@@ -17,6 +17,7 @@ public class WfmgrDbContext : DbContext
     public DbSet<OutboxMessageEntity> OutboxMessages => Set<OutboxMessageEntity>();
     public DbSet<WorkflowProfileEntity> WorkflowProfiles => Set<WorkflowProfileEntity>();
     public DbSet<WorkflowRuleEntity> WorkflowRules => Set<WorkflowRuleEntity>();
+    public DbSet<WorkflowConfigChangeLogEntity> WorkflowConfigChangeLogs => Set<WorkflowConfigChangeLogEntity>();
     public DbSet<AuditLogEntity> AuditLogs => Set<AuditLogEntity>();
     public DbSet<CaseTransitionHistoryEntity> CaseTransitionHistories => Set<CaseTransitionHistoryEntity>();
     public DbSet<CaseFormEntity> CaseForms => Set<CaseFormEntity>();

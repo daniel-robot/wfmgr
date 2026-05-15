@@ -84,6 +84,33 @@ public class WorkflowConfigApiTests
     }
 
     [Fact]
+    public async Task CreateRule_WithUnsupportedSlotCode_ReturnsBadRequest()
+    {
+        using var factory = new TestApiFactory();
+        using var client = factory.CreateAuthenticatedClient("admin");
+
+        var profile = await CreateProfileAsync(client, "Bad slot profile");
+
+        var request = new CreateWorkflowRuleRequest(
+            SlotCode: "NOT_A_REAL_SLOT",
+            Priority: 10,
+            Enabled: true,
+            ConditionJson: null,
+            ConfigJson: ValidS1ConfigJson,
+            EffectiveFrom: null,
+            EffectiveTo: null,
+            ChangeReason: "test");
+
+        var response = await client.PostAsJsonAsync($"/api/workflow-config/profiles/{profile.Id}/rules", request);
+        var validation = await response.Content.ReadFromJsonAsync<ValidateWorkflowRuleResponse>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.NotNull(validation);
+        Assert.False(validation!.IsValid);
+        Assert.Contains(validation.Errors, e => e.Contains("slotCode", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task CreateAndUpdateRule_HappyPath_ReturnsOk()
     {
         using var factory = new TestApiFactory();
@@ -166,6 +193,64 @@ public class WorkflowConfigApiTests
         Assert.Equal(HttpStatusCode.Conflict, staleResponse.StatusCode);
         Assert.NotNull(conflict);
         Assert.Equal(updatedRule!.ConcurrencyHash, conflict!.CurrentHash);
+    }
+
+    [Fact]
+    public async Task UpdateProfile_WithStaleExpectedHash_ReturnsConflict()
+    {
+        using var factory = new TestApiFactory();
+        using var client = factory.CreateAuthenticatedClient("admin");
+
+        var profile = await CreateProfileAsync(client, "Profile concurrency");
+
+        var firstUpdate = new UpdateWorkflowProfileRequest(
+            Name: "Renamed",
+            Version: profile.Version,
+            HospitalId: profile.HospitalId,
+            SiteId: profile.SiteId,
+            DepartmentId: profile.DepartmentId,
+            IsActive: profile.IsActive,
+            ExpectedHash: profile.ConcurrencyHash,
+            ChangeReason: "first");
+
+        var firstResp = await client.PutAsJsonAsync($"/api/workflow-config/profiles/{profile.Id}", firstUpdate);
+        Assert.Equal(HttpStatusCode.OK, firstResp.StatusCode);
+
+        var staleUpdate = firstUpdate with { Name = "Renamed Again", ChangeReason = "stale" };
+        var staleResp = await client.PutAsJsonAsync($"/api/workflow-config/profiles/{profile.Id}", staleUpdate);
+        Assert.Equal(HttpStatusCode.Conflict, staleResp.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetChangeLog_ReturnsAuditEntriesForProfileAndItsRules()
+    {
+        using var factory = new TestApiFactory();
+        using var client = factory.CreateAuthenticatedClient("admin");
+
+        var profile = await CreateProfileAsync(client, "Changelog profile");
+        var rule = await CreateRuleAsync(client, profile.Id);
+
+        var updateRequest = new UpdateWorkflowRuleRequest(
+            SlotCode: rule.SlotCode,
+            Priority: rule.Priority + 5,
+            Enabled: rule.Enabled,
+            ConditionJson: rule.ConditionJson,
+            ConfigJson: ValidS1ConfigJson,
+            EffectiveFrom: rule.EffectiveFrom,
+            EffectiveTo: rule.EffectiveTo,
+            ExpectedHash: rule.ConcurrencyHash,
+            ChangeReason: "bump-priority");
+        var updateResp = await client.PutAsJsonAsync($"/api/workflow-config/rules/{rule.Id}", updateRequest);
+        Assert.Equal(HttpStatusCode.OK, updateResp.StatusCode);
+
+        var response = await client.GetAsync($"/api/workflow-config/profiles/{profile.Id}/changelog");
+        var entries = await response.Content.ReadFromJsonAsync<List<WorkflowConfigChangeLogDto>>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(entries);
+        Assert.Contains(entries!, e => e.EntityType == "Profile" && e.Action == "Create");
+        Assert.Contains(entries!, e => e.EntityType == "Rule" && e.Action == "Create");
+        Assert.Contains(entries!, e => e.EntityType == "Rule" && e.Action == "Update" && e.ChangeReason == "bump-priority");
     }
 
     [Fact]
@@ -339,7 +424,8 @@ public class WorkflowConfigApiTests
                 }
 
                 services.AddDbContext<WfmgrDbContext>(options =>
-                    options.UseInMemoryDatabase(_dbName, _dbRoot));
+                    options.UseInMemoryDatabase(_dbName, _dbRoot)
+                        .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.ManyServiceProvidersCreatedWarning)));
             });
         }
     }

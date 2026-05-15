@@ -13,7 +13,7 @@ namespace Wfmgr.Application.Workflows.V1;
 /// <para>
 /// Execution pipeline per call:
 /// 1. Catalog lookup by <c>triggerName</c> + <c>fromStatus</c>.
-/// 2. <c>RequiredRole</c> check.
+/// 2. <c>RequiredRoles</c> check.
 /// 3. <see cref="IGateValidationService.ValidateAsync"/> for all declared <c>GateChecks</c>.
 /// 4. Mutate <c>CaseData.CurrentStatus</c> + increment <c>StatusVersion</c>.
 /// 5. Write <c>AuditLog</c>.
@@ -85,17 +85,17 @@ public sealed class CaseTransitionService : ICaseTransitionService
             toStatus = definition.ToStatus;
 
             // ── 2. Role check ─────────────────────────────────────────────────
-            if (!string.IsNullOrWhiteSpace(definition.RequiredRole))
+            if (definition.RequiredRoles.Count > 0)
             {
-                var required = definition.RequiredRole.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                var hasRole = required.Any(r => context.Roles.Contains(r, StringComparer.OrdinalIgnoreCase));
+                var hasRole = definition.RequiredRoles.Any(
+                    r => context.Roles.Contains(r, StringComparer.OrdinalIgnoreCase));
                 if (!hasRole)
                 {
                     _logger.LogWarning(
-                        "Transition {Code} denied: caller lacks required role '{RequiredRole}'. Case {CaseId} status {Status}",
-                        definition.Code, definition.RequiredRole, caseData.CaseId, fromStatus);
+                        "Transition {Code} denied: caller lacks any of required roles [{RequiredRoles}]. Case {CaseId} status {Status}",
+                        definition.Code, string.Join(", ", definition.RequiredRoles), caseData.CaseId, fromStatus);
                     return TransitionExecutionResult.RoleDenied(
-                        definition.Code, fromStatus, definition.RequiredRole);
+                        definition.Code, fromStatus, definition.RequiredRoles);
                 }
             }
 

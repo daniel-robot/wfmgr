@@ -284,7 +284,8 @@ public class ContouringSubStateFlowTests
                 }
 
                 services.AddDbContext<WfmgrDbContext>(options =>
-                    options.UseInMemoryDatabase(_dbName, _dbRoot));
+                    options.UseInMemoryDatabase(_dbName, _dbRoot)
+                        .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.ManyServiceProvidersCreatedWarning)));
             });
         }
     }
