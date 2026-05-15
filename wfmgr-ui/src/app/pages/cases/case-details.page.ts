@@ -19,6 +19,7 @@ import {
   WorkItem
 } from '../../core/models/workflow.models';
 import { WorkflowApiService } from '../../core/services/workflow-api.service';
+import { NotificationService } from '../../core/services/notification.service';
 
 @Component({
   selector: 'app-case-details-page',
@@ -31,6 +32,7 @@ export class CaseDetailsPageComponent implements OnInit {
   private readonly api = inject(WorkflowApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
+  private readonly notify = inject(NotificationService);
 
   caseId = '';
   details: CaseDetails | null = null;
@@ -270,7 +272,10 @@ export class CaseDetailsPageComponent implements OnInit {
           this.infoMessage = `Refreshed at ${new Date().toLocaleTimeString()}.`;
           this.ctEventForm.patchValue({ accessionNumber: details.accessionNumber });
         },
-        error: (err) => (this.error = err?.error?.message ?? 'Failed to load case details.')
+        error: (err) => {
+          this.error = err?.error?.error ?? err?.error?.message ?? 'Failed to load case details.';
+          this.notify.fromHttpError('Failed to load case details.', err);
+        }
       });
   }
 
@@ -436,7 +441,10 @@ export class CaseDetailsPageComponent implements OnInit {
     }
 
     if (!this.isActionEnabled(action)) {
-      this.error = `Action '${action}' is not allowed for status '${this.details?.currentStatus ?? 'Unknown'}'. Allowed: ${this.getAllowedStatusesText(action)}.`;
+      this.notify.warning(`Action '${action}' is not allowed in the current state.`, {
+        detail: `Current status: ${this.details?.currentStatus ?? 'Unknown'}.`,
+        lines: [`Allowed statuses: ${this.getAllowedStatusesText(action)}`],
+      });
       return;
     }
 
@@ -483,7 +491,7 @@ export class CaseDetailsPageComponent implements OnInit {
         this.runAction(() => this.api.cancelCase(this.caseId, request));
         break;
       default:
-        this.error = `Unknown action '${action}'.`;
+        this.notify.error(`Unknown action '${action}'.`);
         break;
     }
   }
@@ -516,12 +524,12 @@ export class CaseDetailsPageComponent implements OnInit {
       .pipe(finalize(() => (this.busy = false)))
       .subscribe({
         next: () => {
-          this.actionMessage = 'Action submitted successfully.';
+          this.notify.success('Action submitted successfully.');
           this.ctEventForm.patchValue({ externalEventId: crypto.randomUUID() });
           this.pvMedForm.patchValue({ externalEventId: crypto.randomUUID() });
           this.loadCase();
         },
-        error: (err) => (this.error = err?.error?.message ?? 'Action failed.')
+        error: (err) => this.notify.fromHttpError('Action failed.', err)
       });
   }
 
