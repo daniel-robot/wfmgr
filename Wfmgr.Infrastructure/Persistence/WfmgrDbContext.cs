@@ -18,6 +18,13 @@ public class WfmgrDbContext : DbContext
     public DbSet<WorkflowProfileEntity> WorkflowProfiles => Set<WorkflowProfileEntity>();
     public DbSet<WorkflowRuleEntity> WorkflowRules => Set<WorkflowRuleEntity>();
     public DbSet<WorkflowConfigChangeLogEntity> WorkflowConfigChangeLogs => Set<WorkflowConfigChangeLogEntity>();
+    public DbSet<WorkflowTransitionEntity> WorkflowTransitions => Set<WorkflowTransitionEntity>();
+    public DbSet<WorkflowTransitionFromStatusEntity> WorkflowTransitionFromStatuses => Set<WorkflowTransitionFromStatusEntity>();
+    public DbSet<WorkflowTransitionAttributeEntity> WorkflowTransitionAttributes => Set<WorkflowTransitionAttributeEntity>();
+    public DbSet<WorkflowTransitionChangeLogEntity> WorkflowTransitionChangeLogs => Set<WorkflowTransitionChangeLogEntity>();
+    public DbSet<WorkflowVocabularyTermEntity> WorkflowVocabularyTerms => Set<WorkflowVocabularyTermEntity>();
+    public DbSet<WorkflowVocabularyChangeLogEntity> WorkflowVocabularyChangeLogs => Set<WorkflowVocabularyChangeLogEntity>();
+    public DbSet<WorkflowCaseStatusOverlayEntity> WorkflowCaseStatusOverlays => Set<WorkflowCaseStatusOverlayEntity>();
     public DbSet<AuditLogEntity> AuditLogs => Set<AuditLogEntity>();
     public DbSet<CaseTransitionHistoryEntity> CaseTransitionHistories => Set<CaseTransitionHistoryEntity>();
     public DbSet<CaseFormEntity> CaseForms => Set<CaseFormEntity>();

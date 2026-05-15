@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Wfmgr.Application.Abstractions.Persistence;
 using Wfmgr.Application.Abstractions.Persistence.Models;
+using Wfmgr.Application.Workflows.V1.Definitions;
 using Wfmgr.Application.Workflows.V1.Gates;
 using Wfmgr.Application.Workflows.V1.SideEffects;
 using Wfmgr.Domain.Enums;
@@ -30,17 +31,20 @@ public sealed class CaseTransitionService : ICaseTransitionService
     private readonly IWorkflowDataAccess _dataAccess;
     private readonly IGateValidationService _gateValidation;
     private readonly IWorkflowSideEffectService _sideEffects;
+    private readonly IWorkflowTransitionCatalogService _catalog;
     private readonly ILogger<CaseTransitionService> _logger;
 
     public CaseTransitionService(
         IWorkflowDataAccess dataAccess,
         IGateValidationService gateValidation,
         IWorkflowSideEffectService sideEffects,
+        IWorkflowTransitionCatalogService catalog,
         ILogger<CaseTransitionService> logger)
     {
         _dataAccess = dataAccess;
         _gateValidation = gateValidation;
         _sideEffects = sideEffects;
+        _catalog = catalog;
         _logger = logger;
     }
 
@@ -71,9 +75,7 @@ public sealed class CaseTransitionService : ICaseTransitionService
         var fromStatus = caseData.CurrentStatus;
 
         // ── 1. Look up transition definition in catalog ────────────────────────
-        var definition = WorkflowTransitionCatalog.All.FirstOrDefault(
-            t => t.TriggerName.Equals(triggerName, StringComparison.OrdinalIgnoreCase)
-              && t.FromStatuses.Contains(fromStatus));
+        var definition = await _catalog.FindByTriggerAsync(triggerName, fromStatus, ct);
 
         CaseStatus toStatus;
         string? transitionCode = null;

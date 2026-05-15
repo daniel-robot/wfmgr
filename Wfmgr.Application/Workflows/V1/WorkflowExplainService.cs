@@ -16,7 +16,7 @@ namespace Wfmgr.Application.Workflows.V1;
 /// </summary>
 public interface IWorkflowExplainService
 {
-    IReadOnlyList<TransitionDefinitionDto> GetCatalog();
+    Task<IReadOnlyList<TransitionDefinitionDto>> GetCatalogAsync(CancellationToken ct);
 
     Task<ExplainTransitionResponse> ExplainAsync(ExplainTransitionRequest request, CancellationToken ct);
 }
@@ -25,16 +25,22 @@ public sealed class WorkflowExplainService : IWorkflowExplainService
 {
     private readonly IWorkflowDataAccess _dataAccess;
     private readonly IGateValidationService _gateValidation;
+    private readonly IWorkflowTransitionCatalogService _catalog;
 
-    public WorkflowExplainService(IWorkflowDataAccess dataAccess, IGateValidationService gateValidation)
+    public WorkflowExplainService(
+        IWorkflowDataAccess dataAccess,
+        IGateValidationService gateValidation,
+        IWorkflowTransitionCatalogService catalog)
     {
         _dataAccess = dataAccess;
         _gateValidation = gateValidation;
+        _catalog = catalog;
     }
 
-    public IReadOnlyList<TransitionDefinitionDto> GetCatalog()
+    public async Task<IReadOnlyList<TransitionDefinitionDto>> GetCatalogAsync(CancellationToken ct)
     {
-        return WorkflowTransitionCatalog.All.Select(ToDto).ToList();
+        var all = await _catalog.GetAllAsync(ct);
+        return all.Select(ToDto).ToList();
     }
 
     public async Task<ExplainTransitionResponse> ExplainAsync(ExplainTransitionRequest request, CancellationToken ct)
@@ -59,9 +65,7 @@ public sealed class WorkflowExplainService : IWorkflowExplainService
         }
 
         var fromStatus = caseData.CurrentStatus;
-        var definition = WorkflowTransitionCatalog.All.FirstOrDefault(
-            t => t.TriggerName.Equals(request.TriggerName, StringComparison.OrdinalIgnoreCase)
-              && t.FromStatuses.Contains(fromStatus));
+        var definition = await _catalog.FindByTriggerAsync(request.TriggerName, fromStatus, ct);
 
         if (definition is null)
         {

@@ -25,9 +25,10 @@ public class WorkflowExplainController : ControllerBase
 
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<TransitionDefinitionDto>), StatusCodes.Status200OK)]
-    public ActionResult<IReadOnlyList<TransitionDefinitionDto>> GetCatalog()
+    public async Task<ActionResult<IReadOnlyList<TransitionDefinitionDto>>> GetCatalog(CancellationToken ct)
     {
-        return Ok(_service.GetCatalog());
+        var catalog = await _service.GetCatalogAsync(ct);
+        return Ok(catalog);
     }
 
     [HttpPost("explain")]

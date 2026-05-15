@@ -21,6 +21,9 @@
     <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
     @if (currentUser()?.role === 'Admin') {
       <a routerLink="/workflow-config" routerLinkActive="active">Workflow Config</a>
+      <a routerLink="/workflow-transitions" routerLinkActive="active">Transitions</a>
+      <a routerLink="/workflow-vocabulary" routerLinkActive="active">Vocabulary</a>
+      <a routerLink="/case-status-overlays" routerLinkActive="active">Statuses</a>
     }
     <a routerLink="/events" routerLinkActive="active">Events</a>
     <a routerLink="/audit-logs" routerLinkActive="active">Audit Logs</a>

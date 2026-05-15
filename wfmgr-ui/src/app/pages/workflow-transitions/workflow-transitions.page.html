@@ -1,0 +1,202 @@
+<div class="page">
+  <header class="page-header">
+    <h1>Workflow transitions</h1>
+    <p class="muted">
+      DB-backed catalog of named transitions used by the workflow engine. Edits are
+      applied immediately and recorded in the change log. Existing rows seeded from
+      the static <code>WorkflowTransitionCatalog</code>.
+    </p>
+  </header>
+
+  <div *ngIf="pageError" class="alert error">{{ pageError }}</div>
+  <div *ngIf="pageMessage" class="alert info">{{ pageMessage }}</div>
+
+  <div class="layout">
+    <!-- ── Left: list ─────────────────────────────────────────────── -->
+    <section class="list-pane">
+      <div class="filters">
+        <label>
+          Phase
+          <select [(ngModel)]="filterPhase" name="filterPhase">
+            <option value="">All</option>
+            <option *ngFor="let p of phases" [value]="p">{{ p }}</option>
+          </select>
+        </label>
+        <label>
+          State
+          <select [(ngModel)]="filterEnabled" name="filterEnabled">
+            <option value="all">All</option>
+            <option value="enabled">Enabled only</option>
+            <option value="disabled">Disabled only</option>
+          </select>
+        </label>
+        <button type="button" class="btn primary" (click)="startCreate()">+ New transition</button>
+        <button type="button" class="btn" (click)="reload()" [disabled]="loading">Reload</button>
+      </div>
+
+      <table class="grid">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Phase</th>
+            <th>From → To</th>
+            <th>Trigger</th>
+            <th>Roles</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            *ngFor="let t of filteredTransitions"
+            [class.selected]="selected?.id === t.id"
+            [class.disabled]="!t.isEnabled"
+            (click)="select(t)"
+          >
+            <td><code>{{ t.code }}</code></td>
+            <td>{{ t.phase }}</td>
+            <td class="from-to">
+              <span>{{ t.fromStatuses.join(', ') }}</span>
+              <span class="arrow">→</span>
+              <strong>{{ t.toStatus }}</strong>
+            </td>
+            <td>{{ t.triggerName }} <span class="muted">({{ t.triggerType }})</span></td>
+            <td>{{ t.requiredRoles.join(', ') || '—' }}</td>
+            <td>
+              <span *ngIf="!t.isEnabled" class="chip warn">disabled</span>
+            </td>
+          </tr>
+          <tr *ngIf="filteredTransitions.length === 0">
+            <td colspan="6" class="muted center">No transitions match the current filter.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ── Right: editor ──────────────────────────────────────────── -->
+    <section class="editor-pane" *ngIf="isCreating || selected">
+      <h2>
+        {{ isCreating ? 'New transition' : 'Edit transition' }}
+        <span *ngIf="selected && !selected.isEnabled" class="chip warn">disabled</span>
+      </h2>
+
+      <form [formGroup]="form" (ngSubmit)="save()">
+        <div class="form-grid">
+          <label>
+            Code
+            <input formControlName="code" placeholder="e.g. SIM-001" />
+          </label>
+          <label>
+            Phase
+            <input formControlName="phase" />
+          </label>
+          <label>
+            Sort order
+            <input type="number" formControlName="sortOrder" />
+          </label>
+
+          <label>
+            To status
+            <select formControlName="toStatus">
+              <option *ngFor="let s of meta?.caseStatuses" [value]="s.code">{{ s.code }}</option>
+            </select>
+          </label>
+          <label>
+            Trigger name
+            <input formControlName="triggerName" />
+          </label>
+          <label>
+            Trigger type
+            <select formControlName="triggerType">
+              <option *ngFor="let t of meta?.triggerTypes" [value]="t.code">{{ t.code }}</option>
+            </select>
+          </label>
+
+          <label class="span-2">
+            From statuses (comma-separated)
+            <input formControlName="fromStatuses" placeholder="Submitted, SimScheduled" />
+          </label>
+          <label>
+            Config slot
+            <select formControlName="configSlot">
+              <option value="">— none —</option>
+              <option *ngFor="let s of meta?.slotCodes" [value]="s.code">{{ s.code }}</option>
+            </select>
+          </label>
+
+          <label class="span-3">
+            Description
+            <input formControlName="description" />
+          </label>
+
+          <label class="span-3">
+            Required roles (comma-separated)
+            <input formControlName="requiredRoles" placeholder="Physician, Dosimetrist" />
+          </label>
+
+          <label class="span-3">
+            Gate checks (comma-separated)
+            <input formControlName="gateChecks" placeholder="CaseNotCancelled, ReasonRequired" />
+          </label>
+
+          <label class="span-3">
+            Success actions (comma-separated)
+            <input formControlName="successActions" />
+          </label>
+
+          <label class="span-3">
+            Failure actions (comma-separated)
+            <input formControlName="failureActions" />
+          </label>
+
+          <label class="span-3">
+            Work items to create (comma-separated)
+            <input formControlName="workItemsToCreate" />
+          </label>
+
+          <label class="span-3">
+            Change reason (recorded in audit log)
+            <input formControlName="changeReason" />
+          </label>
+        </div>
+
+        <div *ngIf="validation" class="validation"
+             [class.ok]="validation.isValid"
+             [class.bad]="!validation.isValid">
+          <h3>{{ validation.isValid ? 'Validation OK' : 'Validation failed' }}</h3>
+          <ul *ngIf="validation.errors.length">
+            <li *ngFor="let e of validation.errors" class="err">{{ e }}</li>
+          </ul>
+          <ul *ngIf="validation.warnings.length">
+            <li *ngFor="let w of validation.warnings" class="warn">{{ w }}</li>
+          </ul>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn" (click)="validateNow()" [disabled]="saving">Validate</button>
+          <button type="submit" class="btn primary" [disabled]="saving || form.invalid">
+            {{ isCreating ? 'Create' : 'Save' }}
+          </button>
+          <button *ngIf="selected" type="button" class="btn" (click)="toggleEnabled()" [disabled]="saving">
+            {{ selected.isEnabled ? 'Disable' : 'Enable' }}
+          </button>
+          <button *ngIf="selected" type="button" class="btn danger" (click)="delete()" [disabled]="saving">
+            Delete
+          </button>
+        </div>
+      </form>
+
+      <section *ngIf="selected" class="changelog">
+        <h3>Change log</h3>
+        <p *ngIf="changeLog.length === 0" class="muted">No changes recorded yet.</p>
+        <ol *ngIf="changeLog.length">
+          <li *ngFor="let c of changeLog">
+            <strong>{{ c.action }}</strong>
+            by {{ c.actorId || 'system' }}
+            at {{ c.createdAt }}
+            <span *ngIf="c.changeReason"> — {{ c.changeReason }}</span>
+          </li>
+        </ol>
+      </section>
+    </section>
+  </div>
+</div>

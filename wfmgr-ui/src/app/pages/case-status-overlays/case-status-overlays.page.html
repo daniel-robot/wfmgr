@@ -1,0 +1,94 @@
+<div class="page">
+  <header class="page-header">
+    <h1>Case status overlay</h1>
+    <p class="muted">
+      Customise the display name, description, colour, category, and sort order
+      of each <code>CaseStatus</code> value. The set of statuses is code-owned;
+      this page only re-skins what already exists.
+    </p>
+  </header>
+
+  <div *ngIf="pageError" class="alert error">{{ pageError }}</div>
+  <div *ngIf="pageMessage" class="alert info">{{ pageMessage }}</div>
+
+  <div class="layout">
+    <section class="list-pane">
+      <div class="filters">
+        <button type="button" class="btn" (click)="reload()" [disabled]="loading">Reload</button>
+        <span class="muted">{{ overlays.length }} status(es)</span>
+      </div>
+
+      <div *ngFor="let group of groupedByCategory" class="group">
+        <h3 class="group-header">{{ group.category }}</h3>
+        <table class="grid">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Display</th>
+              <th>Sort</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              *ngFor="let o of group.rows"
+              [class.selected]="selected?.code === o.code"
+              (click)="select(o)"
+            >
+              <td>
+                <span class="dot" [style.background]="o.color || '#ccc'"></span>
+                <code>{{ o.code }}</code>
+              </td>
+              <td>{{ o.displayName || '—' }}</td>
+              <td>{{ o.sortOrder }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="edit-pane" *ngIf="selected">
+      <h2>
+        <span class="dot lg" [style.background]="selected.color || '#ccc'"></span>
+        {{ selected.code }}
+        <small class="muted">value: {{ selected.value }}</small>
+      </h2>
+
+      <form [formGroup]="form" (ngSubmit)="save()">
+        <label>
+          Display name
+          <input formControlName="displayName" />
+        </label>
+        <label>
+          Description
+          <input formControlName="description" />
+        </label>
+        <label>
+          Colour
+          <span class="color-row">
+            <input formControlName="color" placeholder="#1976d2" />
+            <input
+              type="color"
+              [value]="form.controls.color.value || '#999999'"
+              (input)="form.controls.color.setValue(($any($event.target)).value)"
+            />
+          </span>
+        </label>
+        <label>
+          Category
+          <input formControlName="category" />
+        </label>
+        <label>
+          Sort order
+          <input type="number" formControlName="sortOrder" />
+        </label>
+
+        <div class="actions">
+          <button type="submit" class="btn primary" [disabled]="saving">Save</button>
+          <button type="button" class="btn" (click)="reset()" [disabled]="saving">
+            Reset to defaults
+          </button>
+        </div>
+      </form>
+    </aside>
+  </div>
+</div>

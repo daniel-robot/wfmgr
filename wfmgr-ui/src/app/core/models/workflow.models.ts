@@ -384,3 +384,183 @@ export interface EffectiveWorkflowConfig {
   unmatchedSlots: EffectiveWorkflowUnmatchedSlot[];
   evaluatedProfiles: EffectiveWorkflowEvaluatedProfile[];
 }
+
+// ── Workflow transition catalog (Phase 2 admin) ────────────────────────────
+
+export interface WorkflowTransition {
+  id: string;
+  code: string;
+  phase: string;
+  sortOrder: number;
+  toStatus: string;
+  triggerName: string;
+  triggerType: string;
+  configSlot: string | null;
+  description: string | null;
+  isEnabled: boolean;
+  fromStatuses: string[];
+  requiredRoles: string[];
+  gateChecks: string[];
+  successActions: string[];
+  failureActions: string[];
+  workItemsToCreate: string[];
+  concurrencyHash: string;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface CreateWorkflowTransitionRequest {
+  code: string;
+  phase: string;
+  sortOrder: number;
+  toStatus: string;
+  triggerName: string;
+  triggerType: string;
+  configSlot: string | null;
+  description: string | null;
+  fromStatuses: string[];
+  requiredRoles: string[];
+  gateChecks: string[];
+  successActions: string[];
+  failureActions: string[];
+  workItemsToCreate: string[];
+  changeReason: string | null;
+}
+
+export interface UpdateWorkflowTransitionRequest {
+  phase: string;
+  sortOrder: number;
+  toStatus: string;
+  triggerName: string;
+  triggerType: string;
+  configSlot: string | null;
+  description: string | null;
+  fromStatuses: string[];
+  requiredRoles: string[];
+  gateChecks: string[];
+  successActions: string[];
+  failureActions: string[];
+  workItemsToCreate: string[];
+  expectedHash: string | null;
+  changeReason: string | null;
+}
+
+export interface ToggleWorkflowTransitionRequest {
+  expectedHash: string | null;
+  changeReason: string | null;
+}
+
+export interface ValidateWorkflowTransitionResponse {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface WorkflowTransitionChangeLog {
+  changeLogId: number;
+  transitionId: string;
+  code: string;
+  action: string;
+  actorId: string | null;
+  createdAt: string;
+  changeReason: string | null;
+  snapshotJson: string | null;
+}
+
+export interface WorkflowMetaItem {
+  code: string;
+  description: string | null;
+}
+
+export interface WorkflowMetaCatalog {
+  caseStatuses: WorkflowMetaItem[];
+  workItemTypes: WorkflowMetaItem[];
+  caseFormTypes: WorkflowMetaItem[];
+  roles: WorkflowMetaItem[];
+  gateChecks: WorkflowMetaItem[];
+  sideEffectActions: WorkflowMetaItem[];
+  triggerTypes: WorkflowMetaItem[];
+  slotCodes: WorkflowMetaItem[];
+}
+
+// ── Workflow vocabulary catalog (Phase 3 admin) ────────────────────────────
+
+export type WorkflowVocabularyKind = 'Role' | 'WorkItemType' | 'CaseFormType';
+
+export interface WorkflowVocabularyTerm {
+  id: string;
+  kind: WorkflowVocabularyKind;
+  code: string;
+  displayName: string | null;
+  description: string | null;
+  sortOrder: number;
+  isSystem: boolean;
+  isEnabled: boolean;
+  concurrencyHash: string;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface CreateWorkflowVocabularyTermRequest {
+  kind: WorkflowVocabularyKind;
+  code: string;
+  displayName: string | null;
+  description: string | null;
+  sortOrder: number | null;
+  changeReason: string | null;
+}
+
+export interface UpdateWorkflowVocabularyTermRequest {
+  displayName: string | null;
+  description: string | null;
+  sortOrder: number | null;
+  expectedHash: string | null;
+  changeReason: string | null;
+}
+
+export interface ToggleWorkflowVocabularyTermRequest {
+  expectedHash: string | null;
+  changeReason: string | null;
+}
+
+export interface ValidateWorkflowVocabularyTermResponse {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface WorkflowVocabularyChangeLog {
+  changeLogId: number;
+  termId: string;
+  kind: WorkflowVocabularyKind;
+  code: string;
+  action: string;
+  actorId: string | null;
+  createdAt: string;
+  changeReason: string | null;
+  snapshotJson: string | null;
+}
+
+// ── Case status overlay (Phase 4 admin) ────────────────────────────────────
+
+export interface CaseStatusOverlay {
+  code: string;
+  value: number;
+  displayName: string | null;
+  description: string | null;
+  color: string | null;
+  category: string | null;
+  sortOrder: number;
+  concurrencyHash: string;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface UpdateCaseStatusOverlayRequest {
+  displayName: string | null;
+  description: string | null;
+  color: string | null;
+  category: string | null;
+  sortOrder: number | null;
+  expectedHash: string | null;
+}

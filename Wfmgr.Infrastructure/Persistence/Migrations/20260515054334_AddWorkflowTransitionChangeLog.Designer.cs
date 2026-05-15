@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Wfmgr.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Wfmgr.Infrastructure.Persistence;
 namespace Wfmgr.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(WfmgrDbContext))]
-    partial class WfmgrDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260515054334_AddWorkflowTransitionChangeLog")]
+    partial class AddWorkflowTransitionChangeLog
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -616,55 +619,6 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.ToTable("WorkItem", (string)null);
                 });
 
-            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowCaseStatusOverlayEntity", b =>
-                {
-                    b.Property<string>("Code")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Category")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Color")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<string>("DisplayName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Value")
-                        .HasColumnType("integer");
-
-                    b.Property<uint>("Xmin")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Code");
-
-                    b.HasIndex("Category");
-
-                    b.HasIndex("SortOrder");
-
-                    b.ToTable("WorkflowCaseStatusOverlay", (string)null);
-                });
-
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowConfigChangeLogEntity", b =>
                 {
                     b.Property<long>("ChangeLogId")
@@ -975,110 +929,6 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.HasKey("TransitionId", "FromStatus");
 
                     b.ToTable("WorkflowTransitionFromStatus", (string)null);
-                });
-
-            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowVocabularyChangeLogEntity", b =>
-                {
-                    b.Property<long>("ChangeLogId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("ChangeLogId"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("ActorId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("ChangeReason")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("SnapshotJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<Guid>("TermId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("ChangeLogId");
-
-                    b.HasIndex("TermId", "CreatedAt");
-
-                    b.HasIndex("Kind", "Code", "CreatedAt");
-
-                    b.ToTable("WorkflowVocabularyChangeLog", (string)null);
-                });
-
-            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowVocabularyTermEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<string>("DisplayName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsSystem")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<uint>("Xmin")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Kind", "Code")
-                        .IsUnique();
-
-                    b.HasIndex("Kind", "SortOrder");
-
-                    b.ToTable("WorkflowVocabularyTerm", (string)null);
                 });
 
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.AuditLogEntity", b =>

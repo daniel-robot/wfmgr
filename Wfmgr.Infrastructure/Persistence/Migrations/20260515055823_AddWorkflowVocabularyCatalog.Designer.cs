@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Wfmgr.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Wfmgr.Infrastructure.Persistence;
 namespace Wfmgr.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(WfmgrDbContext))]
-    partial class WfmgrDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260515055823_AddWorkflowVocabularyCatalog")]
+    partial class AddWorkflowVocabularyCatalog
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -614,55 +617,6 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.HasIndex("AssignedRole", "Status");
 
                     b.ToTable("WorkItem", (string)null);
-                });
-
-            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowCaseStatusOverlayEntity", b =>
-                {
-                    b.Property<string>("Code")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Category")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Color")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<string>("DisplayName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Value")
-                        .HasColumnType("integer");
-
-                    b.Property<uint>("Xmin")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Code");
-
-                    b.HasIndex("Category");
-
-                    b.HasIndex("SortOrder");
-
-                    b.ToTable("WorkflowCaseStatusOverlay", (string)null);
                 });
 
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowConfigChangeLogEntity", b =>

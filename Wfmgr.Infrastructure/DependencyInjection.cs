@@ -6,10 +6,14 @@ using Wfmgr.Application.Integrations;
 using Wfmgr.Application.Integrations.Dtos;
 using Wfmgr.Application.Workflows.V1;
 using Wfmgr.Application.Workflows.V1.Config;
+using Wfmgr.Application.Workflows.V1.CaseStatuses;
+using Wfmgr.Application.Workflows.V1.Definitions;
+using Wfmgr.Application.Workflows.V1.Vocabulary;
 using Wfmgr.Infrastructure.Integrations;
 using Wfmgr.Infrastructure.Persistence;
 using Wfmgr.Infrastructure.Profiles;
 using Wfmgr.Infrastructure.Persistence.Repositories;
+using Wfmgr.Infrastructure.Workflows;
 
 namespace Wfmgr.Infrastructure;
 
@@ -26,6 +30,9 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowDataAccess, WorkflowDataAccess>();
         services.AddScoped<IWorkflowProfileResolver, WorkflowProfileResolver>();
         services.AddScoped<IWorkflowConfigService, WorkflowConfigService>();
+        services.AddSingleton<IWorkflowTransitionCatalogService, WorkflowTransitionCatalogService>();
+        services.AddSingleton<IWorkflowVocabularyCatalogService, WorkflowVocabularyCatalogService>();
+        services.AddSingleton<ICaseStatusOverlayService, CaseStatusOverlayService>();
         services.AddScoped<IExternalEventDispatcher, ExternalEventDispatcher>();
         services.AddHttpClient<IPvMedClient, PvMedClient>(client =>
         {
