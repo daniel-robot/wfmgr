@@ -553,6 +553,7 @@ public class CaseWorkflowService : ICaseWorkflowService
             TriggerName = "CancelCase",
             TriggerType = WorkflowTriggerType.User,
             TriggeredBy = triggeredBy,
+            ActorRoles = [WorkflowRoles.Physician],
             Reason = reason,
             Metadata = new
             {

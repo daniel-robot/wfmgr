@@ -7,6 +7,7 @@ Angular 21 testing console for the radiotherapy workflow backend.
 This app is intentionally simple and built for backend workflow testing, not production UX. It lets developers exercise the full case lifecycle without needing Postman or curl.
 
 Supported operations:
+
 - Create a case
 - Submit simulation record
 - Simulate CT image stored event
@@ -72,7 +73,7 @@ Output goes to `dist/wfmgr-ui/`.
 ## Routes
 
 | Route | Page |
-|-------|------|
+| ------- | ------ |
 | `/` | Dashboard |
 | `/cases` | Case list |
 | `/cases/new` | Create case |
