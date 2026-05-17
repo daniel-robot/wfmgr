@@ -1,6 +1,9 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Wfmgr.Application.Abstractions.Persistence;
 using Wfmgr.Application.Abstractions.Persistence.Models;
+using Wfmgr.Application.Diagnostics;
 using Wfmgr.Application.Integrations;
 using Wfmgr.Application.Integrations.Dtos;
 using Wfmgr.Application.Workflows.V1;
@@ -42,13 +45,41 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
 
     public async Task DispatchAsync(ExternalIntegrationEventRequest request, CancellationToken ct)
     {
-        if (await _dataAccess.ExternalEventExistsAsync(request.Source, request.Type, request.ExternalId, ct))
-        {
-            return;
-        }
+        using var activity = WfmgrActivitySource.Source.StartActivity(WfmgrActivitySource.ExternalEventReceive);
+        activity?.SetTag(WfmgrActivitySource.TagExternalSource, request.Source);
+        activity?.SetTag(WfmgrActivitySource.TagExternalType, request.Type);
+        activity?.SetTag(WfmgrActivitySource.TagExternalEventId, request.ExternalId);
+
+        // Inbox-first idempotency. The composite primary key on the inbox row guarantees
+        // dedup at the database level even under concurrent writers; if a parallel insert
+        // races us, SaveChangesAsync below will throw and the caller / retry loop will
+        // observe the duplicate.
+        var integration = request.Source;
+        var externalEventId = request.ExternalId;
+        var payloadHash = ComputePayloadHash(request.PayloadJson);
+        var traceparent = WfmgrActivitySource.CurrentTraceparent();
 
         var resolvedCase = await ResolveCaseAsync(request, ct);
         var caseId = resolvedCase?.CaseId;
+
+        var reserved = await _dataAccess.TryReserveExternalEventInboxAsync(
+            integration, externalEventId, messageType: null,
+            payloadHash: payloadHash, caseId: caseId, traceparent: traceparent, ct);
+
+        if (!reserved)
+        {
+            activity?.SetTag(WfmgrActivitySource.TagDuplicate, true);
+            return;
+        }
+
+        // Back-compat: the legacy ExternalEvent table is still the source of truth for
+        // historical event lookup, so we continue to check + write it. Once all consumers
+        // have moved to the inbox-only API the legacy check can be removed.
+        if (await _dataAccess.ExternalEventExistsAsync(request.Source, request.Type, request.ExternalId, ct))
+        {
+            activity?.SetTag(WfmgrActivitySource.TagDuplicate, true);
+            return;
+        }
 
         try
         {
@@ -79,6 +110,8 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
                 ProcessedAt = DateTimeOffset.UtcNow,
                 ProcessStatus = "Processed"
             }, ct);
+
+            await _dataAccess.MarkExternalEventInboxProcessedAsync(integration, externalEventId, caseId, ct);
         }
         catch (Exception ex)
         {
@@ -101,6 +134,13 @@ public class ExternalEventDispatcher : IExternalEventDispatcher
         }
 
         await _dataAccess.SaveChangesAsync(ct);
+    }
+
+    private static string? ComputePayloadHash(string? payload)
+    {
+        if (string.IsNullOrEmpty(payload)) return null;
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
+        return Convert.ToHexString(bytes);
     }
 
     private async Task HandleEventAsync(ExternalIntegrationEventRequest request, CaseData? caseData, CancellationToken ct)

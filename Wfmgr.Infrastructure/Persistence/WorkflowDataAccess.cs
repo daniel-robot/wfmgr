@@ -517,11 +517,36 @@ public class WorkflowDataAccess : IWorkflowDataAccess
             RetryCount = item.RetryCount,
             NextRetryAt = item.NextRetryAt,
             CreatedAt = item.CreatedAt,
-            LastTriedAt = item.LastTriedAt
+            LastTriedAt = item.LastTriedAt,
+            MessageType = item.MessageType,
+            SchemaVersion = item.SchemaVersion,
+            CorrelationId = item.CorrelationId,
+            Traceparent = item.Traceparent,
+            DeliveryMode = item.DeliveryMode
         }, ct);
     }
 
-    public async Task EnqueueOutboxAsync(Guid? caseId, string targetSystem, string action, string payloadJson, CancellationToken ct)
+    public Task EnqueueOutboxAsync(Guid? caseId, string targetSystem, string action, string payloadJson, CancellationToken ct) =>
+        EnqueueOutboxAsync(
+            caseId, targetSystem, action, payloadJson,
+            messageType: null,
+            schemaVersion: 1,
+            correlationId: caseId,
+            traceparent: Wfmgr.Application.Diagnostics.WfmgrActivitySource.CurrentTraceparent(),
+            deliveryMode: Wfmgr.Domain.Integrations.OutboxDeliveryMode.Http,
+            ct);
+
+    public async Task EnqueueOutboxAsync(
+        Guid? caseId,
+        string targetSystem,
+        string action,
+        string payloadJson,
+        string? messageType,
+        int schemaVersion,
+        Guid? correlationId,
+        string? traceparent,
+        Wfmgr.Domain.Integrations.OutboxDeliveryMode deliveryMode,
+        CancellationToken ct)
     {
         await AddOutboxMessageAsync(new OutboxMessageData
         {
@@ -532,8 +557,57 @@ public class WorkflowDataAccess : IWorkflowDataAccess
             PayloadJson = payloadJson,
             Status = Domain.Enums.OutboxStatus.New,
             RetryCount = 0,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow,
+            MessageType = messageType,
+            SchemaVersion = schemaVersion,
+            CorrelationId = correlationId,
+            Traceparent = traceparent,
+            DeliveryMode = deliveryMode
         }, ct);
+    }
+
+    public async Task<bool> TryReserveExternalEventInboxAsync(
+        string integration,
+        string externalEventId,
+        string? messageType,
+        string? payloadHash,
+        Guid? caseId,
+        string? traceparent,
+        CancellationToken ct)
+    {
+        var existing = await _dbContext.ExternalEventInbox
+            .AsNoTracking()
+            .AnyAsync(x => x.Integration == integration && x.ExternalEventId == externalEventId, ct);
+        if (existing) return false;
+
+        await _dbContext.ExternalEventInbox.AddAsync(new ExternalEventInboxEntity
+        {
+            Integration = integration,
+            ExternalEventId = externalEventId,
+            MessageType = messageType,
+            PayloadHash = payloadHash,
+            CaseId = caseId,
+            Traceparent = traceparent,
+            ReceivedAt = DateTimeOffset.UtcNow
+        }, ct);
+
+        // Note: the unique (Integration, ExternalEventId) primary key still guards us against
+        // a concurrent insert race; the caller's SaveChangesAsync will surface that as a
+        // DbUpdateException which they should treat as a duplicate.
+        return true;
+    }
+
+    public async Task MarkExternalEventInboxProcessedAsync(
+        string integration,
+        string externalEventId,
+        Guid? caseId,
+        CancellationToken ct)
+    {
+        var row = await _dbContext.ExternalEventInbox
+            .FirstOrDefaultAsync(x => x.Integration == integration && x.ExternalEventId == externalEventId, ct);
+        if (row is null) return;
+        row.ProcessedAt = DateTimeOffset.UtcNow;
+        if (caseId is not null) row.CaseId = caseId;
     }
 
     public async Task AddAuditLogAsync(AuditLogData item, CancellationToken ct)

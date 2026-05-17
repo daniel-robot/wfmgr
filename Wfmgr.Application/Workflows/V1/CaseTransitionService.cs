@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Wfmgr.Application.Abstractions.Persistence;
 using Wfmgr.Application.Abstractions.Persistence.Models;
+using Wfmgr.Application.Diagnostics;
 using Wfmgr.Application.Workflows.V1.Definitions;
 using Wfmgr.Application.Workflows.V1.Gates;
 using Wfmgr.Application.Workflows.V1.SideEffects;
@@ -71,7 +72,12 @@ public sealed class CaseTransitionService : ICaseTransitionService
         GateValidationContext context,
         CancellationToken ct = default,
         CaseStatus? fallbackToStatus = null)
-    {
+    {using var activity = WfmgrActivitySource.Source.StartActivity(WfmgrActivitySource.ApplyTransition);
+        activity?.SetTag(WfmgrActivitySource.TagCaseId, caseData.CaseId);
+        activity?.SetTag(WfmgrActivitySource.TagTriggerName, triggerName);
+        activity?.SetTag(WfmgrActivitySource.TagFromStatus, caseData.CurrentStatus.ToString());
+
+        
         var fromStatus = caseData.CurrentStatus;
 
         // ── 1. Look up transition definition in catalog ────────────────────────
@@ -157,6 +163,9 @@ public sealed class CaseTransitionService : ICaseTransitionService
                 ct);
         }
 
+        activity?.SetTag(WfmgrActivitySource.TagTransitionCode, transitionCode ?? "(fallback)");
+        activity?.SetTag(WfmgrActivitySource.TagToStatus, toStatus.ToString());
+        activity?.SetTag(WfmgrActivitySource.TagResult, "succeeded");
         return TransitionExecutionResult.Succeeded(transitionCode, fromStatus, toStatus);
     }
 

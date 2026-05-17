@@ -11,6 +11,7 @@ This document describes the internals of the `Wfmgr.Application.Workflows.V1` wo
 3. [Compensation Catalog](#3-compensation-catalog)
 4. [External Event Integration](#4-external-event-integration)
 5. [Outbox Failure Escalation](#5-outbox-failure-escalation)
+5b. [Asynchronous Dispatch (RabbitMQ + MassTransit)](#5b-asynchronous-dispatch-rabbitmq--masstransit)
 6. [Workflow Configuration](#6-workflow-configuration)
 7. [Runtime Catalog Storage](#7-runtime-catalog-storage)
 
@@ -307,6 +308,83 @@ Any other action with an exhausted retry budget is marked `Failed` without escal
 ### Unit-of-work boundary
 
 Both the outbox status update (`Failed`) and the compensation side-effects (status change, work item creation) are persisted in a single `SaveChangesAsync` call inside the worker so that neither can be committed without the other.
+
+---
+
+## 5b. Asynchronous Dispatch (RabbitMQ + MassTransit)
+
+The outbox is delivery-agnostic: each row's `Action` is routed to either the **HTTP**
+adapter (synchronous) or the **bus** adapter (RabbitMQ via MassTransit). Routing is
+driven by `Messaging:BusActions` in configuration — actions not listed take the HTTP
+path. With no `RabbitMq:Host` configured the API runs in HTTP-only mode and any
+attempt to publish to the bus fails fast at startup.
+
+### Dispatch decision
+
+```
+OutboxWorker pulls Pending row
+        │
+        ├─ Action ∈ Messaging:BusActions  → IBusPublisher.PublishAsync (RabbitMQ)
+        └─ otherwise                       → IHttpAdapter.SendAsync
+        │
+        on success → Sent
+        on failure → retry / Failed → compensation (unchanged from §5)
+```
+
+The retry / failure / compensation flow in §5 is identical for both paths — the bus
+publish is just another `attempt delivery` outcome.
+
+### Inbound webhook bridge
+
+When `Messaging:InboundViaBus=true`, `POST /api/integration/events` becomes a thin
+accept-and-publish endpoint. `IngestExternalEventConsumer` replays each message
+through `IExternalEventDispatcher`, which still uses the `ExternalEventInbox` table
+for idempotency, so broker redelivery is safe.
+
+### Sagas
+
+Multi-step external handshakes (currently the contour → Monaco import flow) are
+modelled as MassTransit state-machine sagas rather than ad-hoc status fields on the
+case row. `ContouringSaga` is persisted in `ContouringSagaState` via MassTransit's
+EF Core repository with optimistic concurrency; the correlation id is the case id.
+
+| State | Triggered by | Transitions to |
+| --- | --- | --- |
+| `Initial` | `StartContouringSaga.V1` (relayed from `SendImagesToContourTool.V1`) | `AwaitingContour` |
+| `AwaitingContour` | `ContourCompleted.V1` (translated from external event `contour.completed`) | `AwaitingMonacoAck` |
+| `AwaitingMonacoAck` | `MonacoImportAcked.V1` (translated from `monaco.import.acked`) | Final |
+
+Timeouts (`Schedule(...)`) are not yet wired — they require the
+`delayed_message_exchange` plugin or Quartz. The `TimeoutTokenId` column is
+reserved. Until then, stuck sagas rely on broker retries plus operator intervention.
+
+### Production hardening (Phase 5)
+
+- **Transactional consume.** Every consumer is wrapped in MassTransit's
+  `UseInMemoryOutbox`. Messages a consumer publishes via `IPublishEndpoint` are
+  buffered and released only after the consumer completes successfully — a throw
+  discards them, so retries do not produce duplicate side-effects on the bus.
+  (This is per-process buffering, not a cross-DB outbox; the durable `OutboxMessage`
+  table in §5 is still the source of truth for the original send.)
+
+- **Dead-letter visibility.** `GET /health/messaging` scrapes the RabbitMQ
+  management API and reports the depth of every `*_error` queue. Thresholds
+  (`RabbitMq:DeadLetterDegradedThreshold`, `RabbitMq:DeadLetterUnhealthyThreshold`)
+  promote the check to `Degraded` / `Unhealthy`. A failed scrape is `Degraded` so
+  observability outages never block the publisher.
+
+- **Broker metrics.** Docker Compose ships a Prometheus container that scrapes
+  RabbitMQ's built-in `rabbitmq_prometheus` exporter on port `15692`. The scrape
+  config lives in `observability/prometheus.yml`. Operators alert on
+  `rabbitmq_queue_messages{queue=~".*_error"}` for the same DLQ depths surfaced by
+  the health probe, plus `rabbitmq_queue_messages_ready` for backlog.
+
+### Still open
+
+- **Quorum queues** for clinical paths (Monaco / PvMed) — broker-side durability
+  across node failure (`cfg.SetQuorumQueue()` on the relevant endpoints).
+- **Saga timeouts** — requires a custom RabbitMQ image with
+  `delayed_message_exchange` or a Quartz scheduler.
 
 ---
 

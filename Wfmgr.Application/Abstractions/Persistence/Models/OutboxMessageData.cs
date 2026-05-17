@@ -1,4 +1,5 @@
 using Wfmgr.Domain.Enums;
+using Wfmgr.Domain.Integrations;
 
 namespace Wfmgr.Application.Abstractions.Persistence.Models;
 
@@ -14,4 +15,10 @@ public class OutboxMessageData
     public DateTimeOffset? NextRetryAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? LastTriedAt { get; set; }
+
+    public string? MessageType { get; set; }
+    public int SchemaVersion { get; set; } = 1;
+    public Guid? CorrelationId { get; set; }
+    public string? Traceparent { get; set; }
+    public OutboxDeliveryMode DeliveryMode { get; set; } = OutboxDeliveryMode.Http;
 }

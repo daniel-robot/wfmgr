@@ -3,6 +3,7 @@ using Wfmgr.Application.Abstractions.Persistence;
 using Wfmgr.Application.Abstractions.Persistence.Models;
 using Wfmgr.Application.Workflows.V1.Dtos;
 using Wfmgr.Application.Workflows.V1.Gates;
+using Wfmgr.Application.Workflows.V1.Outbox;
 using Wfmgr.Application.Workflows.V1.StateMachine;
 using Wfmgr.Application.Workflows.V1.WorkItems;
 using Wfmgr.Domain;
@@ -19,17 +20,20 @@ public class CaseWorkflowService : ICaseWorkflowService
     private readonly IWorkflowProfileResolver _profileResolver;
     private readonly IWorkItemLifecycleService _workItemLifecycleService;
     private readonly ICaseTransitionService _caseTransitionService;
+    private readonly IOutboxRoutingPolicy _routing;
 
     public CaseWorkflowService(
         IWorkflowDataAccess dataAccess,
         IWorkflowProfileResolver profileResolver,
         IWorkItemLifecycleService workItemLifecycleService,
-        ICaseTransitionService caseTransitionService)
+        ICaseTransitionService caseTransitionService,
+        IOutboxRoutingPolicy routing)
     {
         _dataAccess = dataAccess;
         _profileResolver = profileResolver;
         _workItemLifecycleService = workItemLifecycleService;
         _caseTransitionService = caseTransitionService;
+        _routing = routing;
     }
 
     // Adapter: thin wrapper that bridges old TransitionExecutionContext into the new
@@ -211,6 +215,11 @@ public class CaseWorkflowService : ICaseWorkflowService
                 CaseId = caseData.CaseId,
                 TargetSystem = contourProvider,
                 Action = OutboxActions.SendImagesToContourTool,
+                MessageType = typeof(Wfmgr.Contracts.Contouring.SendImagesToContourTool.V1).FullName,
+                SchemaVersion = 1,
+                CorrelationId = caseData.CaseId,
+                Traceparent = Wfmgr.Application.Diagnostics.WfmgrActivitySource.CurrentTraceparent(),
+                DeliveryMode = _routing.GetDeliveryMode(OutboxActions.SendImagesToContourTool),
                 PayloadJson = JsonSerializer.Serialize(new
                 {
                     caseData.CaseId,
@@ -701,6 +710,11 @@ public class CaseWorkflowService : ICaseWorkflowService
             CaseId = caseData.CaseId,
             TargetSystem = "Monaco",
             Action = OutboxActions.SendToMonacoImport,
+            MessageType = typeof(Wfmgr.Contracts.Monaco.SendToMonacoImport.V1).FullName,
+            SchemaVersion = 1,
+            CorrelationId = caseData.CaseId,
+            Traceparent = Wfmgr.Application.Diagnostics.WfmgrActivitySource.CurrentTraceparent(),
+            DeliveryMode = _routing.GetDeliveryMode(OutboxActions.SendToMonacoImport),
             PayloadJson = JsonSerializer.Serialize(new
             {
                 caseData.CaseId,

@@ -136,6 +136,162 @@ dotnet tool run dotnet-ef migrations add <MigrationName> \
 
 ---
 
+## 1b. Messaging (RabbitMQ — optional)
+
+The outbox supports two delivery modes per action: **HTTP** (synchronous, the default) and
+**Bus** (asynchronous via RabbitMQ + MassTransit). The bus is opt-in — without configuration
+the API runs in HTTP-only mode and any action accidentally routed to the bus fails fast.
+
+### Start RabbitMQ
+
+```bash
+docker compose up -d rabbitmq
+```
+
+Management UI: `http://localhost:15672` (user `wfmgr` / password `wfmgr`).
+
+### Enable the bus for the API
+
+Configuration is read from `RabbitMq:Host` and `Messaging:BusActions`. The committed
+`appsettings.json` ships with the host unset; enable per-run via env vars:
+
+```bash
+export RabbitMq__Host=localhost
+export RabbitMq__Username=wfmgr
+export RabbitMq__Password=wfmgr
+export Messaging__BusActions__0=SendToMonacoImport
+
+dotnet run --project Wfmgr.Api/Wfmgr.Api.csproj
+```
+
+### Health probe
+
+| Route | Returns |
+|-------|---------|
+| `GET /health` | Liveness (process up) |
+| `GET /health/ready` | Readiness (all registered checks) |
+| `GET /health/messaging` | JSON: publisher mode (`bus` / `http-only`) + implementation type |
+
+### Switching an action to the bus
+
+1. Add the outbox action name to `Messaging:BusActions`.
+2. Ensure an `IConsumer<T>` exists in `Wfmgr.Infrastructure/Integrations/Messaging/Consumers/`
+   and is registered in `AddMessaging()` in `Wfmgr.Infrastructure/DependencyInjection.cs`.
+3. The next outbox row stamped with that action will be published to RabbitMQ instead of
+   dispatched over HTTP. Existing in-flight HTTP rows finish on the HTTP path.
+
+### Routing inbound webhooks through the bus
+
+Set `Messaging:InboundViaBus=true` to make `POST /api/integration/events` publish each
+request to RabbitMQ instead of dispatching inline. The `IngestExternalEventConsumer`
+replays it through `IExternalEventDispatcher`, which still uses the inbox table
+(`ExternalEventInbox`) for idempotency — so broker redelivery is safe.
+
+```bash
+export Messaging__InboundViaBus=true
+```
+
+This converts the controller into a thin "accept-and-publish" endpoint, letting an
+inbound flood drain at the consumer's pace instead of holding HTTP connections open.
+
+### Saga: `ContouringSaga` (Phase 3)
+
+The contour → import handshake runs as a MassTransit state-machine saga so that
+"which step is this case in" has a single durable home outside the case row.
+
+| State | Triggered by | Transitions to |
+| --- | --- | --- |
+| `Initial` | `StartContouringSaga.V1` (published by `StartContouringSagaRelay` when `SendImagesToContourTool.V1` is observed) | `AwaitingContour` |
+| `AwaitingContour` | `ContourCompleted.V1` (translated by `SagaExternalEventTranslatorConsumer` from `IngestExternalEvent.V1` of type `contour.completed`) | `AwaitingMonacoAck` |
+| `AwaitingMonacoAck` | `MonacoImportAcked.V1` (translated from external events of type `monaco.import.acked`) | Final (row removed) |
+
+Saga instances are persisted in the `ContouringSagaState` table inside `WfmgrDbContext`,
+using MassTransit's EF Core repository with optimistic concurrency. Correlation id =
+case id, so every event for the same case lands on the same instance.
+
+> **Timeouts are not yet wired.** `Schedule(...)` requires the RabbitMQ
+> `delayed_message_exchange` plugin or a Quartz scheduler. The `TimeoutTokenId`
+> column is reserved for that wiring. Until then the saga relies on broker
+> retries + manual operator intervention for stuck cases.
+
+### Production hardening (Phase 5)
+
+**Transactional consume.** Every bus consumer runs inside MassTransit's
+`InMemoryOutbox`: messages a consumer publishes via `IPublishEndpoint` are buffered
+and released only after the consumer completes successfully. A consumer throw
+discards the buffered messages — no partial side-effects on retry.
+
+**Dead-letter monitoring.** `GET /health/messaging` scrapes the RabbitMQ management
+API for `*_error` queue depth and reports per-queue counts plus a total. Thresholds
+are configurable:
+
+```jsonc
+"RabbitMq": {
+  "ManagementPort": 15672,
+  "ManagementScheme": "http",
+  "DeadLetterDegradedThreshold": 1,    // any DLQ message → Degraded
+  "DeadLetterUnhealthyThreshold": 100  // 100+ DLQ messages → Unhealthy
+}
+```
+
+A failed scrape reports Degraded (publisher still works; only observability is impaired).
+
+**Broker metrics.** The local-dev stack ships a Prometheus container scraping
+RabbitMQ's built-in `rabbitmq_prometheus` plugin:
+
+```bash
+docker compose up -d rabbitmq prometheus
+open http://localhost:9090       # Prometheus UI
+open http://localhost:15692/metrics  # raw exporter
+```
+
+Useful queries:
+- `rabbitmq_queue_messages{queue=~".*_error"}` — DLQ depth per endpoint
+- `rabbitmq_queue_messages_ready` — work backlog
+- `rabbitmq_channel_consumers` — confirms wfmgr is connected
+
+**Example `/health/messaging` response (bus mode, one stuck message):**
+
+```json
+{
+  "status": "Degraded",
+  "results": {
+    "messaging": {
+      "status": "Degraded",
+      "data": {
+        "mode": "bus",
+        "dlq.total": 1,
+        "dlq.queues": 1,
+        "dlq.send-images-to-contour-tool_error": 1
+      }
+    }
+  }
+}
+```
+
+If the management API itself is unreachable the check stays Degraded (publisher still
+works; only observability is impaired) and surfaces `data.probeError`.
+
+**Smoke-testing the hardening locally:**
+
+```bash
+# 1. DLQ probe — force a message into <queue>_error (e.g. by temporarily throwing
+#    in a consumer), then:
+curl -s http://localhost:5223/health/messaging | jq
+
+# Clear it afterwards:
+docker exec -it wfmgr-rabbitmq rabbitmqctl purge_queue <name>_error
+
+# 2. Prometheus scrape target is up
+curl -s 'http://localhost:9090/api/v1/targets' \
+  | jq '.data.activeTargets[] | {job:.labels.job, health, lastError}'
+
+# 3. InMemoryOutbox — temporarily Publish() + throw inside a consumer; verify the
+#    published message never appears on any downstream queue across all retries.
+```
+
+---
+
 ## 2. Start the Backend
 
 ```bash

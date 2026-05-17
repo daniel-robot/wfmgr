@@ -17,10 +17,63 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.0")
+                .HasAnnotation("ProductVersion", "9.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Integrations.Messaging.Sagas.ContouringSagaState", b =>
+                {
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessionNumber")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ContourCompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CurrentState")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("FaultReason")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset?>("MonacoAckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TimeoutTokenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TransitionCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TriggeredBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("CorrelationId");
+
+                    b.HasIndex("CurrentState");
+
+                    b.ToTable("ContouringSagaState", (string)null);
+                });
 
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.AuditLogEntity", b =>
                 {
@@ -342,6 +395,44 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.ToTable("ExternalEvent", (string)null);
                 });
 
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.ExternalEventInboxEntity", b =>
+                {
+                    b.Property<string>("Integration")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ExternalEventId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("MessageType")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("PayloadHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Traceparent")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Integration", "ExternalEventId");
+
+                    b.HasIndex("CaseId");
+
+                    b.ToTable("ExternalEventInbox", (string)null);
+                });
+
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.IntegrationReferenceEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -400,11 +491,23 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CaseId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CorrelationId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("DeliveryMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTimeOffset?>("LastTriedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MessageType")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<DateTimeOffset?>("NextRetryAt")
                         .HasColumnType("timestamp with time zone");
@@ -416,6 +519,11 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.Property<int>("RetryCount")
                         .HasColumnType("integer");
 
+                    b.Property<int>("SchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -424,9 +532,15 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("Traceparent")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.HasKey("MessageId");
 
                     b.HasIndex("CaseId");
+
+                    b.HasIndex("CorrelationId");
 
                     b.HasIndex("Status", "NextRetryAt");
 
