@@ -10,6 +10,7 @@ using Wfmgr.Application.Abstractions.Persistence.Models;
 using Wfmgr.Application.Workflows.V1;
 using Wfmgr.Application.Workflows.V1.Definitions;
 using Wfmgr.Application.Workflows.V1.Gates;
+using Wfmgr.Application.Workflows.V1.WorkItems;
 using Wfmgr.Domain.Enums;
 using Wfmgr.Domain.WorkItems;
 
@@ -48,14 +49,18 @@ public sealed class GateValidationServiceTests
 
     private static GateValidationContext MakeEventContext(string source, string type, string externalId)
     {
-        var ctx = MakeContext();
-        ctx.Metadata = new Dictionary<string, object?>
+        return new GateValidationContext
         {
-            [GateCheckNames.MetaEventSource] = source,
-            [GateCheckNames.MetaEventType] = type,
-            [GateCheckNames.MetaEventExternalId] = externalId
+            UserId = "user-1",
+            Roles = ["System"],
+            Reason = "Event received",
+            Metadata = new Dictionary<string, object?>
+            {
+                [GateCheckNames.MetaEventSource] = source,
+                [GateCheckNames.MetaEventType] = type,
+                [GateCheckNames.MetaEventExternalId] = externalId
+            }
         };
-        return ctx;
     }
 
     private static TransitionDefinition MakeTransition(params string[] gateChecks) => new()
@@ -68,8 +73,6 @@ public sealed class GateValidationServiceTests
         GateChecks = gateChecks
     };
 
-    private static Task<string?> NullResult() => Task.FromResult<string?>(null);
-
     // ── CaseNotCancelledAsync ────────────────────────────────────────────────
 
     [Fact]
@@ -81,7 +84,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
         result.FailedChecks.Should().Contain(GateCheckNames.CaseNotCancelled);
     }
 
@@ -94,7 +97,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     // ── CancellationAllowedAsync / TreatmentNotStarted ───────────────────────
@@ -112,12 +115,8 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
-
-    // Note: There is no non-cancellable status enum value above the last
-    // cancellable one (PlanDoubleCheckOptional) in the current CaseStatus enum.
-    // This gap should be addressed when treatment delivery statuses are added.
 
     // ── ImageReferenceExistsAsync ────────────────────────────────────────────
 
@@ -132,7 +131,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -146,7 +145,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
     }
 
     [Fact]
@@ -160,7 +159,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
     }
 
     // ── ContourResultExistsAsync / ContourResultRefsValid ────────────────────
@@ -175,7 +174,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -188,7 +187,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
     }
 
     // ── Simulation checks ────────────────────────────────────────────────────
@@ -204,7 +203,7 @@ public sealed class GateValidationServiceTests
         var transition = MakeTransition(GateCheckNames.SimulationScheduleExists);
         var result = await _sut.ValidateAsync(caseData, transition, context: MakeContext());
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -218,7 +217,39 @@ public sealed class GateValidationServiceTests
         var transition = MakeTransition(GateCheckNames.SimulationScheduleExists);
         var result = await _sut.ValidateAsync(caseData, transition, context: MakeContext());
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
+    }
+
+    // ── SimulationRequestFormValidAsync ──────────────────────────────────────
+
+    [Fact]
+    public async Task SimulationRequestFormValid_WhenFormExists_ShouldPass()
+    {
+        var caseData = MakeCase(CaseStatus.SimScheduled);
+        _dataAccess.CaseFormExistsAsync(
+                caseData.CaseId, Domain.Forms.CaseFormTypes.SimulationRequestForm,
+                Domain.Forms.CaseFormStatuses.Submitted, Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        var transition = MakeTransition(GateCheckNames.SimulationRequestFormValid);
+        var result = await _sut.ValidateAsync(caseData, transition, context: MakeContext());
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SimulationRequestFormValid_WhenMissing_ShouldFail()
+    {
+        var caseData = MakeCase(CaseStatus.SimScheduled);
+        _dataAccess.CaseFormExistsAsync(
+                caseData.CaseId, Domain.Forms.CaseFormTypes.SimulationRequestForm,
+                Domain.Forms.CaseFormStatuses.Submitted, Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var transition = MakeTransition(GateCheckNames.SimulationRequestFormValid);
+        var result = await _sut.ValidateAsync(caseData, transition, context: MakeContext());
+
+        result.IsValid.Should().BeFalse();
     }
 
     // ── EventIdempotentAsync ─────────────────────────────────────────────────
@@ -234,7 +265,7 @@ public sealed class GateValidationServiceTests
         var context = MakeEventContext("PvMed", "AutoContourProgress", "evt-001");
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -248,7 +279,7 @@ public sealed class GateValidationServiceTests
         var context = MakeEventContext("PvMed", "AutoContourProgress", "evt-001");
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
     }
 
     [Fact]
@@ -260,7 +291,7 @@ public sealed class GateValidationServiceTests
         var context = MakeContext();
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     // ── ExternalPayloadPresentAsync ──────────────────────────────────────────
@@ -270,12 +301,16 @@ public sealed class GateValidationServiceTests
     {
         var caseData = MakeCase(CaseStatus.SimCompleted);
         var transition = MakeTransition(GateCheckNames.CaseResolvedByCorrelationKey);
-        var context = MakeContext();
-        context.ExternalEventPayload = "{\"key\": \"value\"}";
+        var context = new GateValidationContext
+        {
+            UserId = "system",
+            Roles = ["System"],
+            ExternalEventPayload = "{\"key\": \"value\"}"
+        };
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -283,12 +318,16 @@ public sealed class GateValidationServiceTests
     {
         var caseData = MakeCase(CaseStatus.SimCompleted);
         var transition = MakeTransition(GateCheckNames.CaseResolvedByCorrelationKey);
-        var context = MakeContext();
-        context.ExternalEventPayload = null;
+        var context = new GateValidationContext
+        {
+            UserId = "system",
+            Roles = ["System"],
+            ExternalEventPayload = null
+        };
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
     }
 
     // ── ReasonPresentAsync ───────────────────────────────────────────────────
@@ -298,12 +337,16 @@ public sealed class GateValidationServiceTests
     {
         var caseData = MakeCase(CaseStatus.ContoursUnderReview);
         var transition = MakeTransition(GateCheckNames.RejectionReasonRequired);
-        var context = MakeContext();
-        context.Reason = "Contours do not match clinical target volume.";
+        var context = new GateValidationContext
+        {
+            UserId = "physician-1",
+            Roles = ["Physician"],
+            Reason = "Contours do not match clinical target volume."
+        };
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -311,12 +354,16 @@ public sealed class GateValidationServiceTests
     {
         var caseData = MakeCase(CaseStatus.ContoursUnderReview);
         var transition = MakeTransition(GateCheckNames.RejectionReasonRequired);
-        var context = MakeContext();
-        context.Reason = string.Empty;
+        var context = new GateValidationContext
+        {
+            UserId = "physician-1",
+            Roles = ["Physician"],
+            Reason = string.Empty
+        };
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
     }
 
     // ── FormOrPayloadPresentAsync ────────────────────────────────────────────
@@ -326,12 +373,16 @@ public sealed class GateValidationServiceTests
     {
         var caseData = MakeCase(CaseStatus.PlanReady);
         var transition = MakeTransition(GateCheckNames.PlanPayloadValid);
-        var context = MakeContext();
-        context.ExternalEventPayload = "{\"plan\": \"data\"}";
+        var context = new GateValidationContext
+        {
+            UserId = "dosimetrist-1",
+            Roles = ["Dosimetrist"],
+            ExternalEventPayload = "{\"plan\": \"data\"}"
+        };
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -339,12 +390,16 @@ public sealed class GateValidationServiceTests
     {
         var caseData = MakeCase(CaseStatus.PlanReady);
         var transition = MakeTransition(GateCheckNames.PlanPayloadValid);
-        var context = MakeContext();
-        context.FormId = Guid.NewGuid();
+        var context = new GateValidationContext
+        {
+            UserId = "dosimetrist-1",
+            Roles = ["Dosimetrist"],
+            FormId = Guid.NewGuid()
+        };
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -352,13 +407,17 @@ public sealed class GateValidationServiceTests
     {
         var caseData = MakeCase(CaseStatus.PlanReady);
         var transition = MakeTransition(GateCheckNames.PlanPayloadValid);
-        var context = MakeContext();
-        context.FormId = null;
-        context.ExternalEventPayload = null;
+        var context = new GateValidationContext
+        {
+            UserId = "dosimetrist-1",
+            Roles = ["Dosimetrist"],
+            FormId = null,
+            ExternalEventPayload = null
+        };
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
     }
 
     // ── RetryAllowedAsync ────────────────────────────────────────────────────
@@ -372,7 +431,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -380,12 +439,16 @@ public sealed class GateValidationServiceTests
     {
         var caseData = MakeCase(CaseStatus.ContourReworkRequired);
         var transition = MakeTransition(GateCheckNames.RetryAllowed);
-        var context = MakeContext();
-        context.Metadata = new Dictionary<string, object?> { [GateCheckNames.MetaRetryAllowed] = false };
+        var context = new GateValidationContext
+        {
+            UserId = "system",
+            Roles = ["System"],
+            Metadata = new Dictionary<string, object?> { [GateCheckNames.MetaRetryAllowed] = false }
+        };
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
     }
 
     // ── AssigneeExistsAsync ──────────────────────────────────────────────────
@@ -395,12 +458,15 @@ public sealed class GateValidationServiceTests
     {
         var caseData = MakeCase(CaseStatus.PlanningPending);
         var transition = MakeTransition(GateCheckNames.AssigneeExists);
-        var context = MakeContext();
-        context.UserId = "dosimetrist-1";
+        var context = new GateValidationContext
+        {
+            UserId = "dosimetrist-1",
+            Roles = ["Scheduler"]
+        };
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -408,16 +474,19 @@ public sealed class GateValidationServiceTests
     {
         var caseData = MakeCase(CaseStatus.PlanningPending);
         var transition = MakeTransition(GateCheckNames.AssigneeExists);
-        var context = MakeContext();
-        context.UserId = null; // not in inline
-        context.Metadata = new Dictionary<string, object?>
+        var context = new GateValidationContext
         {
-            [GateCheckNames.MetaAssigneeUserId] = "dosimetrist-1"
+            UserId = "scheduler-1",
+            Roles = ["Scheduler"],
+            Metadata = new Dictionary<string, object?>
+            {
+                [GateCheckNames.MetaAssigneeUserId] = "dosimetrist-1"
+            }
         };
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -425,12 +494,51 @@ public sealed class GateValidationServiceTests
     {
         var caseData = MakeCase(CaseStatus.PlanningPending);
         var transition = MakeTransition(GateCheckNames.AssigneeExists);
-        var context = MakeContext();
-        context.UserId = null;
+        var context = new GateValidationContext
+        {
+            Roles = ["Scheduler"],
+            UserId = null
+        };
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
+    }
+
+    // ── WorkItemIdPresentAsync ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task WorkItemIdPresent_WhenIdProvided_ShouldPass()
+    {
+        var caseData = MakeCase(CaseStatus.PlanningAssigned);
+        var transition = MakeTransition(GateCheckNames.TaskAssigned);
+        var context = new GateValidationContext
+        {
+            UserId = "dosimetrist-1",
+            Roles = ["Dosimetrist"],
+            WorkItemId = Guid.NewGuid()
+        };
+
+        var result = await _sut.ValidateAsync(caseData, transition, context);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task WorkItemIdPresent_WhenIdMissing_ShouldFail()
+    {
+        var caseData = MakeCase(CaseStatus.PlanningAssigned);
+        var transition = MakeTransition(GateCheckNames.TaskAssigned);
+        var context = new GateValidationContext
+        {
+            UserId = "dosimetrist-1",
+            Roles = ["Dosimetrist"],
+            WorkItemId = null
+        };
+
+        var result = await _sut.ValidateAsync(caseData, transition, context);
+
+        result.IsValid.Should().BeFalse();
     }
 
     // ── PlanVersionExistsAsync ───────────────────────────────────────────────
@@ -445,7 +553,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -461,7 +569,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -477,7 +585,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
     }
 
     // ── ReviewApprovalExistsAsync / MinimumApprovalsReached ──────────────────
@@ -493,7 +601,7 @@ public sealed class GateValidationServiceTests
         var transition = MakeTransition(GateCheckNames.MinimumApprovalsReached);
         var result = await _sut.ValidateAsync(caseData, transition, context: MakeContext());
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -511,7 +619,7 @@ public sealed class GateValidationServiceTests
         var transition = MakeTransition(GateCheckNames.MinimumApprovalsReached);
         var result = await _sut.ValidateAsync(caseData, transition, context: MakeContext());
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -529,7 +637,73 @@ public sealed class GateValidationServiceTests
         var transition = MakeTransition(GateCheckNames.MinimumApprovalsReached);
         var result = await _sut.ValidateAsync(caseData, transition, context: MakeContext());
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
+    }
+
+    // ── SimulationRecordFormValidAsync ───────────────────────────────────────
+
+    [Fact]
+    public async Task SimulationRecordFormValid_WhenFormExists_ShouldPass()
+    {
+        var caseData = MakeCase(CaseStatus.SimInProgress);
+        _dataAccess.CaseFormExistsAsync(
+                caseData.CaseId, Domain.Forms.CaseFormTypes.SimulationRecordForm,
+                Domain.Forms.CaseFormStatuses.Submitted, Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        var transition = MakeTransition(GateCheckNames.SimulationRecordFormValid);
+        var result = await _sut.ValidateAsync(caseData, transition, context: MakeContext());
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SimulationRecordFormValid_WhenMissing_ShouldFail()
+    {
+        var caseData = MakeCase(CaseStatus.SimInProgress);
+        _dataAccess.CaseFormExistsAsync(
+                caseData.CaseId, Domain.Forms.CaseFormTypes.SimulationRecordForm,
+                Domain.Forms.CaseFormStatuses.Submitted, Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var transition = MakeTransition(GateCheckNames.SimulationRecordFormValid);
+        var result = await _sut.ValidateAsync(caseData, transition, context: MakeContext());
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    // ── QA approval checks ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task QAApprovalExists_WhenWorkItemExists_ShouldPass()
+    {
+        var caseData = MakeCase(CaseStatus.PlanQAInProgress);
+        _dataAccess.WorkItemExistsAsync(
+                caseData.CaseId, WorkItemTypes.PlanQA, WorkItemResultCodes.Approved, Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        var transition = MakeTransition(GateCheckNames.QAFormValid);
+        var result = await _sut.ValidateAsync(caseData, transition, context: MakeContext());
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task QAApprovalExists_WhenMissing_ShouldFail()
+    {
+        var caseData = MakeCase(CaseStatus.PlanQAInProgress);
+        _dataAccess.WorkItemExistsAsync(
+                caseData.CaseId, WorkItemTypes.PlanQA, WorkItemResultCodes.Approved, Arg.Any<CancellationToken>())
+            .Returns(false);
+        _dataAccess.CaseFormExistsAsync(
+                caseData.CaseId, Domain.Forms.CaseFormTypes.PlanQAForm,
+                Domain.Forms.CaseFormStatuses.Submitted, Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var transition = MakeTransition(GateCheckNames.QAFormValid);
+        var result = await _sut.ValidateAsync(caseData, transition, context: MakeContext());
+
+        result.IsValid.Should().BeFalse();
     }
 
     // ── Multiple gate checks ─────────────────────────────────────────────────
@@ -552,7 +726,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -573,7 +747,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
         result.FailedChecks.Should().Contain(GateCheckNames.SimulationScheduleExists);
         result.FailedChecks.Should().Contain(GateCheckNames.ImageReferenceExists);
         // CaseActiveNotCancelled should pass
@@ -591,7 +765,7 @@ public sealed class GateValidationServiceTests
 
         var result = await _sut.ValidateAsync(caseData, transition, context);
 
-        result.IsSuccess.Should().BeFalse();
+        result.IsValid.Should().BeFalse();
         result.FailedChecks.Should().Contain("UNKNOWN_CHECK_01234");
         result.Messages.Should().Contain(m => m.Contains("not implemented"));
     }

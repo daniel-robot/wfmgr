@@ -12,6 +12,7 @@ This document describes the internals of the `Wfmgr.Application.Workflows.V1` wo
 4. [External Event Integration](#4-external-event-integration)
 5. [Outbox Failure Escalation](#5-outbox-failure-escalation)
 6. [Workflow Configuration](#6-workflow-configuration)
+7. [Runtime Catalog Storage](#7-runtime-catalog-storage)
 
 ---
 
@@ -38,12 +39,17 @@ public sealed record TransitionDefinition
 }
 ```
 
-All definitions live in `WorkflowTransitionCatalog` as `static readonly` fields. Two collection properties are derived once at startup:
+Definitions are persisted in the `WorkflowTransition` table and exposed at runtime by `IWorkflowTransitionCatalogService` (singleton, `Wfmgr.Infrastructure.Workflows.WorkflowTransitionCatalogService`). The static `WorkflowTransitionCatalog` class still ships the canonical 53 records as `static readonly` fields, but at runtime it is **seed-only**: on first read the service lazy-seeds any rows missing from the database, then serves all subsequent lookups from a cached DB snapshot. Administrators can edit transitions via the `/api/workflow-transitions` admin surface, and changes are visible to the engine after the cache is invalidated (mutations invalidate it automatically; the seeder uses `xmin` for optimistic concurrency and writes a row to `workflow_transition_change_log`).
 
-| Property | Type | Use |
-|----------|------|-----|
-| `All` | `IReadOnlyList<TransitionDefinition>` | iteration / docs / validation |
-| `ByCode` | `IReadOnlyDictionary<string, TransitionDefinition>` | O(1) lookup by `Code` |
+The service exposes two lookup shapes used by the engine and the explain endpoint:
+
+| Member | Type | Use |
+|--------|------|-----|
+| `ListAllAsync(ct)` | `IReadOnlyList<TransitionDefinition>` | iteration / docs / validation |
+| `GetByCodeAsync(code, ct)` | `TransitionDefinition?` | O(1) lookup by `Code` |
+| `GetExtraVocabularyAsync(ct)` | `(roles, workItemTypes)` | DB-extension lists fed into `WorkflowTransitionGraphValidator.ValidateOne` so user-added vocabulary is treated as known |
+
+Runtime callers — `CaseTransitionService`, `WorkflowExplainService`, `WorkflowExplainController` — read exclusively through this service. Tests still reference `WorkflowTransitionCatalog.All` directly to assert canonical content.
 
 ### Phases and codes
 
@@ -466,3 +472,70 @@ Focused integration tests now live in `Wfmgr.Api.Tests/WorkflowConfigApiTests.cs
 - effective preview explainability payload
 
 These tests use `WebApplicationFactory<Program>` with EF Core InMemory storage and are intended to validate the workflow configuration slice without changing workflow runtime semantics.
+
+---
+
+## 7. Runtime Catalog Storage
+
+Reference data that historically lived as `static` C# arrays has been moved into Postgres tables behind small singleton services. This lets administrators extend the catalogs at runtime without redeploying, while keeping the in-code constants as a starting seed and as the contract used by inline service code.
+
+All catalog services follow the same pattern:
+
+- **Lazy first-read seed** — on the first call, the service inserts any rows that are present in the in-code defaults but missing from the table, then loads everything into a process-wide cache.
+- **`xmin` optimistic concurrency** — every entity is mapped with `Property<uint>("Xmin").IsRowVersion()`. The hash returned to clients is computed from editable fields plus `xmin`, and `409 Conflict` is returned when an `ExpectedHash` does not match.
+- **Cache invalidation on mutation** — every successful mutation calls `InvalidateCache()` so the next read repopulates the snapshot.
+- **Test-friendly** — seeders are lazy (never executed at host startup), so the test harness — which strips `IHostedService` instances and uses InMemory EF — does not need to be aware of seed code paths.
+
+### 7.1 Transition catalog
+
+- Table: `workflow_transition_catalog` + `workflow_transition_change_log`
+- Service: `IWorkflowTransitionCatalogService` (see [Section 1](#1-transition-catalog))
+- Admin API: `/api/workflow-transitions`
+- Admin UI: `wfmgr-ui/src/app/pages/workflow-transitions/`
+- Change log: yes (mutations recorded with actor, before/after JSON, change kind)
+
+### 7.2 Workflow vocabulary
+
+A single table backs three logical kinds of named string constants used by the transition graph and engine:
+
+| Kind | Code source | Used as |
+|------|-------------|---------|
+| `Role` | `WorkflowRoles` constants | `RequiredRole` slash-lists on transitions; gate-check role checks |
+| `WorkItemType` | `WorkItemTypes` constants | `WorkItemsToCreate` lists; work-item lifecycle dispatch |
+| `CaseFormType` | `CaseFormTypes` constants | form-driven gate checks; UI form selectors |
+
+- Table: `workflow_vocabulary_term` (composite key `(kind, code)`) + `workflow_vocabulary_change_log`
+- Service: `IWorkflowVocabularyCatalogService` — exposes `ListAllAsync()`, `ListByKindAsync(kind)`, `GetEnabledCodesAsync(kind)`, `UpsertAsync(...)`, etc.
+- Consumed by `WorkflowTransitionCatalogService.GetExtraVocabularyAsync` to feed the validator's `extraKnownRoles` / `extraKnownWorkItemTypes` parameters, so DB-added entries do not produce "unknown role" warnings.
+- Surfaced by `WorkflowMetaController.Get` in the `WorkItemTypes`, `CaseFormTypes`, and `Roles` lists (DB merged with in-code constants for back-compat).
+- Admin API: `/api/workflow-vocabulary`
+- Admin UI: `wfmgr-ui/src/app/pages/workflow-vocabulary/`
+- Change log: yes
+
+**Important:** the C# constants (`WorkflowRoles.Physician`, `WorkItemTypes.DailyImageScan`, `CaseFormTypes.PlanQAForm`, …) are still used **inline** by service code (e.g. `CaseWorkflowService` references `WorkflowRoles.SimTech` directly) and therefore cannot be removed. The DB table is a **runtime superset** for administrator-added vocabulary; the constants act as the seed and as the compile-time contract for engine code.
+
+### 7.3 Case-status display overlay
+
+A cosmetic-only overlay layered on top of the `CaseStatus` enum so the UI can show a friendly display name, description, color, category, and sort order without code changes.
+
+- Table: `workflow_case_status_overlay` (one row per `CaseStatus` enum value, lazy-seeded with sensible defaults derived from the enum name)
+- Service: `ICaseStatusOverlayService` — `ListAllAsync`, `GetByCodeAsync`, `UpdateAsync`, `ResetAsync`
+- Surfaced by `WorkflowMetaController.CaseStatuses`
+- Admin API: `/api/case-status-overlays`
+- Admin UI: `wfmgr-ui/src/app/pages/case-status-overlays/`
+- Change log: **no** — overlay edits are purely cosmetic and never affect engine behaviour, so the change-log overhead is intentionally skipped.
+
+The enum values themselves remain code-owned; the overlay only customises how a status is presented.
+
+### 7.4 What stays in code by design
+
+Not every static catalog has been migrated. The following remain in code because each entry is paired with C# behaviour that cannot be runtime-extended:
+
+| Catalog | Reason |
+|---------|--------|
+| `GateCheckNames` (~50 constants) | Each name maps to a delegate in `GateValidationService`'s strategy map. Adding a new name without paired code would surface as `"not implemented"`. |
+| `WorkflowTriggerType` enum | Intrinsically a closed set of trigger categories (`User` / `System` / `ExternalEvent`). |
+| `WorkflowSlotCodes` (S1–S8) and their display labels in `WorkflowConfigService.GetSlotCodes()` | Each slot drives engine rule selection in `WorkflowProfileResolver`. The codes and their labels live next to the engine logic that consumes them. |
+| `WorkflowCompensationCatalog` | Each compensation rule embeds a target status, work-item type, and retry policy interpreted by `WorkflowCompensationService`. |
+
+These are explicitly **not** candidates for DB-backing; introducing tables for them would create the illusion of runtime extensibility without the matching code paths.
