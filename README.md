@@ -21,9 +21,9 @@ database/
 ### API Endpoints
 
 | Method | Route | Purpose |
-|--------|-------|---------|
+| -------- | ------- | -------- |
 | `POST` | `/api/cases` | Create a new workflow case |
-| `GET`  | `/api/cases` | List all cases |
+| `GET` | `/api/cases` | List all cases |
 | `GET`  | `/api/cases/{caseId}` | Get case details |
 | `POST` | `/api/cases/{caseId}/sim-record` | Submit simulation record |
 | `POST` | `/api/cases/{caseId}/forward/monaco` | Manually forward to Monaco |
@@ -115,12 +115,25 @@ psql -h localhost -U postgres -d WfmgrDb -f database/init.sql
 
 Use this only if you are not using `init.sql`. Do not apply both to the same database.
 
+Linux/macOS (bash):
+
 ```bash
 dotnet tool restore
 
 dotnet tool run dotnet-ef database update \
   --project Wfmgr.Infrastructure/Wfmgr.Infrastructure.csproj \
   --startup-project Wfmgr.Api/Wfmgr.Api.csproj \
+  --context WfmgrDbContext
+```
+
+Windows PowerShell:
+
+```powershell
+dotnet tool restore
+
+dotnet tool run dotnet-ef database update `
+  --project Wfmgr.Infrastructure/Wfmgr.Infrastructure.csproj `
+  --startup-project Wfmgr.Api/Wfmgr.Api.csproj `
   --context WfmgrDbContext
 ```
 

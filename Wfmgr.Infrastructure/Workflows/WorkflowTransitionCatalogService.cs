@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using Wfmgr.Application.Workflows.V1;
 using Wfmgr.Application.Workflows.V1.Definitions;
 using Wfmgr.Application.Workflows.V1.Vocabulary;
@@ -81,10 +82,7 @@ public sealed class WorkflowTransitionCatalogService : IWorkflowTransitionCatalo
         var db = scope.ServiceProvider.GetRequiredService<WfmgrDbContext>();
 
         // Ensure the table is seeded the first time we list (parity with read path).
-        if (!await db.WorkflowTransitions.AnyAsync(ct))
-        {
-            await SeedFromStaticCatalogAsync(db, ct);
-        }
+        await EnsureSeededAsync(db, ct);
 
         var rows = await db.WorkflowTransitions
             .AsNoTracking()
@@ -283,7 +281,7 @@ public sealed class WorkflowTransitionCatalogService : IWorkflowTransitionCatalo
 
         var currentHash = ComputeHash(entity, GetXmin(db, entity));
         if (!string.IsNullOrWhiteSpace(request.ExpectedHash) &&
-            string.Equals(request.ExpectedHash, currentHash, StringComparison.Ordinal))
+            !string.Equals(request.ExpectedHash, currentHash, StringComparison.Ordinal))
         {
             return WorkflowTransitionMutationResult.ConflictResult(new WorkflowTransitionMutationConflictDto(
                 "Transition has been modified since last read.", currentHash));
@@ -522,10 +520,7 @@ public sealed class WorkflowTransitionCatalogService : IWorkflowTransitionCatalo
             var rows = await LoadRowsAsync(db, ct);
             if (rows.Count == 0)
             {
-                _logger.LogInformation(
-                    "WorkflowTransition table empty — seeding {Count} transitions from static WorkflowTransitionCatalog.",
-                    WorkflowTransitionCatalog.All.Count);
-                await SeedFromStaticCatalogAsync(db, ct);
+                await EnsureSeededAsync(db, ct);
                 rows = await LoadRowsAsync(db, ct);
             }
 
@@ -550,6 +545,36 @@ public sealed class WorkflowTransitionCatalogService : IWorkflowTransitionCatalo
             .OrderBy(x => x.Phase)
             .ThenBy(x => x.SortOrder)
             .ToListAsync(ct);
+    }
+
+    private async Task EnsureSeededAsync(WfmgrDbContext db, CancellationToken ct)
+    {
+        if (await db.WorkflowTransitions.AnyAsync(ct))
+        {
+            return;
+        }
+
+        _logger.LogInformation(
+            "WorkflowTransition table empty — seeding {Count} transitions from static WorkflowTransitionCatalog.",
+            WorkflowTransitionCatalog.All.Count);
+
+        try
+        {
+            await SeedFromStaticCatalogAsync(db, ct);
+        }
+        catch (DbUpdateException ex) when (IsTransitionSeedRace(ex))
+        {
+            // A concurrent caller seeded first; safe to ignore once data exists.
+            _logger.LogDebug(ex, "WorkflowTransition seed race ignored (rows already present).");
+            db.ChangeTracker.Clear();
+        }
+    }
+
+    private static bool IsTransitionSeedRace(DbUpdateException ex)
+    {
+        return ex.InnerException is PostgresException pg
+            && pg.SqlState == PostgresErrorCodes.UniqueViolation
+            && string.Equals(pg.ConstraintName, "IX_WorkflowTransition_Code", StringComparison.Ordinal);
     }
 
     private TransitionDefinition? MapRow(WorkflowTransitionEntity row)

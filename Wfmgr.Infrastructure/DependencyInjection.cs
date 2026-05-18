@@ -30,7 +30,12 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("WfmgrDb")
             ?? throw new InvalidOperationException("Connection string 'WfmgrDb' was not found.");
 
-        services.AddDbContext<WfmgrDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddDbContext<WfmgrDbContext>(options =>
+            options.UseNpgsql(connectionString, npgsql =>
+                npgsql.EnableRetryOnFailure(
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: new[] { "40P01" })));
         services.AddScoped<IWorkflowCaseRepository, WorkflowCaseRepository>();
         services.AddScoped<IPatientRepository, PatientRepository>();
         services.AddScoped<IWorkflowDataAccess, WorkflowDataAccess>();
