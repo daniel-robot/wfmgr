@@ -15,7 +15,7 @@ public enum TransitionFailureReason
     NotFound,
 
     /// <summary>
-    /// The actor's roles do not satisfy <see cref="Definitions.TransitionDefinition.RequiredRole"/>.
+    /// The actor's roles do not satisfy <see cref="Definitions.TransitionDefinition.RequiredRoles"/>.
     /// </summary>
     RoleDenied,
 
@@ -103,11 +103,11 @@ public sealed class TransitionExecutionResult
     internal static TransitionExecutionResult RoleDenied(
         string? transitionCode,
         CaseStatus fromStatus,
-        string requiredRole) =>
+        IReadOnlyList<string> requiredRoles) =>
         new(false, transitionCode, fromStatus, null,
             TransitionFailureReason.RoleDenied,
             [],
-            [$"Transition requires role '{requiredRole}'."]);
+            [$"Transition requires one of roles: {string.Join(", ", requiredRoles)}."]);
 
     internal static TransitionExecutionResult GateCheckFailed(
         string? transitionCode,

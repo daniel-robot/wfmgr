@@ -1,0 +1,153 @@
+<div class="page">
+  <header class="page-header">
+    <h1>Workflow vocabulary</h1>
+    <p class="muted">
+      Manage the named codes used by workflow transitions: roles, work-item types,
+      and case-form types. System-seeded rows can be edited or disabled but not
+      deleted (their codes are referenced by application code).
+    </p>
+  </header>
+
+  <div *ngIf="pageError" class="alert error">{{ pageError }}</div>
+  <div *ngIf="pageMessage" class="alert info">{{ pageMessage }}</div>
+
+  <nav class="tabs">
+    <button
+      *ngFor="let k of kinds"
+      type="button"
+      class="tab"
+      [class.active]="activeKind === k"
+      (click)="switchKind(k)"
+    >
+      {{ kindLabels[k] }}
+    </button>
+  </nav>
+
+  <div class="layout">
+    <section class="list-pane">
+      <div class="filters">
+        <button type="button" class="btn" (click)="reload()" [disabled]="loading">Reload</button>
+        <span class="muted">{{ terms.length }} term(s)</span>
+      </div>
+
+      <table class="grid">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Display name</th>
+            <th>Description</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            *ngFor="let t of terms"
+            [class.selected]="selected?.id === t.id"
+            [class.disabled]="!t.isEnabled"
+            (click)="select(t)"
+          >
+            <td>
+              <code>{{ t.code }}</code>
+              <span *ngIf="t.isSystem" class="chip system" title="Seeded from in-code constants">system</span>
+            </td>
+            <td>{{ t.displayName || '—' }}</td>
+            <td class="desc">{{ t.description || '' }}</td>
+            <td>
+              <span *ngIf="!t.isEnabled" class="chip warn">disabled</span>
+            </td>
+          </tr>
+          <tr *ngIf="terms.length === 0">
+            <td colspan="4" class="muted center">No terms in this category.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <aside class="right-pane">
+      <section class="create-pane">
+        <h2>Add new {{ kindLabels[activeKind] | lowercase }}</h2>
+        <form [formGroup]="createForm" (ngSubmit)="create()">
+          <label>
+            Kind
+            <select formControlName="kind">
+              <option *ngFor="let k of kinds" [value]="k">{{ kindLabels[k] }}</option>
+            </select>
+          </label>
+          <label>
+            Code
+            <input formControlName="code" placeholder="MyNewRole" />
+            <small class="muted">letters, digits, '_' or '-' (must start with a letter)</small>
+          </label>
+          <label>
+            Display name
+            <input formControlName="displayName" />
+          </label>
+          <label>
+            Description
+            <input formControlName="description" />
+          </label>
+          <label>
+            Change reason
+            <input formControlName="changeReason" />
+          </label>
+          <button type="submit" class="btn primary" [disabled]="saving || createForm.invalid">Create</button>
+        </form>
+      </section>
+
+      <section *ngIf="selected" class="edit-pane">
+        <h2>
+          Edit '{{ selected.code }}'
+          <span *ngIf="selected.isSystem" class="chip system">system</span>
+          <span *ngIf="!selected.isEnabled" class="chip warn">disabled</span>
+        </h2>
+        <form [formGroup]="editForm" (ngSubmit)="saveEdit()">
+          <label>
+            Display name
+            <input formControlName="displayName" />
+          </label>
+          <label>
+            Description
+            <input formControlName="description" />
+          </label>
+          <label>
+            Sort order
+            <input type="number" formControlName="sortOrder" />
+          </label>
+          <label>
+            Change reason
+            <input formControlName="changeReason" />
+          </label>
+
+          <div class="actions">
+            <button type="submit" class="btn primary" [disabled]="saving">Save</button>
+            <button type="button" class="btn" (click)="toggleEnabled()" [disabled]="saving">
+              {{ selected.isEnabled ? 'Disable' : 'Enable' }}
+            </button>
+            <button
+              type="button"
+              class="btn danger"
+              (click)="deleteSelected()"
+              [disabled]="saving || selected.isSystem"
+              [title]="selected.isSystem ? 'System-seeded terms cannot be deleted' : 'Hard delete'"
+            >
+              Delete
+            </button>
+          </div>
+        </form>
+
+        <section class="changelog">
+          <h3>Change log</h3>
+          <p *ngIf="changeLog.length === 0" class="muted">No changes recorded yet.</p>
+          <ol *ngIf="changeLog.length">
+            <li *ngFor="let c of changeLog">
+              <strong>{{ c.action }}</strong>
+              by {{ c.actorId || 'system' }}
+              at {{ c.createdAt }}
+              <span *ngIf="c.changeReason"> — {{ c.changeReason }}</span>
+            </li>
+          </ol>
+        </section>
+      </section>
+    </aside>
+  </div>
+</div>

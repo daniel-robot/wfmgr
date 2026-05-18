@@ -11,6 +11,10 @@ public class WorkflowRuleEntity
     public bool IsEnabled { get; set; }
     public DateTimeOffset? EffectiveFrom { get; set; }
     public DateTimeOffset? EffectiveTo { get; set; }
+    public DateTimeOffset? CreatedAt { get; set; }
+    public DateTimeOffset? UpdatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+    public string? UpdatedBy { get; set; }
 
     public WorkflowProfileEntity Profile { get; set; } = null!;
 }

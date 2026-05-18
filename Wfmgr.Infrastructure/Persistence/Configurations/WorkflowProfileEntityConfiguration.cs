@@ -19,6 +19,17 @@ public class WorkflowProfileEntityConfiguration : IEntityTypeConfiguration<Workf
         builder.Property(x => x.Version).IsRequired();
         builder.Property(x => x.IsActive).IsRequired();
         builder.Property(x => x.CreatedAt).IsRequired();
+        builder.Property(x => x.UpdatedAt);
+        builder.Property(x => x.CreatedBy).HasMaxLength(128);
+        builder.Property(x => x.UpdatedBy).HasMaxLength(128);
+
+        // PostgreSQL-only: map xmin system column as a row-version concurrency token.
+        // The InMemory provider used by tests ignores this configuration safely.
+        builder.Property<uint>("Xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsRowVersion();
 
         builder.HasIndex(x => new { x.HospitalId, x.SiteId, x.DepartmentId, x.Version }).IsUnique();
     }

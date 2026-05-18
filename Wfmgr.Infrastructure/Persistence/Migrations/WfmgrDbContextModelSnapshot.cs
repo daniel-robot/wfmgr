@@ -17,10 +17,63 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.0")
+                .HasAnnotation("ProductVersion", "9.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Integrations.Messaging.Sagas.ContouringSagaState", b =>
+                {
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessionNumber")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ContourCompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CurrentState")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("FaultReason")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset?>("MonacoAckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TimeoutTokenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TransitionCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TriggeredBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("CorrelationId");
+
+                    b.HasIndex("CurrentState");
+
+                    b.ToTable("ContouringSagaState", (string)null);
+                });
 
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.AuditLogEntity", b =>
                 {
@@ -342,6 +395,44 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.ToTable("ExternalEvent", (string)null);
                 });
 
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.ExternalEventInboxEntity", b =>
+                {
+                    b.Property<string>("Integration")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ExternalEventId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("MessageType")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("PayloadHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Traceparent")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Integration", "ExternalEventId");
+
+                    b.HasIndex("CaseId");
+
+                    b.ToTable("ExternalEventInbox", (string)null);
+                });
+
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.IntegrationReferenceEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -400,11 +491,23 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CaseId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CorrelationId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("DeliveryMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTimeOffset?>("LastTriedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MessageType")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<DateTimeOffset?>("NextRetryAt")
                         .HasColumnType("timestamp with time zone");
@@ -416,6 +519,11 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.Property<int>("RetryCount")
                         .HasColumnType("integer");
 
+                    b.Property<int>("SchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -424,9 +532,15 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("Traceparent")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.HasKey("MessageId");
 
                     b.HasIndex("CaseId");
+
+                    b.HasIndex("CorrelationId");
 
                     b.HasIndex("Status", "NextRetryAt");
 
@@ -616,6 +730,102 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.ToTable("WorkItem", (string)null);
                 });
 
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowCaseStatusOverlayEntity", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Value")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("Xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Code");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("SortOrder");
+
+                    b.ToTable("WorkflowCaseStatusOverlay", (string)null);
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowConfigChangeLogEntity", b =>
+                {
+                    b.Property<long>("ChangeLogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("ChangeLogId"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ActorId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ChangeReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("ProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SnapshotJson")
+                        .HasColumnType("text");
+
+                    b.HasKey("ChangeLogId");
+
+                    b.HasIndex("ProfileId", "CreatedAt");
+
+                    b.HasIndex("EntityType", "EntityId", "CreatedAt");
+
+                    b.ToTable("WorkflowConfigChangeLog", (string)null);
+                });
+
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowProfileEntity", b =>
                 {
                     b.Property<Guid>("ProfileId")
@@ -624,6 +834,10 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("DepartmentId")
                         .HasMaxLength(32)
@@ -645,8 +859,21 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<int>("Version")
                         .HasColumnType("integer");
+
+                    b.Property<uint>("Xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("ProfileId");
 
@@ -669,6 +896,13 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<DateTimeOffset?>("EffectiveFrom")
                         .HasColumnType("timestamp with time zone");
 
@@ -689,6 +923,19 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<uint>("Xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("RuleId");
 
                     b.HasIndex("ProfileId", "SlotCode", "IsEnabled");
@@ -696,6 +943,256 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.HasIndex("ProfileId", "SlotCode", "Priority");
 
                     b.ToTable("WorkflowRule", (string)null);
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowTransitionAttributeEntity", b =>
+                {
+                    b.Property<Guid>("TransitionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("TransitionId", "Kind", "Value");
+
+                    b.ToTable("WorkflowTransitionAttribute", (string)null);
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowTransitionChangeLogEntity", b =>
+                {
+                    b.Property<long>("ChangeLogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("ChangeLogId"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ActorId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ChangeReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SnapshotJson")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TransitionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ChangeLogId");
+
+                    b.HasIndex("Code", "CreatedAt");
+
+                    b.HasIndex("TransitionId", "CreatedAt");
+
+                    b.ToTable("WorkflowTransitionChangeLog", (string)null);
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowTransitionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ConfigSlot")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Phase")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TriggerName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("TriggerType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("Phase", "SortOrder");
+
+                    b.ToTable("WorkflowTransition", (string)null);
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowTransitionFromStatusEntity", b =>
+                {
+                    b.Property<Guid>("TransitionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("TransitionId", "FromStatus");
+
+                    b.ToTable("WorkflowTransitionFromStatus", (string)null);
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowVocabularyChangeLogEntity", b =>
+                {
+                    b.Property<long>("ChangeLogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("ChangeLogId"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ActorId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ChangeReason")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SnapshotJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("TermId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ChangeLogId");
+
+                    b.HasIndex("TermId", "CreatedAt");
+
+                    b.HasIndex("Kind", "Code", "CreatedAt");
+
+                    b.ToTable("WorkflowVocabularyChangeLog", (string)null);
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowVocabularyTermEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kind", "Code")
+                        .IsUnique();
+
+                    b.HasIndex("Kind", "SortOrder");
+
+                    b.ToTable("WorkflowVocabularyTerm", (string)null);
                 });
 
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.AuditLogEntity", b =>
@@ -820,6 +1317,28 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
                     b.Navigation("Profile");
                 });
 
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowTransitionAttributeEntity", b =>
+                {
+                    b.HasOne("Wfmgr.Infrastructure.Persistence.Entities.WorkflowTransitionEntity", "Transition")
+                        .WithMany("Attributes")
+                        .HasForeignKey("TransitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Transition");
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowTransitionFromStatusEntity", b =>
+                {
+                    b.HasOne("Wfmgr.Infrastructure.Persistence.Entities.WorkflowTransitionEntity", "Transition")
+                        .WithMany("FromStatuses")
+                        .HasForeignKey("TransitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Transition");
+                });
+
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.CaseEntity", b =>
                 {
                     b.Navigation("Attachments");
@@ -854,6 +1373,13 @@ namespace Wfmgr.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowProfileEntity", b =>
                 {
                     b.Navigation("Rules");
+                });
+
+            modelBuilder.Entity("Wfmgr.Infrastructure.Persistence.Entities.WorkflowTransitionEntity", b =>
+                {
+                    b.Navigation("Attributes");
+
+                    b.Navigation("FromStatuses");
                 });
 #pragma warning restore 612, 618
         }

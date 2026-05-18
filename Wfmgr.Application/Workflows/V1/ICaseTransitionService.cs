@@ -11,7 +11,7 @@ namespace Wfmgr.Application.Workflows.V1;
 /// <list type="number">
 ///   <item>Looks up the matching <see cref="Definitions.TransitionDefinition"/> in
 ///     <see cref="WorkflowTransitionCatalog"/> by trigger name and current case status.</item>
-///   <item>Validates <see cref="Definitions.TransitionDefinition.RequiredRole"/> against the
+///   <item>Validates <see cref="Definitions.TransitionDefinition.RequiredRoles"/> against the
 ///     actor roles in the supplied <see cref="GateValidationContext"/>.</item>
 ///   <item>Invokes <see cref="IGateValidationService"/> to evaluate all named gate checks.</item>
 ///   <item>On success: mutates <see cref="CaseData.CurrentStatus"/>, increments

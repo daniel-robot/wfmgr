@@ -33,6 +33,22 @@ import {
   WorkflowOption,
   WorkflowRule,
   WorkflowSlotCode,
+  WorkflowTransition,
+  CreateWorkflowTransitionRequest,
+  UpdateWorkflowTransitionRequest,
+  ToggleWorkflowTransitionRequest,
+  ValidateWorkflowTransitionResponse,
+  WorkflowTransitionChangeLog,
+  WorkflowMetaCatalog,
+  WorkflowVocabularyTerm,
+  WorkflowVocabularyKind,
+  CreateWorkflowVocabularyTermRequest,
+  UpdateWorkflowVocabularyTermRequest,
+  ToggleWorkflowVocabularyTermRequest,
+  ValidateWorkflowVocabularyTermResponse,
+  WorkflowVocabularyChangeLog,
+  CaseStatusOverlay,
+  UpdateCaseStatusOverlayRequest,
   WorkItem
 } from '../models/workflow.models';
 
@@ -373,5 +389,108 @@ export class WorkflowApiService {
 
   private isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
+  }
+
+  // ── Workflow transition catalog (Phase 2 admin) ──────────────────────────
+
+  getWorkflowTransitions(): Observable<WorkflowTransition[]> {
+    return this.http.get<WorkflowTransition[]>(`${this.baseUrl}/api/workflow-transitions`);
+  }
+
+  getWorkflowTransition(id: string): Observable<WorkflowTransition> {
+    return this.http.get<WorkflowTransition>(`${this.baseUrl}/api/workflow-transitions/${id}`);
+  }
+
+  createWorkflowTransition(request: CreateWorkflowTransitionRequest): Observable<WorkflowTransition> {
+    return this.http.post<WorkflowTransition>(`${this.baseUrl}/api/workflow-transitions`, request);
+  }
+
+  updateWorkflowTransition(id: string, request: UpdateWorkflowTransitionRequest): Observable<WorkflowTransition> {
+    return this.http.put<WorkflowTransition>(`${this.baseUrl}/api/workflow-transitions/${id}`, request);
+  }
+
+  validateWorkflowTransition(request: CreateWorkflowTransitionRequest): Observable<ValidateWorkflowTransitionResponse> {
+    return this.http.post<ValidateWorkflowTransitionResponse>(`${this.baseUrl}/api/workflow-transitions/validate`, request);
+  }
+
+  enableWorkflowTransition(id: string, request: ToggleWorkflowTransitionRequest): Observable<WorkflowTransition> {
+    return this.http.post<WorkflowTransition>(`${this.baseUrl}/api/workflow-transitions/${id}/enable`, request);
+  }
+
+  disableWorkflowTransition(id: string, request: ToggleWorkflowTransitionRequest): Observable<WorkflowTransition> {
+    return this.http.post<WorkflowTransition>(`${this.baseUrl}/api/workflow-transitions/${id}/disable`, request);
+  }
+
+  deleteWorkflowTransition(id: string, expectedHash: string | null, changeReason: string | null): Observable<WorkflowTransition> {
+    let params = new HttpParams();
+    if (expectedHash) params = params.set('expectedHash', expectedHash);
+    if (changeReason) params = params.set('changeReason', changeReason);
+    return this.http.delete<WorkflowTransition>(`${this.baseUrl}/api/workflow-transitions/${id}`, { params });
+  }
+
+  getWorkflowTransitionChangeLog(id: string, limit = 100): Observable<WorkflowTransitionChangeLog[]> {
+    const params = new HttpParams().set('limit', String(limit));
+    return this.http.get<WorkflowTransitionChangeLog[]>(`${this.baseUrl}/api/workflow-transitions/${id}/changelog`, { params });
+  }
+
+  getWorkflowMeta(): Observable<WorkflowMetaCatalog> {
+    return this.http.get<WorkflowMetaCatalog>(`${this.baseUrl}/api/workflow-meta`);
+  }
+
+  // ── Workflow vocabulary catalog (Phase 3 admin) ──────────────────────────
+
+  getWorkflowVocabulary(kind?: WorkflowVocabularyKind): Observable<WorkflowVocabularyTerm[]> {
+    const params = kind ? new HttpParams().set('kind', kind) : new HttpParams();
+    return this.http.get<WorkflowVocabularyTerm[]>(`${this.baseUrl}/api/workflow-vocabulary`, { params });
+  }
+
+  getWorkflowVocabularyTerm(id: string): Observable<WorkflowVocabularyTerm> {
+    return this.http.get<WorkflowVocabularyTerm>(`${this.baseUrl}/api/workflow-vocabulary/${id}`);
+  }
+
+  createWorkflowVocabularyTerm(request: CreateWorkflowVocabularyTermRequest): Observable<WorkflowVocabularyTerm> {
+    return this.http.post<WorkflowVocabularyTerm>(`${this.baseUrl}/api/workflow-vocabulary`, request);
+  }
+
+  updateWorkflowVocabularyTerm(id: string, request: UpdateWorkflowVocabularyTermRequest): Observable<WorkflowVocabularyTerm> {
+    return this.http.put<WorkflowVocabularyTerm>(`${this.baseUrl}/api/workflow-vocabulary/${id}`, request);
+  }
+
+  enableWorkflowVocabularyTerm(id: string, request: ToggleWorkflowVocabularyTermRequest): Observable<WorkflowVocabularyTerm> {
+    return this.http.post<WorkflowVocabularyTerm>(`${this.baseUrl}/api/workflow-vocabulary/${id}/enable`, request);
+  }
+
+  disableWorkflowVocabularyTerm(id: string, request: ToggleWorkflowVocabularyTermRequest): Observable<WorkflowVocabularyTerm> {
+    return this.http.post<WorkflowVocabularyTerm>(`${this.baseUrl}/api/workflow-vocabulary/${id}/disable`, request);
+  }
+
+  deleteWorkflowVocabularyTerm(id: string, expectedHash: string | null, changeReason: string | null): Observable<WorkflowVocabularyTerm> {
+    let params = new HttpParams();
+    if (expectedHash) params = params.set('expectedHash', expectedHash);
+    if (changeReason) params = params.set('changeReason', changeReason);
+    return this.http.delete<WorkflowVocabularyTerm>(`${this.baseUrl}/api/workflow-vocabulary/${id}`, { params });
+  }
+
+  validateWorkflowVocabularyTerm(request: CreateWorkflowVocabularyTermRequest): Observable<ValidateWorkflowVocabularyTermResponse> {
+    return this.http.post<ValidateWorkflowVocabularyTermResponse>(`${this.baseUrl}/api/workflow-vocabulary/validate`, request);
+  }
+
+  getWorkflowVocabularyChangeLog(id: string, limit = 100): Observable<WorkflowVocabularyChangeLog[]> {
+    const params = new HttpParams().set('limit', String(limit));
+    return this.http.get<WorkflowVocabularyChangeLog[]>(`${this.baseUrl}/api/workflow-vocabulary/${id}/changelog`, { params });
+  }
+
+  // ── Case status overlay (Phase 4 admin) ────────────────────────────────
+
+  getCaseStatusOverlays(): Observable<CaseStatusOverlay[]> {
+    return this.http.get<CaseStatusOverlay[]>(`${this.baseUrl}/api/case-status-overlays`);
+  }
+
+  updateCaseStatusOverlay(code: string, request: UpdateCaseStatusOverlayRequest): Observable<CaseStatusOverlay> {
+    return this.http.put<CaseStatusOverlay>(`${this.baseUrl}/api/case-status-overlays/${code}`, request);
+  }
+
+  resetCaseStatusOverlay(code: string): Observable<CaseStatusOverlay> {
+    return this.http.post<CaseStatusOverlay>(`${this.baseUrl}/api/case-status-overlays/${code}/reset`, {});
   }
 }

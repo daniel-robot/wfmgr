@@ -6,6 +6,7 @@ using Microsoft.OpenApi.Models;
 using Wfmgr.Application;
 using Wfmgr.Application.Workflows.V1.Config;
 using Wfmgr.Api.Auth;
+using Wfmgr.Api.Health;
 using Wfmgr.Api.Workers;
 using Wfmgr.Infrastructure;
 
@@ -13,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 const string CorsPolicyName = "FrontendCors";
 
 // ── Application & Infrastructure ─────────────────────────────────────────────
-builder.Services.AddApplication();
+builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 
 // ── JWT Settings ──────────────────────────────────────────────────────────────
@@ -125,8 +126,14 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // ── Background Workers ────────────────────────────────────────────────────────
-// OutboxWorker polls every 10 s and dispatches queued PvMed / Monaco messages.
-builder.Services.AddHostedService<OutboxWorker>();
+// OutboxWorker polls every 10 s and dispatches qu
+
+// ── Health checks ─────────────────────────────────────────────────────────────
+// /health        — liveness (always healthy if process is up)
+// /health/ready  — readiness (all checks)
+// /health/messaging — messaging only (broker connectivity / publisher mode)
+builder.Services.AddHealthChecks()
+    .AddCheck<MessagingHealthCheck>("messaging", tags: new[] { "messaging", "ready" });
 
 var app = builder.Build();
 
@@ -139,6 +146,32 @@ if (app.Environment.IsDevelopment())
 }
 
 // CORS must be placed before UseAuthentication / UseAuthorization / MapControllers.
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false, // liveness — process up
+});
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = c => c.Tags.Contains("ready"),
+});
+app.MapHealthChecks("/health/messaging", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = c => c.Tags.Contains("messaging"),
+    ResponseWriter = async (ctx, report) =>
+    {
+        ctx.Response.ContentType = "application/json";
+        var entry = report.Entries.FirstOrDefault().Value;
+        var payload = new
+        {
+            status = report.Status.ToString(),
+            description = entry.Description,
+            data = entry.Data,
+            duration = report.TotalDuration,
+        };
+        await ctx.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(payload));
+    },
+});
+
 app.UseCors(CorsPolicyName);
 
 app.UseAuthentication();

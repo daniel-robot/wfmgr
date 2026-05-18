@@ -23,7 +23,6 @@ export class LoginPageComponent {
     { value: 'Admin', label: 'Admin (full access)' },
     { value: 'Physician', label: 'Physician' },
     { value: 'Physicist', label: 'Physicist' },
-    { value: 'Physicist', label: 'Physicist' },
     { value: 'Dosimetrist', label: 'Dosimetrist' },
     { value: 'SimTech', label: 'SimTech' },
     { value: 'Scheduler', label: 'Scheduler' },

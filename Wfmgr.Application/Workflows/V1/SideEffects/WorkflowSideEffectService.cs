@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Wfmgr.Application.Abstractions.Persistence;
 using Wfmgr.Application.Workflows.V1.Definitions;
+using Wfmgr.Application.Workflows.V1.Outbox;
 using Wfmgr.Application.Workflows.V1.WorkItems;
 using Wfmgr.Domain.Integrations;
 using Wfmgr.Domain.WorkItems;
@@ -17,17 +18,20 @@ public sealed class WorkflowSideEffectService : IWorkflowSideEffectService
     private readonly IWorkflowDataAccess _dataAccess;
     private readonly IWorkItemLifecycleService _workItems;
     private readonly IWorkflowProfileResolver _profileResolver;
+    private readonly IOutboxRoutingPolicy _routing;
     private readonly ILogger<WorkflowSideEffectService> _logger;
 
     public WorkflowSideEffectService(
         IWorkflowDataAccess dataAccess,
         IWorkItemLifecycleService workItems,
         IWorkflowProfileResolver profileResolver,
+        IOutboxRoutingPolicy routing,
         ILogger<WorkflowSideEffectService> logger)
     {
         _dataAccess = dataAccess;
         _workItems = workItems;
         _profileResolver = profileResolver;
+        _routing = routing;
         _logger = logger;
     }
 
@@ -147,7 +151,17 @@ public sealed class WorkflowSideEffectService : IWorkflowSideEffectService
                 reason = context.ValidationContext.Reason,
             });
 
-            await _dataAccess.EnqueueOutboxAsync(caseData.CaseId, targetSystem, descriptor.Action, payload, ct);
+            await _dataAccess.EnqueueOutboxAsync(
+                caseId: caseData.CaseId,
+                targetSystem: targetSystem,
+                action: descriptor.Action,
+                payloadJson: payload,
+                messageType: descriptor.MessageType,
+                schemaVersion: 1,
+                correlationId: caseData.CaseId,
+                traceparent: Wfmgr.Application.Diagnostics.WfmgrActivitySource.CurrentTraceparent(),
+                deliveryMode: _routing.GetDeliveryMode(descriptor.Action),
+                ct: ct);
 
             _logger.LogDebug(
                 "Side effect: enqueued outbox '{Action}' to '{System}' for case {CaseId} after transition {Code}",
@@ -157,7 +171,7 @@ public sealed class WorkflowSideEffectService : IWorkflowSideEffectService
 
     // ── Static maps ───────────────────────────────────────────────────────────
 
-    private sealed record OutboxDescriptor(string TargetSystem, string Action);
+    private sealed record OutboxDescriptor(string TargetSystem, string Action, string MessageType);
 
     /// <summary>
     /// Maps <see cref="TransitionDefinition.SuccessActions"/> string identifiers to outbox
@@ -169,22 +183,22 @@ public sealed class WorkflowSideEffectService : IWorkflowSideEffectService
             new Dictionary<string, OutboxDescriptor>(StringComparer.OrdinalIgnoreCase)
             {
                 // Contouring tool — target system resolved at runtime from S1 profile.
-                ["CreateOutboxSendImagesToContourTool"] = new("PvMed",   OutboxActions.SendImagesToContourTool),
-                ["CreateOutboxRestartContouring"]       = new("PvMed",   OutboxActions.SendImagesToContourTool),
+                ["CreateOutboxSendImagesToContourTool"] = new("PvMed",   OutboxActions.SendImagesToContourTool,  typeof(Wfmgr.Contracts.Contouring.SendImagesToContourTool.V1).FullName!),
+                ["CreateOutboxRestartContouring"]       = new("PvMed",   OutboxActions.SendImagesToContourTool,  typeof(Wfmgr.Contracts.Contouring.SendImagesToContourTool.V1).FullName!),
 
                 // Monaco import.
-                ["SendToMonacoImport"]                  = new("Monaco",  OutboxActions.SendToMonacoImport),
+                ["SendToMonacoImport"]                  = new("Monaco",  OutboxActions.SendToMonacoImport,       typeof(Wfmgr.Contracts.Monaco.SendToMonacoImport.V1).FullName!),
 
                 // Prescription generation / retry.
-                ["CreateOutboxGeneratePrescription"]    = new("PvMed",   OutboxActions.GeneratePrescription),
-                ["CreateOutboxPrescriptionSync"]        = new("PvMed",   OutboxActions.GeneratePrescription),
+                ["CreateOutboxGeneratePrescription"]    = new("PvMed",   OutboxActions.GeneratePrescription,     typeof(Wfmgr.Contracts.Prescription.GeneratePrescription.V1).FullName!),
+                ["CreateOutboxPrescriptionSync"]        = new("PvMed",   OutboxActions.GeneratePrescription,     typeof(Wfmgr.Contracts.Prescription.GeneratePrescription.V1).FullName!),
 
                 // Schedule synchronisation.
-                ["StartScheduleWatch"]                  = new("MSQ",     OutboxActions.SyncSchedule),
+                ["StartScheduleWatch"]                  = new("MSQ",     OutboxActions.SyncSchedule,             typeof(Wfmgr.Contracts.Scheduling.SyncSchedule.V1).FullName!),
 
                 // Treatment progress polling.
-                ["CreateTreatmentMonitor"]              = new("Monaco",  OutboxActions.QueryTreatmentProgress),
-                ["UpdateProgress"]                      = new("Monaco",  OutboxActions.QueryTreatmentProgress),
+                ["CreateTreatmentMonitor"]              = new("Monaco",  OutboxActions.QueryTreatmentProgress,   typeof(Wfmgr.Contracts.Monaco.QueryTreatmentProgress.V1).FullName!),
+                ["UpdateProgress"]                      = new("Monaco",  OutboxActions.QueryTreatmentProgress,   typeof(Wfmgr.Contracts.Monaco.QueryTreatmentProgress.V1).FullName!),
             });
 
     /// <summary>

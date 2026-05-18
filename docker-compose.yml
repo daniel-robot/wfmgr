@@ -35,6 +35,42 @@ services:
     volumes:
       - pgadmin-data:/var/lib/pgadmin
 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: wfmgr-rabbitmq
+    restart: unless-stopped
+    hostname: wfmgr-rabbit
+    environment:
+      RABBITMQ_DEFAULT_USER: wfmgr
+      RABBITMQ_DEFAULT_PASS: wfmgr
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI: http://localhost:15672 (wfmgr / wfmgr)
+      - "15692:15692" # Prometheus metrics (rabbitmq_prometheus plugin, enabled by default in management image)
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: wfmgr-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   pgadmin-data:
+  rabbitmq-data:
+  prometheus-data:

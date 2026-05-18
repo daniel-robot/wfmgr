@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <Description>Wire-level message contracts exchanged between wfmgr and external systems via the broker. Records are versioned (V1, V2, ...) and append-only; never modify a published version.</Description>
+  </PropertyGroup>
+
+</Project>

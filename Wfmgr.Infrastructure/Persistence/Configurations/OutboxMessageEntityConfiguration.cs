@@ -18,8 +18,13 @@ public class OutboxMessageEntityConfiguration : IEntityTypeConfiguration<OutboxM
         builder.Property(x => x.Status).HasConversion<int>().IsRequired();
         builder.Property(x => x.RetryCount).IsRequired();
         builder.Property(x => x.CreatedAt).IsRequired();
+        builder.Property(x => x.MessageType).HasMaxLength(256);
+        builder.Property(x => x.SchemaVersion).IsRequired().HasDefaultValue(1);
+        builder.Property(x => x.Traceparent).HasMaxLength(128);
+        builder.Property(x => x.DeliveryMode).HasConversion<int>().IsRequired().HasDefaultValue(Wfmgr.Domain.Integrations.OutboxDeliveryMode.Http);
 
         builder.HasIndex(x => new { x.Status, x.NextRetryAt });
+        builder.HasIndex(x => x.CorrelationId);
 
         builder.HasOne(x => x.Case)
             .WithMany(x => x.OutboxMessages)

@@ -37,15 +37,15 @@ public sealed class TransitionDefinition
     public required WorkflowTriggerType TriggerType { get; init; }
 
     /// <summary>
-    /// Role that the actor must hold to perform this transition.
-    /// <c>null</c> means the transition is not role-gated (typically system-initiated transitions).
-    /// When multiple roles are acceptable the value is a slash-separated list (e.g. "Physician/Admin").
+    /// Roles that the actor may hold to perform this transition.
+    /// An empty list means the transition is not role-gated (typically system-initiated transitions).
+    /// When multiple roles are listed, holding any one of them is sufficient.
     /// </summary>
-    public string? RequiredRole { get; init; }
+    public IReadOnlyList<string> RequiredRoles { get; init; } = [];
 
     /// <summary>
     /// Named gate-check identifiers that must pass before the transition is allowed.
-    /// Each string is a symbolic name resolved by <c>ICaseTransitionGateValidator</c>.
+    /// Each string is a symbolic name resolved by <c>IGateValidationService</c>.
     /// </summary>
     public string[] GateChecks { get; init; } = [];
 

@@ -92,6 +92,44 @@ public sealed record ValidateWorkflowRuleResponse(
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> Warnings);
 
+/// <summary>
+/// Result of a workflow rule mutation (create / update). Either contains the resulting
+/// <see cref="WorkflowRuleDto"/>, a <see cref="ValidateWorkflowRuleResponse"/> with errors
+/// (e.g. unsupported slot code), or signals that the target was not found.
+/// </summary>
+public sealed record WorkflowRuleMutationResult(
+    WorkflowRuleDto? Rule,
+    ValidateWorkflowRuleResponse? ValidationError,
+    bool NotFound,
+    WorkflowMutationConflictDto? Conflict)
+{
+    public bool IsSuccess => Rule is not null;
+    public bool IsValidationError => ValidationError is not null;
+    public bool IsConflict => Conflict is not null;
+
+    public static WorkflowRuleMutationResult Success(WorkflowRuleDto rule) => new(rule, null, false, null);
+    public static WorkflowRuleMutationResult Invalid(ValidateWorkflowRuleResponse response) => new(null, response, false, null);
+    public static WorkflowRuleMutationResult NotFoundResult() => new(null, null, true, null);
+    public static WorkflowRuleMutationResult ConflictResult(WorkflowMutationConflictDto conflict) => new(null, null, false, conflict);
+}
+
+/// <summary>Result of a workflow profile mutation. Mirrors <see cref="WorkflowRuleMutationResult"/>.</summary>
+public sealed record WorkflowProfileMutationResult(
+    WorkflowProfileDto? Profile,
+    bool NotFound,
+    WorkflowMutationConflictDto? Conflict,
+    IReadOnlyList<string>? Errors)
+{
+    public bool IsSuccess => Profile is not null;
+    public bool IsConflict => Conflict is not null;
+    public bool IsValidationError => Errors is { Count: > 0 };
+
+    public static WorkflowProfileMutationResult Success(WorkflowProfileDto p) => new(p, false, null, null);
+    public static WorkflowProfileMutationResult NotFoundResult() => new(null, true, null, null);
+    public static WorkflowProfileMutationResult ConflictResult(WorkflowMutationConflictDto c) => new(null, false, c, null);
+    public static WorkflowProfileMutationResult Invalid(IReadOnlyList<string> errors) => new(null, false, null, errors);
+}
+
 public sealed record WorkflowSlotCodeDto(
     string Code,
     string Name,
@@ -147,3 +185,17 @@ public sealed record EffectiveWorkflowConfigDto(
     IReadOnlyList<EffectiveWorkflowSlotDto> ResolvedSlots,
     IReadOnlyList<EffectiveWorkflowUnmatchedSlotDto> UnmatchedSlots,
     IReadOnlyList<EffectiveWorkflowEvaluatedProfileDto> EvaluatedProfiles);
+
+/// <summary>
+/// Single audit row from the <c>WorkflowConfigChangeLog</c> table.
+/// </summary>
+public sealed record WorkflowConfigChangeLogDto(
+    long ChangeLogId,
+    string EntityType,
+    Guid EntityId,
+    Guid ProfileId,
+    string Action,
+    string? ActorId,
+    DateTimeOffset CreatedAt,
+    string? ChangeReason,
+    string? SnapshotJson);

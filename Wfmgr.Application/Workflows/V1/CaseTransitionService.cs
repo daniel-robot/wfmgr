@@ -2,6 +2,8 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Wfmgr.Application.Abstractions.Persistence;
 using Wfmgr.Application.Abstractions.Persistence.Models;
+using Wfmgr.Application.Diagnostics;
+using Wfmgr.Application.Workflows.V1.Definitions;
 using Wfmgr.Application.Workflows.V1.Gates;
 using Wfmgr.Application.Workflows.V1.SideEffects;
 using Wfmgr.Domain.Enums;
@@ -13,7 +15,7 @@ namespace Wfmgr.Application.Workflows.V1;
 /// <para>
 /// Execution pipeline per call:
 /// 1. Catalog lookup by <c>triggerName</c> + <c>fromStatus</c>.
-/// 2. <c>RequiredRole</c> check.
+/// 2. <c>RequiredRoles</c> check.
 /// 3. <see cref="IGateValidationService.ValidateAsync"/> for all declared <c>GateChecks</c>.
 /// 4. Mutate <c>CaseData.CurrentStatus</c> + increment <c>StatusVersion</c>.
 /// 5. Write <c>AuditLog</c>.
@@ -30,17 +32,20 @@ public sealed class CaseTransitionService : ICaseTransitionService
     private readonly IWorkflowDataAccess _dataAccess;
     private readonly IGateValidationService _gateValidation;
     private readonly IWorkflowSideEffectService _sideEffects;
+    private readonly IWorkflowTransitionCatalogService _catalog;
     private readonly ILogger<CaseTransitionService> _logger;
 
     public CaseTransitionService(
         IWorkflowDataAccess dataAccess,
         IGateValidationService gateValidation,
         IWorkflowSideEffectService sideEffects,
+        IWorkflowTransitionCatalogService catalog,
         ILogger<CaseTransitionService> logger)
     {
         _dataAccess = dataAccess;
         _gateValidation = gateValidation;
         _sideEffects = sideEffects;
+        _catalog = catalog;
         _logger = logger;
     }
 
@@ -67,13 +72,16 @@ public sealed class CaseTransitionService : ICaseTransitionService
         GateValidationContext context,
         CancellationToken ct = default,
         CaseStatus? fallbackToStatus = null)
-    {
+    {using var activity = WfmgrActivitySource.Source.StartActivity(WfmgrActivitySource.ApplyTransition);
+        activity?.SetTag(WfmgrActivitySource.TagCaseId, caseData.CaseId);
+        activity?.SetTag(WfmgrActivitySource.TagTriggerName, triggerName);
+        activity?.SetTag(WfmgrActivitySource.TagFromStatus, caseData.CurrentStatus.ToString());
+
+        
         var fromStatus = caseData.CurrentStatus;
 
         // ── 1. Look up transition definition in catalog ────────────────────────
-        var definition = WorkflowTransitionCatalog.All.FirstOrDefault(
-            t => t.TriggerName.Equals(triggerName, StringComparison.OrdinalIgnoreCase)
-              && t.FromStatuses.Contains(fromStatus));
+        var definition = await _catalog.FindByTriggerAsync(triggerName, fromStatus, ct);
 
         CaseStatus toStatus;
         string? transitionCode = null;
@@ -85,17 +93,17 @@ public sealed class CaseTransitionService : ICaseTransitionService
             toStatus = definition.ToStatus;
 
             // ── 2. Role check ─────────────────────────────────────────────────
-            if (!string.IsNullOrWhiteSpace(definition.RequiredRole))
+            if (definition.RequiredRoles.Count > 0)
             {
-                var required = definition.RequiredRole.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                var hasRole = required.Any(r => context.Roles.Contains(r, StringComparer.OrdinalIgnoreCase));
+                var hasRole = definition.RequiredRoles.Any(
+                    r => context.Roles.Contains(r, StringComparer.OrdinalIgnoreCase));
                 if (!hasRole)
                 {
                     _logger.LogWarning(
-                        "Transition {Code} denied: caller lacks required role '{RequiredRole}'. Case {CaseId} status {Status}",
-                        definition.Code, definition.RequiredRole, caseData.CaseId, fromStatus);
+                        "Transition {Code} denied: caller lacks any of required roles [{RequiredRoles}]. Case {CaseId} status {Status}",
+                        definition.Code, string.Join(", ", definition.RequiredRoles), caseData.CaseId, fromStatus);
                     return TransitionExecutionResult.RoleDenied(
-                        definition.Code, fromStatus, definition.RequiredRole);
+                        definition.Code, fromStatus, definition.RequiredRoles);
                 }
             }
 
@@ -155,6 +163,9 @@ public sealed class CaseTransitionService : ICaseTransitionService
                 ct);
         }
 
+        activity?.SetTag(WfmgrActivitySource.TagTransitionCode, transitionCode ?? "(fallback)");
+        activity?.SetTag(WfmgrActivitySource.TagToStatus, toStatus.ToString());
+        activity?.SetTag(WfmgrActivitySource.TagResult, "succeeded");
         return TransitionExecutionResult.Succeeded(transitionCode, fromStatus, toStatus);
     }
 
