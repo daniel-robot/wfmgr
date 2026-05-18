@@ -1,13 +1,15 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Wfmgr.Api.Auth;
 using Wfmgr.Application.Workflows.V1.Config;
 
 namespace Wfmgr.Api.Controllers;
 
 [ApiController]
 [Route("api/workflow-config")]
+[Authorize(Policy = WorkflowConfigPolicies.Admin)]
 public class WorkflowConfigController : ControllerBase
 {
-    // TODO: Protect workflow configuration endpoints with admin RBAC before production.
     private readonly IWorkflowConfigService _service;
 
     public WorkflowConfigController(IWorkflowConfigService service)
@@ -346,12 +348,8 @@ public class WorkflowConfigController : ControllerBase
 
     private string? GetActorId()
     {
-        if (User?.Identity?.IsAuthenticated == true)
-        {
-            return User.Identity?.Name;
-        }
-
-        return null;
+        var actor = ActorInfo.FromPrincipal(User);
+        return actor.UserId;
     }
 
     private static List<string> ValidateProfile(string? name, int? version)

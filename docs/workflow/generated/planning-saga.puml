@@ -26,8 +26,7 @@ state "5. Treatment Planning" as PLN {
 
 ' ─── Transitions ─────────────────────────
 PlanningInProgress --> PlanReady : PLN-001 SubmitPlan [User]\n«Dosimetrist/Monaco»
-PlanReady --> PlanUnderReview : PLN-002 StartPlanReview [Sys]
-PlanUnderReview --> PlanningInProgress : PLN-003 RejectPlan [User]\n«Physicist/Doctor»
-PlanUnderReview --> PlanReviewed : PLN-004 ApprovePlanReview [User]\n«Physicist/Doctor»
+PlanReady --> PlanUnderReview : PLN-002 StartPlanReview [User]\n«Physicist/Physician»
+PlanUnderReview --> PlanReviewed : PLN-004 ApprovePlanReview [User]\n«Physicist/Physician»
 PlanReviewed  --> ReadyForPromotion : PLN-004 MarkReady [User]\n«Physicist»
 @enduml

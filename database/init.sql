@@ -333,7 +333,7 @@ CROSS JOIN (
                     "fallback": {
                         "onFailureCreateManualWorkItem": true,
                         "manualWorkItemType": "ManualContouring",
-                        "manualWorkItemRole": "Doctor"
+                        "manualWorkItemRole": "Physician"
                     }
                 }
                 $$
@@ -350,7 +350,7 @@ CROSS JOIN (
                     "onReject": {
                         "targetStatus": "ContourReworkRequired",
                         "createReworkWorkItem": true,
-                        "reworkWorkItemRole": "Doctor"
+                        "reworkWorkItemRole": "Physician"
                     },
                     "timeoutHours": 24
                 }
@@ -370,7 +370,7 @@ CROSS JOIN (
                     "escalation": {
                         "enabled": true,
                         "afterMinutes": 180,
-                        "escalateToRole": "ChiefDoctor"
+                        "escalateToRole": "Physician"
                     }
                 }
                 $$
@@ -387,7 +387,7 @@ CROSS JOIN (
                         "riskLevelIn": ["High"],
                         "doseDeltaPercentGte": 5
                     },
-                    "reviewRole": "SeniorPhysicist",
+                    "reviewRole": "Physicist",
                     "onRejectBackTo": "PlanningInProgress"
                 }
                 $$
@@ -409,12 +409,11 @@ CROSS JOIN (
         ),
         (
                 '30000000-0000-0000-0000-000000000006'::uuid,
-                'S6_QUEUE_AND_CANCEL_POLICY',
+                'S6_CANCEL_POLICY',
                 1,
                 NULL,
                 $$
                 {
-                    "queueMode": "MsqDriven",
                     "allowCancel": true,
                     "cancelAllowedBeforeStatus": "Treating",
                     "requireCancelReason": true,
@@ -510,7 +509,7 @@ CROSS JOIN (
                     "fallback": {
                         "onFailureCreateManualWorkItem": true,
                         "manualWorkItemType": "ManualContouring",
-                        "manualWorkItemRole": "Doctor"
+                        "manualWorkItemRole": "Physician"
                     }
                 }
                 $$
@@ -527,7 +526,7 @@ CROSS JOIN (
                     "onReject": {
                         "targetStatus": "ContourReworkRequired",
                         "createReworkWorkItem": true,
-                        "reworkWorkItemRole": "Doctor"
+                        "reworkWorkItemRole": "Physician"
                     },
                     "timeoutHours": 24
                 }
@@ -547,7 +546,7 @@ CROSS JOIN (
                     "escalation": {
                         "enabled": false,
                         "afterMinutes": 180,
-                        "escalateToRole": "ChiefDoctor"
+                        "escalateToRole": "Physician"
                     }
                 }
                 $$
@@ -564,7 +563,7 @@ CROSS JOIN (
                         "riskLevelIn": [],
                         "doseDeltaPercentGte": null
                     },
-                    "reviewRole": "SeniorPhysicist",
+                    "reviewRole": "Physicist",
                     "onRejectBackTo": "PlanningInProgress"
                 }
                 $$
@@ -586,12 +585,11 @@ CROSS JOIN (
         ),
         (
                 '30000000-0000-0000-0000-000000000106'::uuid,
-                'S6_QUEUE_AND_CANCEL_POLICY',
+                'S6_CANCEL_POLICY',
                 1,
                 NULL,
                 $$
                 {
-                    "queueMode": "MsqDriven",
                     "allowCancel": true,
                     "cancelAllowedBeforeStatus": "Treating",
                     "requireCancelReason": true,
@@ -667,7 +665,7 @@ BEGIN
                 ('S3_PLAN_DISPATCH'),
                 ('S4_PLAN_REREVIEW_POLICY'),
                 ('S5_PLAN_DOUBLE_CHECK'),
-                ('S6_QUEUE_AND_CANCEL_POLICY'),
+                ('S6_CANCEL_POLICY'),
                 ('S7_TREATMENT_COMPLETION_POLICY'),
                 ('S8_EXCEPTION_HANDLING_POLICY')
         ) AS s("SlotCode")
@@ -699,7 +697,7 @@ BEGIN
                 ('S3_PLAN_DISPATCH'),
                 ('S4_PLAN_REREVIEW_POLICY'),
                 ('S5_PLAN_DOUBLE_CHECK'),
-                ('S6_QUEUE_AND_CANCEL_POLICY'),
+                ('S6_CANCEL_POLICY'),
                 ('S7_TREATMENT_COMPLETION_POLICY'),
                 ('S8_EXCEPTION_HANDLING_POLICY')
         ) AS s("SlotCode")

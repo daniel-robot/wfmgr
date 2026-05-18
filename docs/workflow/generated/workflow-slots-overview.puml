@@ -46,9 +46,9 @@ ResolutionRules .. Resolver
 Resolver --> Engine : resolved slot config
 
 package "Phase 2-4: Imaging, Contouring, Review" {
-  rectangle "S1\nContouring Strategy\nCode: S1_CONTOURING_STRATEGY\nPurpose: auto contour provider and fallback behavior\nAffects: contour provider, auto-contour monitoring,\nauto-forward-to-Monaco, manual contour fallback\nIf disabled or unmatched: fallback S1 defaults apply\nDefault effect: AutoContourEnabled=false, Provider=PvMed,\nAutoForwardToMonaco=false, AllowManualForward=true,\nManualWorkItemRole=Doctor" as S1
+  rectangle "S1\nContouring Strategy\nCode: S1_CONTOURING_STRATEGY\nPurpose: auto contour provider and fallback behavior\nAffects: contour provider, auto-contour monitoring,\nauto-forward-to-Monaco, manual contour fallback\nIf disabled or unmatched: fallback S1 defaults apply\nDefault effect: AutoContourEnabled=false, Provider=PvMed,\nAutoForwardToMonaco=false, AllowManualForward=true,\nManualWorkItemRole=Physician" as S1
 
-  rectangle "S2\nContour Review Policy\nCode: S2_CONTOUR_REVIEW_POLICY\nPurpose: review mode, rejection behavior, timeout\nAffects: review expectations and contour rework routing\nIf disabled or unmatched: fallback S2 defaults apply\nDefault effect: single review, contour rework target\nremains enabled, Doctor handles rework" as S2
+  rectangle "S2\nContour Review Policy\nCode: S2_CONTOUR_REVIEW_POLICY\nPurpose: review mode, rejection behavior, timeout\nAffects: review expectations and contour rework routing\nIf disabled or unmatched: fallback S2 defaults apply\nDefault effect: single review, contour rework target\nremains enabled, Physician handles rework" as S2
 }
 
 package "Phase 5: Planning" {
@@ -56,13 +56,13 @@ package "Phase 5: Planning" {
 }
 
 package "Phase 6-7: Re-review and QA" {
-  rectangle "S4\nPlan Re-review Policy\nCode: S4_PLAN_REREVIEW_POLICY\nPurpose: optional re-review trigger and reviewer role\nAffects: whether re-review is enabled and who reviews\nIf disabled or unmatched: fallback S4 defaults apply\nDefault effect: Enabled=false, reviewer role SeniorPhysicist" as S4
+  rectangle "S4\nPlan Re-review Policy\nCode: S4_PLAN_REREVIEW_POLICY\nPurpose: optional re-review trigger and reviewer role\nAffects: whether re-review is enabled and who reviews\nIf disabled or unmatched: fallback S4 defaults apply\nDefault effect: Enabled=false, reviewer role Physicist" as S4
 
   rectangle "S5\nPlan Double Check\nCode: S5_PLAN_DOUBLE_CHECK\nPurpose: optional independent double-check policy\nAffects: whether double-check is enabled and who performs it\nIf disabled or unmatched: fallback S5 defaults apply\nDefault effect: Enabled=false, work item role QAReviewer" as S5
 }
 
 package "Phase 8-9: Scheduling, Treatment, Completion" {
-  rectangle "S6\nQueue and Cancel Policy\nCode: S6_QUEUE_AND_CANCEL_POLICY\nPurpose: queue mode and cancellation constraints\nAffects: queue handling, cancel window, cancel final status\nIf disabled or unmatched: fallback S6 defaults apply\nDefault effect: QueueMode=MsqDriven, AllowCancel=true,\nCancelAllowedBeforeStatus=Treating" as S6
+  rectangle "S6\nCancel Policy\nCode: S6_CANCEL_POLICY\nPurpose: cancellation constraints and fallback behavior\nAffects: cancel window, cancel reason requirement, final status\nIf disabled or unmatched: fallback S6 defaults apply\nDefault effect: AllowCancel=true,\nCancelAllowedBeforeStatus=Treating" as S6
 
   rectangle "S7\nTreatment Completion Policy\nCode: S7_TREATMENT_COMPLETION_POLICY\nPurpose: completion mode and mismatch handling\nAffects: how completion is decided and mismatch escalation\nIf disabled or unmatched: fallback S7 defaults apply\nDefault effect: ByCourseCompletedEvent, mismatch creates\nexception work item for Therapist" as S7
 
@@ -74,7 +74,7 @@ Engine --> S2 : contour review decisions
 Engine --> S3 : planning dispatch decisions
 Engine --> S4 : re-review decisions
 Engine --> S5 : double-check decisions
-Engine --> S6 : queue and cancel decisions
+Engine --> S6 : cancel decisions
 Engine --> S7 : treatment completion decisions
 Engine --> S8 : exception handling decisions
 

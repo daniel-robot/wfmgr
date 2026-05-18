@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Wfmgr.Application.Workflows.V1.Forms;
 using Wfmgr.Application.Workflows.V1.Forms.Dtos;
@@ -6,6 +7,7 @@ namespace Wfmgr.Api.Controllers;
 
 [ApiController]
 [Route("api/cases/{caseId:guid}/forms")]
+[Authorize]
 public class CaseFormsController : ControllerBase
 {
     private readonly ICaseFormService _caseFormService;

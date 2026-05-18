@@ -1,0 +1,44 @@
+<div class="login-container">
+  <div class="login-card">
+    <h1>wfmgr-ui</h1>
+    <p class="subtitle">Radiotherapy Workflow Testing Console</p>
+
+    <div class="dev-notice">
+      ⚠ <strong>Development Login</strong><br />
+      This is a local development authentication endpoint. In production,
+      user credentials and roles must come from a real identity provider
+      (Azure AD, Auth0, Keycloak, etc.).
+    </div>
+
+    <form (ngSubmit)="login()" #loginForm="ngForm">
+      <div class="form-group">
+        <label for="userId">User ID</label>
+        <input
+          id="userId"
+          name="userId"
+          type="text"
+          [(ngModel)]="userId"
+          placeholder="e.g. daniel"
+          required
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="role">Role</label>
+        <select id="role" name="role" [(ngModel)]="role">
+          @for (opt of roleOptions; track opt.value) {
+            <option [value]="opt.value">{{ opt.label }}</option>
+          }
+        </select>
+      </div>
+
+      @if (error) {
+        <div class="error-msg">{{ error }}</div>
+      }
+
+      <button type="submit" [disabled]="loading" class="btn-primary">
+        {{ loading ? 'Signing in…' : 'Sign In (Dev)' }}
+      </button>
+    </form>
+  </div>
+</div>

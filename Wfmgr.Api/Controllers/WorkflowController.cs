@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Wfmgr.Application.Workflows.V1;
 
@@ -5,6 +6,7 @@ namespace Wfmgr.Api.Controllers;
 
 [ApiController]
 [Route("api/workflow")]
+[Authorize]
 public class WorkflowController : ControllerBase
 {
     private readonly ICaseQueryService _queryService;

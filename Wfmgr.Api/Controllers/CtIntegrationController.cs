@@ -6,6 +6,7 @@ namespace Wfmgr.Api.Controllers;
 
 [ApiController]
 [Route("api/integration/ct")]
+// TODO: Add API key or mTLS authentication for external system callbacks before production.
 public class CtIntegrationController : ControllerBase
 {
     private readonly ICaseWorkflowService _workflowService;

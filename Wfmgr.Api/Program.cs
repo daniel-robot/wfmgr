@@ -1,7 +1,11 @@
+using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Wfmgr.Application;
 using Wfmgr.Application.Workflows.V1.Config;
+using Wfmgr.Api.Auth;
 using Wfmgr.Api.Workers;
 using Wfmgr.Infrastructure;
 
@@ -12,11 +16,50 @@ const string CorsPolicyName = "FrontendCors";
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// TODO: Protect workflow configuration endpoints with admin RBAC before production.
-// builder.Services.AddAuthorization(options =>
-// {
-//     options.AddPolicy(WorkflowConfigPolicies.Admin, policy => policy.RequireClaim("permission", "workflow-config.edit"));
-// });
+// ── JWT Settings ──────────────────────────────────────────────────────────────
+builder.Services.Configure<JwtSettings>(
+    builder.Configuration.GetSection(JwtSettings.SectionName));
+
+// ── Authentication ────────────────────────────────────────────────────────────
+var jwtSection = builder.Configuration.GetSection(JwtSettings.SectionName);
+var jwtSecret = jwtSection["Secret"];
+var jwtIssuer = jwtSection["Issuer"] ?? "wfmgr";
+var jwtAudience = jwtSection["Audience"] ?? "wfmgr-api";
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = !string.IsNullOrWhiteSpace(jwtSecret),
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
+        IssuerSigningKey = !string.IsNullOrWhiteSpace(jwtSecret)
+            ? new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
+            : null,
+        // In production, when using a real identity provider (Azure AD, Auth0, etc.),
+        // set Authority instead of Secret and remove IssuerSigningKey / Secret.
+    };
+
+    // Map the "role" claim from our JWT to the built-in ClaimTypes.Role
+    // so [Authorize(Roles = "...")] works correctly.
+    options.MapInboundClaims = false;
+});
+
+// ── Authorization — Policy definitions ─────────────────────────────────────
+builder.Services.AddAuthorization(options =>
+{
+    // Workflow config admin — requires the "workflow-config.edit" permission claim.
+    options.AddPolicy(WorkflowConfigPolicies.Admin, policy =>
+        policy.RequireClaim("permission", "workflow-config.edit"));
+});
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 // Allowed origins are read from Cors:AllowedOrigins in appsettings.
@@ -53,6 +96,32 @@ builder.Services.AddSwaggerGen(c =>
         Version = "v1",
         Description = "Radiotherapy workflow management API — development testing interface."
     });
+
+    // Add JWT bearer token support to Swagger UI.
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter your JWT token. Example: \"your-token-here\""
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 
 // ── Background Workers ────────────────────────────────────────────────────────
@@ -69,9 +138,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "wfmgr API v1"));
 }
 
-// CORS must be placed before UseAuthorization and MapControllers.
+// CORS must be placed before UseAuthentication / UseAuthorization / MapControllers.
 app.UseCors(CorsPolicyName);
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

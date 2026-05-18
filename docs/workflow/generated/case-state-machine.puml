@@ -87,13 +87,13 @@ state Cancelled #FFC0CB : ◎ Cancelled – terminal
 Archived --> [*]
 
 ' ─── Phase 1: Intake & Simulation ───────────────
-Draft --> Submitted : SIM-001 SubmitSimulationRequest [User]\n«Doctor»
+Draft --> Submitted : SIM-001 SubmitSimulationRequest [User]\n«Physician»
 Submitted --> SimScheduled : SIM-002 ScheduleSimulation [User]\n«SimTech/Scheduler»
 SimScheduled --> SimInProgress : SIM-003 StartSimulation [User]\n«SimTech»
 SimInProgress --> SimCompleted : SIM-004 SubmitSimulationRecord [User]\n«SimTech»
-Submitted --> Cancelled : SIM-005 CancelCase [User]\n«Doctor/Admin»
-SimScheduled --> Cancelled : SIM-005 CancelCase [User]\n«Doctor/Admin»
-SimInProgress --> Cancelled : SIM-005 CancelCase [User]\n«Doctor/Admin»
+Submitted --> Cancelled : SIM-005 CancelCase [User]\n«Physician/Admin»
+SimScheduled --> Cancelled : SIM-005 CancelCase [User]\n«Physician/Admin»
+SimInProgress --> Cancelled : SIM-005 CancelCase [User]\n«Physician/Admin»
 
 ' ─── Phase 2: Image Acquisition & Forwarding ───────────────
 SimCompleted --> ImageStored : IMG-001 ReceiveCtImageStoredEvent [Ext]
@@ -104,28 +104,28 @@ ImageForwarding --> ContouringInProgress : IMG-003 ContourToolAccepted [Ext]
 ContouringInProgress --> ContouringInProgress : CON-001 AutoContourProgressUpdated [Ext]
 ContouringInProgress --> ContoursReady : CON-002 AutoContourCompleted [Ext]
 ContouringInProgress --> ContourReworkRequired : CON-003 AutoContourFailed [Ext]
-ContourReworkRequired --> ContouringInProgress : CON-004 RestartContouring [User]\n«Doctor/System»
-ContourReworkRequired --> ContoursReady : CON-005 SubmitManualContourResult [User]\n«Doctor/ThirdPartyOperator»
+ContourReworkRequired --> ContouringInProgress : CON-004 RestartContouring [User]\n«Physician/System»
+ContourReworkRequired --> ContoursReady : CON-005 SubmitManualContourResult [User]\n«Physician/ThirdPartyOperator»
 
 ' ─── Phase 4: Contour Review ───────────────
 ContoursReady --> ContoursUnderReview : REV-001 StartContourReview [Sys]
-ContoursUnderReview --> PlanningPending : REV-002 ApproveContours [User]\n«Doctor/ChiefDoctor»
-ContoursUnderReview --> ContoursRejected : REV-003 RejectContours [User]\n«Doctor/ChiefDoctor»
-ContoursRejected --> ContouringInProgress : REV-004 ResubmitContours [User]\n«Doctor/System»
+ContoursUnderReview --> PlanningPending : REV-002 ApproveContours [User]\n«Physician»
+ContoursUnderReview --> ContoursRejected : REV-003 RejectContours [User]\n«Physician»
+ContoursRejected --> ContouringInProgress : REV-004 ResubmitContours [User]\n«Physician/System»
 
 ' ─── Phase 5: Treatment Planning ───────────────
 PlanningPending --> PlanningAssigned : PLN-001 AssignPlanner [User]\n«Scheduler/System»
 PlanningAssigned --> PlanningInProgress : PLN-002 AcceptPlanTask [User]\n«Dosimetrist/Physicist»
 PlanningInProgress --> PlanReady : PLN-003 SubmitPlan [User]\n«Dosimetrist/Monaco»
 PlanReady --> PlanUnderReview : PLN-004 StartPlanReview [Sys]
-PlanUnderReview --> PlanningInProgress : PLN-005 RejectPlan [User]\n«Physicist/Doctor»
-PlanUnderReview --> PlanReviewed : PLN-006 ApprovePlanReview [User]\n«Physicist/Doctor»
+PlanUnderReview --> PlanningInProgress : PLN-005 RejectPlan [User]\n«Physicist/Physician»
+PlanUnderReview --> PlanReviewed : PLN-006 ApprovePlanReview [User]\n«Physicist/Physician»
 
 ' ─── Phase 6: Re-review & Prescription ───────────────
 PlanReviewed --> PlanReReviewOptional : RX-001 StartPlanReReview [Sys]
 PlanReviewed --> PrescriptionGenerating : RX-002 StartPrescriptionGeneration [Sys]
-PlanReReviewOptional --> PrescriptionGenerating : RX-003 ApprovePlanReReview [User]\n«ChiefDoctor/SeniorPhysicist»
-PlanReReviewOptional --> PlanningInProgress : RX-004 RejectPlanReReview [User]\n«ChiefDoctor/SeniorPhysicist»
+PlanReReviewOptional --> PrescriptionGenerating : RX-003 ApprovePlanReReview [User]\n«Physician/Physicist»
+PlanReReviewOptional --> PlanningInProgress : RX-004 RejectPlanReReview [User]\n«Physician/Physicist»
 PrescriptionGenerating --> PrescriptionReady : RX-005 PrescriptionGenerated [Ext]
 PrescriptionGenerating --> PrescriptionSyncFailed : RX-006 PrescriptionSyncFailed [Ext]
 PrescriptionSyncFailed --> PrescriptionGenerating : RX-007 RetryPrescriptionSync [User]\n«Physicist/System»
@@ -137,26 +137,26 @@ PlanQAInProgress --> PlanQAFailed : QA-003 RejectQA [User]\n«Physicist/QAReview
 PlanQAFailed --> PlanningInProgress : QA-004 ReworkAfterQA [User]\n«Physicist/System»
 PlanQAApproved --> PlanDoubleCheckOptional : QA-005 StartDoubleCheck [Sys]
 PlanQAApproved --> ReadyForScheduling : QA-006 SkipDoubleCheck [Sys]
-PlanDoubleCheckOptional --> ReadyForScheduling : QA-007 ApproveDoubleCheck [User]\n«SeniorPhysicist»
-PlanDoubleCheckOptional --> PlanningInProgress : QA-008 RejectDoubleCheck [User]\n«SeniorPhysicist»
+PlanDoubleCheckOptional --> ReadyForScheduling : QA-007 ApproveDoubleCheck [User]\n«Physicist»
+PlanDoubleCheckOptional --> PlanningInProgress : QA-008 RejectDoubleCheck [User]\n«Physicist»
 
 ' ─── Phase 8: Scheduling, Order & Treatment ───────────────
 ReadyForScheduling --> SchedulingInProgress : TRT-001 StartScheduleSync [Sys]
 SchedulingInProgress --> Scheduled : TRT-002 ScheduleSynced [Ext]
 Scheduled --> OrderPending : TRT-003 PrepareTreatmentOrder [Sys]
-OrderPending --> OrderSubmitted : TRT-004 SubmitTreatmentOrder [User]\n«Doctor»
+OrderPending --> OrderSubmitted : TRT-004 SubmitTreatmentOrder [User]\n«Physician»
 OrderSubmitted --> QueuePending : TRT-005 QueueCreated [Ext]
 QueuePending --> Treating : TRT-006 TreatmentStarted [Ext]
 Treating --> Treating : TRT-007 TreatmentFractionCompleted [Ext]
 Treating --> TreatmentPaused : TRT-008 PauseTreatment [User]\n«Therapist/System»
 TreatmentPaused --> Treating : TRT-009 ResumeTreatment [User]\n«Therapist/System»
-Treating --> TreatmentInterrupted : TRT-010 InterruptTreatment [User]\n«Therapist/Doctor/System»
-TreatmentInterrupted --> Treating : TRT-011 ResumeAfterInterruption [User]\n«Doctor/Therapist»
+Treating --> TreatmentInterrupted : TRT-010 InterruptTreatment [User]\n«Therapist/Physician/System»
+TreatmentInterrupted --> Treating : TRT-011 ResumeAfterInterruption [User]\n«Physician/Therapist»
 Treating --> TreatmentCompleted : TRT-012 CompleteTreatmentCourse [Ext]
 
 ' ─── Phase 9: Post-treatment & Archiving ───────────────
 TreatmentCompleted --> PostTreatmentReviewPending : POST-001 StartPostTreatmentReview [Sys]
-PostTreatmentReviewPending --> PostTreatmentReviewed : POST-002 SubmitPostTreatmentReview [User]\n«Doctor»
+PostTreatmentReviewPending --> PostTreatmentReviewed : POST-002 SubmitPostTreatmentReview [User]\n«Physician»
 PostTreatmentReviewed --> Archived : POST-003 ArchiveCase [Sys]\n«System/Admin»
 
 

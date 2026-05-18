@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Wfmgr.Application.Patients;
 using Wfmgr.Application.Workflows.V1;
@@ -7,6 +8,7 @@ namespace Wfmgr.Api.Controllers;
 
 [ApiController]
 [Route("api/patients")]
+[Authorize]
 public class PatientsController : ControllerBase
 {
     private readonly IPatientService _patientService;

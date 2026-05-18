@@ -32,7 +32,7 @@ public interface IWorkflowProfileResolver
         string departmentId,
         CancellationToken ct);
 
-    Task<S6QueueAndCancelPolicy> ResolveS6QueueAndCancelPolicyAsync(
+    Task<S6CancelPolicy> ResolveS6CancelPolicyAsync(
         string hospitalId,
         string siteId,
         string departmentId,

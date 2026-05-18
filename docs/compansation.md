@@ -32,11 +32,11 @@
 
 | TransitionCode | FromStatus                           | ToStatus      | TriggerName             | TriggerType | RequiredRole      | GateChecks                  | OnSuccessActions                        | OnFailureActions      | CreateWorkItems                      | ConfigSlot |
 | -------------- | ------------------------------------ | ------------- | ----------------------- | ----------- | ----------------- | --------------------------- | --------------------------------------- | --------------------- | ------------------------------------ | ---------- |
-| SIM-001        | Draft                                | Submitted     | SubmitSimulationRequest | User        | Doctor            | SimulationRequestForm valid | Save form, audit, transition history    | reject transition     | SimulationSchedule, SimulationRecord | -          |
+| SIM-001        | Draft                                | Submitted     | SubmitSimulationRequest | User        | Physician            | SimulationRequestForm valid | Save form, audit, transition history    | reject transition     | SimulationSchedule, SimulationRecord | -          |
 | SIM-002        | Submitted                            | SimScheduled  | ScheduleSimulation      | User        | SimTech/Scheduler | active case, not cancelled  | save schedule info                      | stay in Submitted     | update SimulationSchedule            | -          |
 | SIM-003        | SimScheduled                         | SimInProgress | StartSimulation         | User        | SimTech           | schedule exists             | audit                                   | stay in SimScheduled  | -                                    | -          |
 | SIM-004        | SimInProgress                        | SimCompleted  | SubmitSimulationRecord  | User        | SimTech           | SimulationRecordForm valid  | save form, complete SimulationRecord    | stay in SimInProgress | ImageValidation                      | -          |
-| SIM-005        | Submitted/SimScheduled/SimInProgress | Cancelled     | CancelCase              | User        | Doctor/Admin      | treatment not started       | save CancellationForm, close open tasks | reject cancel         | cancel open work items               | S8         |
+| SIM-005        | Submitted/SimScheduled/SimInProgress | Cancelled     | CancelCase              | User        | Physician/Admin      | treatment not started       | save CancellationForm, close open tasks | reject cancel         | cancel open work items               | S8         |
 
 ---
 
@@ -57,8 +57,8 @@
 | CON-001        | ContouringInProgress  | ContouringInProgress  | AutoContourProgressUpdated | ExternalEvent | System                    | event idempotent             | update progress, audit            | ignore duplicate    | update AutoContourMonitor           | -          |
 | CON-002        | ContouringInProgress  | ContoursReady         | AutoContourCompleted       | ExternalEvent | System                    | contour result refs valid    | save RTStruct refs, close monitor | create rework       | ContourReview / ContourSecondReview | S2         |
 | CON-003        | ContouringInProgress  | ContourReworkRequired | AutoContourFailed          | ExternalEvent | System                    | event valid                  | audit failure                     | retry if configured | ManualContouring                    | S1/S8      |
-| CON-004        | ContourReworkRequired | ContouringInProgress  | RestartContouring          | User/System   | Doctor/System             | retry allowed                | create new Outbox                 | stay in rework      | AutoContourMonitor                  | S1         |
-| CON-005        | ContourReworkRequired | ContoursReady         | SubmitManualContourResult  | User          | Doctor/ThirdPartyOperator | manual contour payload valid | save contour refs                 | stay in rework      | ContourReview / ContourSecondReview | S2         |
+| CON-004        | ContourReworkRequired | ContouringInProgress  | RestartContouring          | User/System   | Physician/System             | retry allowed                | create new Outbox                 | stay in rework      | AutoContourMonitor                  | S1         |
+| CON-005        | ContourReworkRequired | ContoursReady         | SubmitManualContourResult  | User          | Physician/ThirdPartyOperator | manual contour payload valid | save contour refs                 | stay in rework      | ContourReview / ContourSecondReview | S2         |
 
 ---
 
@@ -67,9 +67,9 @@
 | TransitionCode | FromStatus          | ToStatus             | TriggerName        | TriggerType | RequiredRole       | GateChecks                | OnSuccessActions         | OnFailureActions  | CreateWorkItems                             | ConfigSlot |
 | -------------- | ------------------- | -------------------- | ------------------ | ----------- | ------------------ | ------------------------- | ------------------------ | ----------------- | ------------------------------------------- | ---------- |
 | REV-001        | ContoursReady       | ContoursUnderReview  | StartContourReview | System      | System             | contour result exists     | create review tasks      | -                 | ContourReview, optional ContourSecondReview | S2         |
-| REV-002        | ContoursUnderReview | PlanningPending      | ApproveContours    | User        | Doctor/ChiefDoctor | min approvals reached     | complete review tasks    | reject transition | PlanAssignment                              | S2         |
-| REV-003        | ContoursUnderReview | ContoursRejected     | RejectContours     | User        | Doctor/ChiefDoctor | rejection reason required | save review form         | reject transition | ContourRework                               | S2         |
-| REV-004        | ContoursRejected    | ContouringInProgress | ResubmitContours   | User/System | Doctor/System      | revised contour exists    | clear stale review tasks | stay rejected     | AutoContourMonitor or manual rework         | S8         |
+| REV-002        | ContoursUnderReview | PlanningPending      | ApproveContours    | User        | Physician | min approvals reached     | complete review tasks    | reject transition | PlanAssignment                              | S2         |
+| REV-003        | ContoursUnderReview | ContoursRejected     | RejectContours     | User        | Physician | rejection reason required | save review form         | reject transition | ContourRework                               | S2         |
+| REV-004        | ContoursRejected    | ContouringInProgress | ResubmitContours   | User/System | Physician/System      | revised contour exists    | clear stale review tasks | stay rejected     | AutoContourMonitor or manual rework         | S8         |
 
 ---
 
@@ -81,8 +81,8 @@
 | PLN-002        | PlanningAssigned   | PlanningInProgress | AcceptPlanTask    | User               | Dosimetrist/Physicist | task assigned             | mark task in progress          | stay assigned     | -                     | S3         |
 | PLN-003        | PlanningInProgress | PlanReady          | SubmitPlan        | User/ExternalEvent | Dosimetrist/Monaco    | plan payload valid        | create PlanVersion             | reject submit     | PlanEvaluation        | -          |
 | PLN-004        | PlanReady          | PlanUnderReview    | StartPlanReview   | System/User        | System/Physicist      | plan version exists       | create evaluation task         | -                 | PlanEvaluation        | -          |
-| PLN-005        | PlanUnderReview    | PlanningInProgress | RejectPlan        | User               | Physicist/Doctor      | rejection reason required | increment plan version context | stay review       | PlanDesign            | -          |
-| PLN-006        | PlanUnderReview    | PlanReviewed       | ApprovePlanReview | User               | Physicist/Doctor      | evaluation approved       | audit                          | reject transition | optional PlanReReview | S4         |
+| PLN-005        | PlanUnderReview    | PlanningInProgress | RejectPlan        | User               | Physicist/Physician      | rejection reason required | increment plan version context | stay review       | PlanDesign            | -          |
+| PLN-006        | PlanUnderReview    | PlanReviewed       | ApprovePlanReview | User               | Physicist/Physician      | evaluation approved       | audit                          | reject transition | optional PlanReReview | S4         |
 
 ---
 
@@ -92,8 +92,8 @@
 | -------------- | ---------------------- | ---------------------- | --------------------------- | -------------------- | --------------------------- | ---------------------------- | ---------------------------------- | ----------------- | ---------------- | ---------- |
 | RX-001         | PlanReviewed           | PlanReReviewOptional   | StartPlanReReview           | System               | System                      | S4 enabled                   | create rereview task               | skip if disabled  | PlanReReview     | S4         |
 | RX-002         | PlanReviewed           | PrescriptionGenerating | StartPrescriptionGeneration | System               | System                      | no rereview required         | create Outbox GeneratePrescription | retry/manual sync | PrescriptionSync | S4         |
-| RX-003         | PlanReReviewOptional   | PrescriptionGenerating | ApprovePlanReReview         | User                 | ChiefDoctor/SeniorPhysicist | rereview approved            | create Outbox GeneratePrescription | reject transition | PrescriptionSync | S4         |
-| RX-004         | PlanReReviewOptional   | PlanningInProgress     | RejectPlanReReview          | User                 | ChiefDoctor/SeniorPhysicist | reason required              | plan back to rework                | stay rereview     | PlanDesign       | S4         |
+| RX-003         | PlanReReviewOptional   | PrescriptionGenerating | ApprovePlanReReview         | User                 | Physician/Physicist | rereview approved            | create Outbox GeneratePrescription | reject transition | PrescriptionSync | S4         |
+| RX-004         | PlanReReviewOptional   | PlanningInProgress     | RejectPlanReReview          | User                 | Physician/Physicist | reason required              | plan back to rework                | stay rereview     | PlanDesign       | S4         |
 | RX-005         | PrescriptionGenerating | PrescriptionReady      | PrescriptionGenerated       | ExternalEvent/System | System                      | prescription reference valid | save IntegrationReference          | retry/manual sync | PlanQA           | -          |
 | RX-006         | PrescriptionGenerating | PrescriptionSyncFailed | PrescriptionSyncFailed      | ExternalEvent/System | System                      | failure event valid          | audit failure                      | retry later       | PrescriptionSync | S8         |
 | RX-007         | PrescriptionSyncFailed | PrescriptionGenerating | RetryPrescriptionSync       | User/System          | Physicist/System            | retry allowed                | create new Outbox                  | stay failed       | PrescriptionSync | S8         |
@@ -110,8 +110,8 @@
 | QA-004         | PlanQAFailed            | PlanningInProgress      | ReworkAfterQA      | User/System | Physicist/System     | rework decision made        | reopen planning path     | stay failed       | PlanDesign                                  | S8         |
 | QA-005         | PlanQAApproved          | PlanDoubleCheckOptional | StartDoubleCheck   | System      | System               | S5 enabled                  | create double check task | skip if disabled  | PlanDoubleCheck                             | S5         |
 | QA-006         | PlanQAApproved          | ReadyForScheduling      | SkipDoubleCheck    | System      | System               | S5 disabled                 | audit                    | -                 | ScheduleSync                                | S5         |
-| QA-007         | PlanDoubleCheckOptional | ReadyForScheduling      | ApproveDoubleCheck | User        | SeniorPhysicist      | double check approved       | complete task            | reject transition | ScheduleSync                                | S5         |
-| QA-008         | PlanDoubleCheckOptional | PlanningInProgress      | RejectDoubleCheck  | User        | SeniorPhysicist      | reason required             | reopen planning          | stay double check | PlanDesign                                  | S5         |
+| QA-007         | PlanDoubleCheckOptional | ReadyForScheduling      | ApproveDoubleCheck | User        | Physicist      | double check approved       | complete task            | reject transition | ScheduleSync                                | S5         |
+| QA-008         | PlanDoubleCheckOptional | PlanningInProgress      | RejectDoubleCheck  | User        | Physicist      | reason required             | reopen planning          | stay double check | PlanDesign                                  | S5         |
 
 ---
 
@@ -122,14 +122,14 @@
 | TRT-001        | ReadyForScheduling   | SchedulingInProgress | StartScheduleSync          | System               | System                  | case released for schedule   | start schedule watch             | retry/manual         | ScheduleSync               | S6         |
 | TRT-002        | SchedulingInProgress | Scheduled            | ScheduleSynced             | ExternalEvent        | System                  | schedule payload valid       | save schedule ref                | retry/manual sync    | TreatmentOrder             | S6         |
 | TRT-003        | Scheduled            | OrderPending         | PrepareTreatmentOrder      | System               | System                  | schedule exists              | create order draft               | -                    | TreatmentOrder             | -          |
-| TRT-004        | OrderPending         | OrderSubmitted       | SubmitTreatmentOrder       | User                 | Doctor                  | TreatmentOrderForm valid     | save order form                  | stay pending         | QueueCall                  | -          |
+| TRT-004        | OrderPending         | OrderSubmitted       | SubmitTreatmentOrder       | User                 | Physician                  | TreatmentOrderForm valid     | save order form                  | stay pending         | QueueCall                  | -          |
 | TRT-005        | OrderSubmitted       | QueuePending         | QueueCreated               | ExternalEvent/System | System                  | queue or appointment valid   | save queue ref                   | retry/local fallback | QueueCall                  | S6         |
 | TRT-006        | QueuePending         | Treating             | TreatmentStarted           | ExternalEvent        | System                  | treatment start event valid  | create monitor                   | reject event         | TreatmentMonitor           | -          |
 | TRT-007        | Treating             | Treating             | TreatmentFractionCompleted | ExternalEvent        | System                  | fraction data valid          | update progress                  | ignore duplicate     | TreatmentMonitor           | S7         |
 | TRT-008        | Treating             | TreatmentPaused      | PauseTreatment             | User/ExternalEvent   | Therapist/System        | pause reason provided        | audit pause                      | reject transition    | TreatmentExceptionHandling | S8         |
 | TRT-009        | TreatmentPaused      | Treating             | ResumeTreatment            | User/ExternalEvent   | Therapist/System        | resume allowed               | close exception task if resolved | stay paused          | TreatmentMonitor           | S8         |
-| TRT-010        | Treating             | TreatmentInterrupted | InterruptTreatment         | User/ExternalEvent   | Therapist/Doctor/System | interruption reason required | audit interruption               | reject transition    | TreatmentExceptionHandling | S8         |
-| TRT-011        | TreatmentInterrupted | Treating             | ResumeAfterInterruption    | User                 | Doctor/Therapist        | medical approval exists      | resume monitor                   | stay interrupted     | TreatmentMonitor           | S8         |
+| TRT-010        | Treating             | TreatmentInterrupted | InterruptTreatment         | User/ExternalEvent   | Therapist/Physician/System | interruption reason required | audit interruption               | reject transition    | TreatmentExceptionHandling | S8         |
+| TRT-011        | TreatmentInterrupted | Treating             | ResumeAfterInterruption    | User                 | Physician/Therapist        | medical approval exists      | resume monitor                   | stay interrupted     | TreatmentMonitor           | S8         |
 | TRT-012        | Treating             | TreatmentCompleted   | CompleteTreatmentCourse    | ExternalEvent/System | System                  | S7 completion rule satisfied | create post review               | stay treating        | PostTreatmentReview        | S7         |
 
 ---
@@ -139,7 +139,7 @@
 | TransitionCode | FromStatus                 | ToStatus                   | TriggerName               | TriggerType  | RequiredRole | GateChecks                                 | OnSuccessActions    | OnFailureActions | CreateWorkItems                | ConfigSlot |
 | -------------- | -------------------------- | -------------------------- | ------------------------- | ------------ | ------------ | ------------------------------------------ | ------------------- | ---------------- | ------------------------------ | ---------- |
 | POST-001       | TreatmentCompleted         | PostTreatmentReviewPending | StartPostTreatmentReview  | System       | System       | treatment completed                        | create review task  | -                | PostTreatmentReview            | -          |
-| POST-002       | PostTreatmentReviewPending | PostTreatmentReviewed      | SubmitPostTreatmentReview | User         | Doctor       | PostTreatmentReviewForm valid              | save form           | stay pending     | ArchiveReview                  | -          |
+| POST-002       | PostTreatmentReviewPending | PostTreatmentReviewed      | SubmitPostTreatmentReview | User         | Physician       | PostTreatmentReviewForm valid              | save form           | stay pending     | ArchiveReview                  | -          |
 | POST-003       | PostTreatmentReviewed      | Archived                   | ArchiveCase               | System/Admin | System/Admin | no blocking tasks, required forms complete | mark case read-only | reject archive   | close or cancel residual tasks | -          |
 
 ---

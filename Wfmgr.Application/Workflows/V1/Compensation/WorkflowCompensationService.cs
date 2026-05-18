@@ -277,17 +277,17 @@ public sealed class WorkflowCompensationService : IWorkflowCompensationService
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["ImageForwardToContourTool"]  = "System",
-            ["ManualContouring"]           = "Doctor/ThirdPartyOperator",
-            ["ContourRework"]              = "Doctor/ThirdPartyOperator",
+            ["ManualContouring"]           = "Physician/ThirdPartyOperator",
+            ["ContourRework"]              = "Physician/ThirdPartyOperator",
             ["PlanDesign"]                 = "Dosimetrist",
             ["PrescriptionSync"]           = "Physicist/System",
             ["PlanQA"]                     = "Physicist/QAReviewer",
             ["ScheduleSync"]               = "Scheduler/System",
-            ["TreatmentOrder"]             = "Doctor",
+            ["TreatmentOrder"]             = "Physician",
             ["QueueCall"]                  = "System",
             ["TreatmentMonitor"]           = "System",
             ["TreatmentExceptionHandling"] = "Admin",
-            ["PostTreatmentReview"]        = "Doctor",
+            ["PostTreatmentReview"]        = "Physician",
             ["ArchiveReview"]              = "System/Admin",
         };
 }

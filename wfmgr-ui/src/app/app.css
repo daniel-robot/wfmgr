@@ -12,6 +12,14 @@
 	padding: 1rem 1.25rem;
 	background: #0f172a;
 	color: #f8fafc;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.topbar-left {
+	display: flex;
+	flex-direction: column;
 }
 
 .title {
@@ -22,6 +30,55 @@
 .subtitle {
 	font-size: 0.92rem;
 	opacity: 0.85;
+}
+
+.topbar-right {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.user-info {
+	font-size: 0.85rem;
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.user-role-badge {
+	background: #334155;
+	color: #e2e8f0;
+	font-size: 0.72rem;
+	padding: 0.15rem 0.45rem;
+	border-radius: 4px;
+	font-weight: 600;
+}
+
+.btn-login,
+.btn-logout {
+	background: transparent;
+	border: 1px solid #475569;
+	color: #e2e8f0;
+	padding: 0.3rem 0.7rem;
+	border-radius: 6px;
+	font-size: 0.82rem;
+	font-weight: 600;
+	cursor: pointer;
+	text-decoration: none;
+}
+
+.btn-login:hover,
+.btn-logout:hover {
+	background: #1e293b;
+}
+
+.rbac-warning {
+	background: #fef9c3;
+	border-bottom: 1px solid #facc15;
+	padding: 0.5rem 1.25rem;
+	font-size: 0.82rem;
+	color: #854d0e;
+	text-align: center;
 }
 
 .nav {
