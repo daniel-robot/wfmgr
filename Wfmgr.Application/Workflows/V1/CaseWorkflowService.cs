@@ -163,12 +163,15 @@ public class CaseWorkflowService : ICaseWorkflowService
             ActorRoles = actorRoles ?? [WorkflowRoles.SimTech]
         }, ct);
 
+        await ProcessPendingCtImageStoredEventsAsync(caseData, ct);
+
         await _dataAccess.SaveChangesAsync(ct);
     }
 
     public async Task HandleCtImageStoredAsync(CtImageStoredRequest request, CancellationToken ct)
     {
-        if (await _dataAccess.ExternalEventExistsAsync("CT", "IMAGE_STORED", request.ExternalEventId, ct))
+        var existingEvent = await _dataAccess.GetExternalEventAsync("CT", "IMAGE_STORED", request.ExternalEventId, ct);
+        if (existingEvent is not null && string.Equals(existingEvent.ProcessStatus, "Processed", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
@@ -179,12 +182,98 @@ public class CaseWorkflowService : ICaseWorkflowService
         // Idempotency: if the case already progressed beyond image intake, ignore duplicate/late CT events.
         if (caseData.CurrentStatus >= CaseStatus.ImageStored)
         {
+            if (existingEvent is null)
+            {
+                await _dataAccess.AddExternalEventAsync(new ExternalEventData
+                {
+                    EventId = Guid.NewGuid(),
+                    Source = "CT",
+                    Type = "IMAGE_STORED",
+                    ExternalId = request.ExternalEventId,
+                    CaseCorrelationKey = request.AccessionNumber,
+                    CaseId = caseData.CaseId,
+                    PayloadJson = JsonSerializer.Serialize(request),
+                    ReceivedAt = request.OccurredAt,
+                    ProcessedAt = DateTimeOffset.UtcNow,
+                    ProcessStatus = "Processed"
+                }, ct);
+                await _dataAccess.SaveChangesAsync(ct);
+            }
+
+            return;
+        }
+
+        if (caseData.CurrentStatus == CaseStatus.SimInProgress)
+        {
+            if (existingEvent is null)
+            {
+                await _dataAccess.AddExternalEventAsync(new ExternalEventData
+                {
+                    EventId = Guid.NewGuid(),
+                    Source = "CT",
+                    Type = "IMAGE_STORED",
+                    ExternalId = request.ExternalEventId,
+                    CaseCorrelationKey = request.AccessionNumber,
+                    CaseId = caseData.CaseId,
+                    PayloadJson = JsonSerializer.Serialize(request),
+                    ReceivedAt = request.OccurredAt,
+                    ProcessStatus = "PendingSimCompleted"
+                }, ct);
+                await _dataAccess.SaveChangesAsync(ct);
+            }
+
             return;
         }
 
         if (caseData.CurrentStatus != CaseStatus.SimCompleted)
         {
-            throw new InvalidOperationException($"Case must be in SimCompleted status. Current status is '{caseData.CurrentStatus}'.");
+            throw new InvalidOperationException($"Case must be in SimInProgress or SimCompleted status. Current status is '{caseData.CurrentStatus}'.");
+        }
+
+        await ProcessCtImageStoredAsync(caseData, request, existingEvent, ct);
+
+        await _dataAccess.SaveChangesAsync(ct);
+    }
+
+    private async Task ProcessPendingCtImageStoredEventsAsync(CaseData caseData, CancellationToken ct)
+    {
+        if (caseData.CurrentStatus != CaseStatus.SimCompleted)
+        {
+            return;
+        }
+
+        var pendingEvents = await _dataAccess.GetExternalEventsByCaseAsync(caseData.CaseId, "CT", "IMAGE_STORED", ct);
+        foreach (var pendingEvent in pendingEvents.Where(x => !string.Equals(x.ProcessStatus, "Processed", StringComparison.OrdinalIgnoreCase)))
+        {
+            CtImageStoredRequest? payload;
+            try
+            {
+                payload = JsonSerializer.Deserialize<CtImageStoredRequest>(pendingEvent.PayloadJson);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            if (payload is null)
+            {
+                continue;
+            }
+
+            await ProcessCtImageStoredAsync(caseData, payload, pendingEvent, ct);
+            break;
+        }
+    }
+
+    private async Task ProcessCtImageStoredAsync(
+        CaseData caseData,
+        CtImageStoredRequest request,
+        ExternalEventData? existingEvent,
+        CancellationToken ct)
+    {
+        if (caseData.CurrentStatus != CaseStatus.SimCompleted)
+        {
+            return;
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -260,21 +349,26 @@ public class CaseWorkflowService : ICaseWorkflowService
             Metadata = request
         }, ct);
 
-        await _dataAccess.AddExternalEventAsync(new ExternalEventData
+        if (existingEvent is null)
         {
-            EventId = Guid.NewGuid(),
-            Source = "CT",
-            Type = "IMAGE_STORED",
-            ExternalId = request.ExternalEventId,
-            CaseCorrelationKey = request.AccessionNumber,
-            CaseId = caseData.CaseId,
-            PayloadJson = JsonSerializer.Serialize(request),
-            ReceivedAt = request.OccurredAt,
-            ProcessedAt = now,
-            ProcessStatus = "Processed"
-        }, ct);
+            await _dataAccess.AddExternalEventAsync(new ExternalEventData
+            {
+                EventId = Guid.NewGuid(),
+                Source = "CT",
+                Type = "IMAGE_STORED",
+                ExternalId = request.ExternalEventId,
+                CaseCorrelationKey = request.AccessionNumber,
+                CaseId = caseData.CaseId,
+                PayloadJson = JsonSerializer.Serialize(request),
+                ReceivedAt = request.OccurredAt,
+                ProcessedAt = now,
+                ProcessStatus = "Processed"
+            }, ct);
 
-        await _dataAccess.SaveChangesAsync(ct);
+            return;
+        }
+
+        await _dataAccess.MarkExternalEventProcessedAsync(existingEvent.EventId, caseData.CaseId, ct);
     }
 
     public async Task HandlePvMedEventAsync(PvMedEventRequest request, CancellationToken ct)

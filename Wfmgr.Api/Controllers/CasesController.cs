@@ -138,11 +138,32 @@ public class CasesController : ControllerBase
     }
 
     [HttpPost("{caseId:guid}/actions/complete-manual-contouring")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CompleteManualContouring(Guid caseId, CancellationToken ct)
     {
-        var actor = ActorInfo.FromPrincipal(User);
-        await _workflowService.CompleteManualContouringAsync(caseId, ct, actor.Roles);
-        return NoContent();
+        try
+        {
+            var actor = ActorInfo.FromPrincipal(User);
+            await _workflowService.CompleteManualContouringAsync(caseId, ct, actor.Roles);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex) when (
+            ex.Message.Contains("RoleDenied", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("requires one of roles", StringComparison.OrdinalIgnoreCase))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost("{caseId:guid}/actions/reject-plan-review")]

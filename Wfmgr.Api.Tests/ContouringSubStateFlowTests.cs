@@ -29,6 +29,36 @@ namespace Wfmgr.Api.Tests;
 public class ContouringSubStateFlowTests
 {
     [Fact]
+    public async Task CtImageStored_ReceivedDuringSimInProgress_IsProcessedAfterDailyImageScanCompletion()
+    {
+        using var factory = new TestApiFactory();
+        using var client = factory.CreateAuthenticatedClient();
+
+        var caseId = await CreateCaseAsync(client);
+        var externalEventId = Guid.NewGuid().ToString();
+
+        await SendCtImageStoredAsync(client, caseId, externalEventId);
+
+        var inProgress = await client.GetFromJsonAsync<CaseDetailsDto>($"/api/cases/{caseId}");
+        Assert.Equal(nameof(CaseStatus.SimInProgress), inProgress!.CurrentStatus);
+
+        var complete = await client.PostAsJsonAsync(
+            $"/api/cases/{caseId}/actions/complete-daily-image-scan",
+            new WorkflowActionRequest { TriggeredBy = "simtech" });
+        complete.EnsureSuccessStatusCode();
+
+        var details = await client.GetFromJsonAsync<CaseDetailsDto>($"/api/cases/{caseId}");
+        Assert.Equal(nameof(CaseStatus.AutoContouringInProgress), details!.CurrentStatus);
+
+        var workItems = await client.GetFromJsonAsync<List<WorkItemViewDto>>($"/api/cases/{caseId}/work-items");
+        Assert.Single(workItems!.Where(w => w.Type == WorkItemTypes.AutoContourMonitor));
+
+        await SendCtImageStoredAsync(client, caseId, externalEventId);
+        var afterDuplicate = await client.GetFromJsonAsync<CaseDetailsDto>($"/api/cases/{caseId}");
+        Assert.Equal(nameof(CaseStatus.AutoContouringInProgress), afterDuplicate!.CurrentStatus);
+    }
+
+    [Fact]
     public async Task CtImageStored_TransitionsCaseToAutoContouringInProgress_AndCreatesAutoContourMonitor()
     {
         using var factory = new TestApiFactory();
@@ -148,6 +178,20 @@ public class ContouringSubStateFlowTests
 
     private static async Task<Guid> CreateCaseAndAdvanceToSimCompletedAsync(HttpClient client)
     {
+        var caseId = await CreateCaseAsync(client);
+
+        // Auto-create flow leaves the case in SimInProgress; complete the daily image scan
+        // to reach SimCompleted (precondition for the CT image stored event).
+        var complete = await client.PostAsJsonAsync(
+            $"/api/cases/{caseId}/actions/complete-daily-image-scan",
+            new WorkflowActionRequest { TriggeredBy = "simtech" });
+        complete.EnsureSuccessStatusCode();
+
+        return caseId;
+    }
+
+    private static async Task<Guid> CreateCaseAsync(HttpClient client)
+    {
         var createReq = new CreateCaseRequest
         {
             HospitalId = "H1",
@@ -160,24 +204,15 @@ public class ContouringSubStateFlowTests
         var createResp = await client.PostAsJsonAsync("/api/cases", createReq);
         createResp.EnsureSuccessStatusCode();
         var created = await createResp.Content.ReadFromJsonAsync<CreateCaseResponse>();
-        var caseId = created!.CaseId;
-
-        // Auto-create flow leaves the case in SimInProgress; complete the daily image scan
-        // to reach SimCompleted (precondition for the CT image stored event).
-        var complete = await client.PostAsJsonAsync(
-            $"/api/cases/{caseId}/actions/complete-daily-image-scan",
-            new WorkflowActionRequest { TriggeredBy = "simtech" });
-        complete.EnsureSuccessStatusCode();
-
-        return caseId;
+        return created!.CaseId;
     }
 
-    private static async Task SendCtImageStoredAsync(HttpClient client, Guid caseId)
+    private static async Task SendCtImageStoredAsync(HttpClient client, Guid caseId, string? externalEventId = null)
     {
         var details = await client.GetFromJsonAsync<CaseDetailsDto>($"/api/cases/{caseId}");
         var req = new
         {
-            externalEventId = Guid.NewGuid().ToString(),
+            externalEventId = externalEventId ?? Guid.NewGuid().ToString(),
             accessionNumber = details!.AccessionNumber,
             dicomRef = new
             {

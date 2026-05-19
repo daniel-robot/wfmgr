@@ -329,6 +329,56 @@ public class WorkflowDataAccess : IWorkflowDataAccess
             ct);
     }
 
+    public async Task<ExternalEventData?> GetExternalEventAsync(string source, string type, string externalId, CancellationToken ct)
+    {
+        var entity = await _dbContext.ExternalEvents
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                x => x.Source == source && x.Type == type && x.ExternalId == externalId,
+                ct);
+
+        return entity is null
+            ? null
+            : new ExternalEventData
+            {
+                EventId = entity.EventId,
+                Source = entity.Source,
+                Type = entity.Type,
+                ExternalId = entity.ExternalId,
+                CaseCorrelationKey = entity.CaseCorrelationKey,
+                CaseId = entity.CaseId,
+                PayloadJson = entity.PayloadJson,
+                ReceivedAt = entity.ReceivedAt,
+                ProcessedAt = entity.ProcessedAt,
+                ProcessStatus = entity.ProcessStatus,
+                Error = entity.Error
+            };
+    }
+
+    public async Task<IReadOnlyList<ExternalEventData>> GetExternalEventsByCaseAsync(Guid caseId, string source, string type, CancellationToken ct)
+    {
+        var events = await _dbContext.ExternalEvents
+            .AsNoTracking()
+            .Where(x => x.CaseId == caseId && x.Source == source && x.Type == type)
+            .OrderBy(x => x.ReceivedAt)
+            .ToListAsync(ct);
+
+        return events.Select(x => new ExternalEventData
+        {
+            EventId = x.EventId,
+            Source = x.Source,
+            Type = x.Type,
+            ExternalId = x.ExternalId,
+            CaseCorrelationKey = x.CaseCorrelationKey,
+            CaseId = x.CaseId,
+            PayloadJson = x.PayloadJson,
+            ReceivedAt = x.ReceivedAt,
+            ProcessedAt = x.ProcessedAt,
+            ProcessStatus = x.ProcessStatus,
+            Error = x.Error
+        }).ToList();
+    }
+
     public async Task<WorkItemData?> GetOpenWorkItemAsync(Guid caseId, string type, CancellationToken ct)
     {
         var entity = await _dbContext.WorkItems
@@ -607,6 +657,21 @@ public class WorkflowDataAccess : IWorkflowDataAccess
             .FirstOrDefaultAsync(x => x.Integration == integration && x.ExternalEventId == externalEventId, ct);
         if (row is null) return;
         row.ProcessedAt = DateTimeOffset.UtcNow;
+        if (caseId is not null) row.CaseId = caseId;
+    }
+
+    public async Task MarkExternalEventProcessedAsync(
+        Guid eventId,
+        Guid? caseId,
+        CancellationToken ct)
+    {
+        var row = await _dbContext.ExternalEvents
+            .FirstOrDefaultAsync(x => x.EventId == eventId, ct);
+        if (row is null) return;
+
+        row.ProcessedAt = DateTimeOffset.UtcNow;
+        row.ProcessStatus = "Processed";
+        row.Error = null;
         if (caseId is not null) row.CaseId = caseId;
     }
 

@@ -20,6 +20,8 @@ public interface IWorkflowDataAccess
     Task<IReadOnlyList<IntegrationReferenceData>> GetIntegrationReferencesByCaseIdAsync(Guid caseId, CancellationToken ct);
     Task<IReadOnlyList<PlanVersionData>> GetPlanVersionsByCaseIdAsync(Guid caseId, CancellationToken ct);
     Task<bool> ExternalEventExistsAsync(string source, string type, string externalId, CancellationToken ct);
+    Task<ExternalEventData?> GetExternalEventAsync(string source, string type, string externalId, CancellationToken ct);
+    Task<IReadOnlyList<ExternalEventData>> GetExternalEventsByCaseAsync(Guid caseId, string source, string type, CancellationToken ct);
     Task<WorkItemData?> GetWorkItemByIdAsync(Guid workItemId, CancellationToken ct);
     Task<WorkItemData?> GetOpenWorkItemAsync(Guid caseId, string type, CancellationToken ct);
     Task<IReadOnlyList<WorkItemData>> GetMutableWorkItemsByCaseIdAsync(Guid caseId, CancellationToken ct);
@@ -71,6 +73,10 @@ public interface IWorkflowDataAccess
     Task MarkExternalEventInboxProcessedAsync(
         string integration,
         string externalEventId,
+        Guid? caseId,
+        CancellationToken ct);
+    Task MarkExternalEventProcessedAsync(
+        Guid eventId,
         Guid? caseId,
         CancellationToken ct);
     Task AddAuditLogAsync(AuditLogData item, CancellationToken ct);
