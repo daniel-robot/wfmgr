@@ -167,6 +167,10 @@ public class WorkflowProfileResolver : IWorkflowProfileResolver
         string departmentId,
         CancellationToken ct)
     {
+        // Mirrors database/init.sql so a freshly-migrated empty DB still has the
+        // two default profiles + 8 default slot rules. No-op once seeded.
+        await WorkflowProfileSeeder.EnsureSeededAsync(_dbContext, ct);
+
         var profiles = _dbContext.WorkflowProfiles
             .AsNoTracking()
             .Where(x => x.IsActive)
