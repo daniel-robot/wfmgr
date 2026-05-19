@@ -44,6 +44,7 @@ public static class DependencyInjection
         services.AddSingleton<IWorkflowTransitionCatalogService, WorkflowTransitionCatalogService>();
         services.AddSingleton<IWorkflowVocabularyCatalogService, WorkflowVocabularyCatalogService>();
         services.AddSingleton<ICaseStatusOverlayService, CaseStatusOverlayService>();
+        services.AddHostedService<WorkflowSeedingHostedService>();
         services.AddScoped<IExternalEventDispatcher, ExternalEventDispatcher>();
         services.AddHttpClient<IPvMedClient, PvMedClient>(client =>
         {
