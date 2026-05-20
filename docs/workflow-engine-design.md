@@ -45,7 +45,7 @@ Definitions are persisted in the `WorkflowTransition` table and exposed at runti
 The service exposes two lookup shapes used by the engine and the explain endpoint:
 
 | Member | Type | Use |
-|--------|------|-----|
+| -------- | ------ | ----- |
 | `ListAllAsync(ct)` | `IReadOnlyList<TransitionDefinition>` | iteration / docs / validation |
 | `GetByCodeAsync(code, ct)` | `TransitionDefinition?` | O(1) lookup by `Code` |
 | `GetExtraVocabularyAsync(ct)` | `(roles, workItemTypes)` | DB-extension lists fed into `WorkflowTransitionGraphValidator.ValidateOne` so user-added vocabulary is treated as known |
@@ -100,63 +100,7 @@ Gate checks are precondition validators that must all pass before a transition p
 
 ### Strategy map
 
-`GateValidationService` initialises a `Dictionary<string, GateCheck>` in its constructor. Each entry maps a `GateCheckNames` constant to an async delegate. Aliases (different constant names sharing the same implementation) are explicitly registered as separate map entries:
-
-```bash
-SimulationRequestFormValid → SimulationRequestFormValidAsync
-SimulationRecordFormValid  → SimulationRecordFormValidAsync
-SimulationScheduleExists   → SimulationScheduleExistsAsync
-CaseNotCancelled           → CaseNotCancelledAsync
-CaseActiveNotCancelled     → CaseNotCancelledAsync        ← alias
-TreatmentNotStarted        → CancellationAllowedAsync
-CancellationAllowed        → CancellationAllowedAsync
-ImageReferenceExists       → ImageReferenceExistsAsync
-ImageRefsValid             → ImageReferenceExistsAsync    ← alias
-ImageAccessible            → ImageReferenceExistsAsync    ← alias
-CaseResolvedByCorrelationKey → ExternalPayloadPresentAsync
-ExternalAcceptOrDeliveryConfirmed → ExternalPayloadPresentAsync
-ContourResultExists        → ContourResultExistsAsync
-ContourResultRefsValid     → ContourResultExistsAsync     ← alias
-RevisedContourExists       → ContourResultExistsAsync     ← alias
-EventValid                 → ExternalPayloadPresentAsync
-EventIdempotent            → EventIdempotentAsync
-ManualContourPayloadValid  → FormOrPayloadPresentAsync
-RetryAllowed               → RetryAllowedAsync
-ReviewApprovalExists       → ReviewApprovalExistsAsync
-MinimumApprovalsReached    → ReviewApprovalExistsAsync    ← alias
-RejectionReasonRequired    → ReasonPresentAsync
-PlanVersionExists          → PlanVersionExistsAsync
-PlanPayloadValid           → FormOrPayloadPresentAsync
-AssigneeExists             → AssigneeExistsAsync
-TaskAssigned               → WorkItemIdPresentAsync
-PlanEvaluationApproved / EvaluationApproved → PlanEvaluationApprovedAsync
-ReasonRequired / FailureReasonRequired / ReworkDecisionMade → ReasonPresentAsync
-S4ReReviewEnabled          → S4ReReviewEnabledAsync
-NoReReviewRequired         → S4ReReviewDisabledAsync
-ReReviewApproved           → ReReviewApprovedAsync
-PrescriptionReferenceValid → PrescriptionReferenceExistsAsync
-FailureEventValid          → ExternalPayloadPresentAsync
-PlanAndPrescriptionPresent → PlanAndPrescriptionPresentAsync
-QAFormValid / QAFormApproved → QAApprovalExistsAsync
-DoubleCheckApproved        → DoubleCheckApprovedAsync
-S5DoubleCheckEnabled       → S5DoubleCheckEnabledAsync
-S5DoubleCheckDisabled      → S5DoubleCheckDisabledAsync
-ScheduleReferenceExists / ScheduleExists / CaseReleasedForSchedule → ScheduleReferenceExistsAsync
-SchedulePayloadValid       → ExternalPayloadPresentAsync
-TreatmentOrderFormValid    → TreatmentOrderFormValidAsync
-QueueOrAppointmentValid    → ExternalPayloadPresentAsync
-TreatmentStartEventValid   → ExternalPayloadPresentAsync
-FractionDataValid          → ExternalPayloadPresentAsync
-S7CompletionRuleSatisfied  → S7CompletionRuleSatisfiedAsync
-NoBlockingTasks            → NoBlockingTasksAsync
-RequiredFormsComplete      → RequiredFormsCompleteAsync
-PostTreatmentReviewFormValid → PostTreatmentReviewFormValidAsync
-TreatmentCompleted         → TreatmentCompletedAsync
-PauseReasonProvided        → ReasonPresentAsync
-InterruptionReasonRequired → ReasonPresentAsync
-MedicalApprovalExists      → MedicalApprovalExistsAsync
-ResumeAllowed              → ReasonPresentAsync
-```
+`GateValidationService` initialises a `Dictionary<string, GateCheck>` in its constructor. Each entry maps a `GateCheckNames` constant to an async delegate. Aliases (different constant names sharing the same implementation) are explicitly registered as separate map entries.
 
 ### Policy-slot gate checks
 
@@ -217,11 +161,11 @@ The catalog is `WorkflowCompensationCatalog`. Two derived collections are availa
 | CMP-019 | SIM-005 | Cancellation not medically permitted | Reject cancellation; status unchanged | (none) |
 | CMP-020 | ANY_EXTERNAL_EVENT | Duplicate external event | Ignore safely; no status or work-item change | (none) |
 
-### Execution pipeline
+### Compensation Execution pipeline
 
 `WorkflowCompensationService.HandleFailureAsync`:
 
-```
+```bash
 1. Resolve definition   — WorkflowCompensationCatalog.ByFailedStep lookup
 2. Load case            — IWorkflowDataAccess.GetCaseByIdAsync
 3. Status change        — delegate to ICaseTransitionService with synthetic trigger
@@ -405,7 +349,7 @@ The runtime engine remains catalog-driven:
 Each configurable policy is represented by a stable slot code constant in `WorkflowSlotCodes`:
 
 | Slot | Code | Purpose |
-|------|------|---------|
+| ------ | ------ | --------- |
 | S1 | `S1_CONTOURING_STRATEGY` | Auto contour provider and fallback behavior |
 | S2 | `S2_CONTOUR_REVIEW_POLICY` | Review mode, rejection behavior, timeout |
 | S3 | `S3_PLAN_DISPATCH` | Planning assignment mode and escalation |
@@ -611,7 +555,7 @@ Not every static catalog has been migrated. The following remain in code because
 
 | Catalog | Reason |
 |---------|--------|
-| `GateCheckNames` (~50 constants) | Each name maps to a delegate in `GateValidationService`'s strategy map. Adding a new name without paired code would surface as `"not implemented"`. |
+| `GateCheckNames` (~50 constants) | Each name maps to a delegate in `GateValidationService`'s strategy map. Adding a new name without paired code would surface as `"not implemented"`. The transitions UI lists these code-defined values as a read-only reference. |
 | `WorkflowTriggerType` enum | Intrinsically a closed set of trigger categories (`User` / `System` / `ExternalEvent`). |
 | `WorkflowSlotCodes` (S1–S8) and their display labels in `WorkflowConfigService.GetSlotCodes()` | Each slot drives engine rule selection in `WorkflowProfileResolver`. The codes and their labels live next to the engine logic that consumes them. |
 | `WorkflowCompensationCatalog` | Each compensation rule embeds a target status, work-item type, and retry policy interpreted by `WorkflowCompensationService`. |

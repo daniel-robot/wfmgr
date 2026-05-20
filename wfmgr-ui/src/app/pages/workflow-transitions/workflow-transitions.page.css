@@ -38,6 +38,38 @@
 .form-grid .span-2 { grid-column: span 2; }
 .form-grid .span-3 { grid-column: span 3; }
 
+.reference-panel {
+  border: 1px solid #d8e2f0;
+  border-radius: 6px;
+  background: #f7faff;
+  padding: 0.75rem;
+}
+
+.reference-header {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.reference-copy {
+  margin: 0 0 0.75rem 0;
+}
+
+.reference-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.reference-tag {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #c8d8ee;
+  border-radius: 999px;
+  background: #fff;
+  padding: 0.2rem 0.55rem;
+}
+
 .actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
 .btn { padding: 0.4rem 0.9rem; border: 1px solid #bbb; background: #fff; border-radius: 4px; cursor: pointer; }
 .btn:hover:not(:disabled) { background: #f0f0f0; }

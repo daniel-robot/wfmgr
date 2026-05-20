@@ -50,7 +50,8 @@ public static class WorkflowTransitionGraphValidator
         IReadOnlyList<string> workItemsToCreate,
         string? configSlot,
         IReadOnlyCollection<string>? extraKnownRoles = null,
-        IReadOnlyCollection<string>? extraKnownWorkItemTypes = null)
+        IReadOnlyCollection<string>? extraKnownWorkItemTypes = null,
+        IReadOnlyCollection<string>? extraKnownGateChecks = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -61,6 +62,9 @@ public static class WorkflowTransitionGraphValidator
         var workItemSet = extraKnownWorkItemTypes is { Count: > 0 }
             ? new HashSet<string>(KnownWorkItemTypes.Concat(extraKnownWorkItemTypes), StringComparer.Ordinal)
             : KnownWorkItemTypes;
+        var gateSet = extraKnownGateChecks is { Count: > 0 }
+            ? new HashSet<string>(KnownGateChecks.Concat(extraKnownGateChecks), StringComparer.Ordinal)
+            : KnownGateChecks;
 
         if (string.IsNullOrWhiteSpace(code))
         {
@@ -106,7 +110,7 @@ public static class WorkflowTransitionGraphValidator
 
         foreach (var gate in gateChecks ?? [])
         {
-            if (!KnownGateChecks.Contains(gate))
+            if (!gateSet.Contains(gate))
             {
                 errors.Add($"gateCheck '{gate}' is not registered in GateCheckNames; the gate validator will reject any transition using it.");
             }

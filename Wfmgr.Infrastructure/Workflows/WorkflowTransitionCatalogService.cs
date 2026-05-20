@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using Wfmgr.Application.Workflows.V1;
 using Wfmgr.Application.Workflows.V1.Definitions;
+using Wfmgr.Application.Workflows.V1.Gates;
 using Wfmgr.Application.Workflows.V1.Vocabulary;
 using Wfmgr.Domain.Enums;
 using Wfmgr.Infrastructure.Persistence;
@@ -725,4 +726,5 @@ public sealed class WorkflowTransitionCatalogService : IWorkflowTransitionCatalo
         foreach (var f in formsTask.Result) workItems.Add(f);
         return (rolesTask.Result, workItems);
     }
+
 }

@@ -5,6 +5,7 @@ using Wfmgr.Api.Auth;
 using Wfmgr.Application.Workflows.V1.CaseStatuses;
 using Wfmgr.Application.Workflows.V1.Config;
 using Wfmgr.Application.Workflows.V1.Definitions;
+using Wfmgr.Application.Workflows.V1.Gates;
 using Wfmgr.Application.Workflows.V1.Vocabulary;
 using Wfmgr.Domain.Forms;
 

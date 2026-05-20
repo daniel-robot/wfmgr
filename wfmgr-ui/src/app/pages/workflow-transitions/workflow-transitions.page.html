@@ -50,7 +50,10 @@
             *ngFor="let t of filteredTransitions"
             [class.selected]="selected?.id === t.id"
             [class.disabled]="!t.isEnabled"
+            tabindex="0"
             (click)="select(t)"
+            (keydown.enter)="select(t)"
+            (keydown.space)="select(t); $event.preventDefault()"
           >
             <td><code>{{ t.code }}</code></td>
             <td>{{ t.phase }}</td>
@@ -137,6 +140,18 @@
             Gate checks (comma-separated)
             <input formControlName="gateChecks" placeholder="CaseNotCancelled, ReasonRequired" />
           </label>
+
+          <section class="span-3 reference-panel" *ngIf="meta?.gateChecks?.length">
+            <div class="reference-header">Available gate checks</div>
+            <p class="muted reference-copy">
+              These values come directly from <code>GateCheckNames</code>. Transitions can only use gate checks defined in code.
+            </p>
+            <div class="reference-tags">
+              <span class="reference-tag" *ngFor="let gate of meta?.gateChecks">
+                <code>{{ gate.code }}</code>
+              </span>
+            </div>
+          </section>
 
           <label class="span-3">
             Success actions (comma-separated)
