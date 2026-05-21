@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\\Wfmgr.Domain\\Wfmgr.Domain.csproj" />
     <ProjectReference Include="..\Wfmgr.Contracts\Wfmgr.Contracts.csproj" />
+    <ProjectReference Include="..\Wfmgr.Engine\Wfmgr.Engine.csproj" />
   </ItemGroup>
 
   <ItemGroup>

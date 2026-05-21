@@ -1,4 +1,4 @@
-using Wfmgr.Application.Abstractions;
+using Wfmgr.Engine;
 
 namespace Wfmgr.Application.Workflows.V1.Config;
 
