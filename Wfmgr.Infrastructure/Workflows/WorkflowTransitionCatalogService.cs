@@ -209,7 +209,7 @@ public sealed class WorkflowTransitionCatalogService : IWorkflowTransitionCatalo
 
         var currentHash = ComputeHash(entity, GetXmin(db, entity));
         if (!string.IsNullOrWhiteSpace(request.ExpectedHash) &&
-            string.Equals(request.ExpectedHash, currentHash, StringComparison.Ordinal))
+            !string.Equals(request.ExpectedHash, currentHash, StringComparison.Ordinal))
         {
             return WorkflowTransitionMutationResult.ConflictResult(new WorkflowTransitionMutationConflictDto(
                 "Transition has been modified since last read.", currentHash));
@@ -282,7 +282,7 @@ public sealed class WorkflowTransitionCatalogService : IWorkflowTransitionCatalo
 
         var currentHash = ComputeHash(entity, GetXmin(db, entity));
         if (!string.IsNullOrWhiteSpace(request.ExpectedHash) &&
-            !string.Equals(request.ExpectedHash, currentHash, StringComparison.Ordinal))
+            string.Equals(request.ExpectedHash, currentHash, StringComparison.Ordinal))
         {
             return WorkflowTransitionMutationResult.ConflictResult(new WorkflowTransitionMutationConflictDto(
                 "Transition has been modified since last read.", currentHash));

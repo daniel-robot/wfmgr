@@ -1,0 +1,91 @@
+:host {
+  display: block;
+  position: relative;
+}
+
+.cms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+  padding: 0.25rem 0.3rem;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  background: #fff;
+  min-height: 2rem;
+  cursor: text;
+}
+.cms.disabled { background: #f2f2f2; cursor: not-allowed; }
+.cms:focus-within { border-color: #1976d2; box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.15); }
+
+.cms-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #e8f0fe;
+  color: #0d47a1;
+  border-radius: 999px;
+  padding: 0.05rem 0.35rem 0.05rem 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+.cms-chip.unknown {
+  background: #fff4e5;
+  color: #b25f00;
+  border: 1px dashed #d49a4d;
+}
+.cms-chip-x {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  cursor: pointer;
+  border-radius: 999px;
+}
+.cms-chip-x:hover:not(:disabled) { background: rgba(0, 0, 0, 0.08); }
+
+.cms-input {
+  flex: 1 1 6rem;
+  min-width: 5rem;
+  border: none;
+  outline: none;
+  padding: 0.2rem;
+  font: inherit;
+  background: transparent;
+}
+
+.cms-menu {
+  position: absolute;
+  z-index: 50;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 2px;
+  max-height: 14rem;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.cms-menu-empty { padding: 0.25rem 0; }
+.cms-menu-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+  font: inherit;
+}
+.cms-menu-item:hover,
+.cms-menu-item.active { background: #f0f6ff; }
+.cms-menu-item.add-custom { color: #b25f00; font-style: italic; }
+.cms-menu-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; }
+.cms-menu-desc { color: #555; font-size: 0.8rem; flex: 1; }
+.cms-menu-group { color: #888; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
