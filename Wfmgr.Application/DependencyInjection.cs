@@ -13,6 +13,7 @@ using Wfmgr.Application.Workflows.V1.SideEffects;
 using Wfmgr.Application.Workflows.V1.StateMachine;
 using Wfmgr.Application.Workflows.V1.WorkItems;
 using Wfmgr.Engine;
+using EngineAbstractions = Wfmgr.Engine.Abstractions;
 
 namespace Wfmgr.Application;
 
@@ -29,8 +30,6 @@ public static class DependencyInjection
         services.AddScoped<IWorkItemLifecycleService, WorkItemLifecycleService>();
         services.AddScoped<ICaseStateMachineService, CaseStateMachineService>();
         services.AddScoped<IGateValidationService, GateValidationService>();
-        services.AddScoped<IWorkflowSideEffectService, WorkflowSideEffectService>();
-        services.AddScoped<ICaseTransitionService, CaseTransitionService>();
         services.AddScoped<IWorkflowCompensationService, WorkflowCompensationService>();
         services.AddScoped<IWorkflowExplainService, WorkflowExplainService>();
 
@@ -40,16 +39,16 @@ public static class DependencyInjection
         // ── Engine adapter layer (bridges engine abstractions to host types) ──
 
         // Engine data access: adapts host IWorkflowDataAccess to engine IWorkflowDataAccess
-        services.AddScoped<Wfmgr.Engine.Abstractions.IWorkflowDataAccess, EngineWorkflowDataAccessAdapter>();
+        services.AddScoped<EngineAbstractions.IWorkflowDataAccess, EngineWorkflowDataAccessAdapter>();
 
         // Engine gate validation: adapts host IGateValidationService to engine IGateValidationService
-        services.AddScoped<Wfmgr.Engine.Abstractions.IGateValidationService, EngineGateValidationAdapter>();
+        services.AddScoped<EngineAbstractions.IGateValidationService, EngineGateValidationAdapter>();
 
-        // Engine side effects: adapts host IWorkflowSideEffectService to engine ISideEffectService
-        services.AddScoped<Wfmgr.Engine.Abstractions.ISideEffectService, EngineSideEffectAdapter>();
+        // Engine side effects: WorkflowSideEffectService implements engine ISideEffectService directly
+        services.AddScoped<EngineAbstractions.ISideEffectService, WorkflowSideEffectService>();
 
         // Engine catalog: adapts host IWorkflowTransitionCatalogService to engine ITransitionCatalogService
-        services.AddScoped<Wfmgr.Engine.Abstractions.ITransitionCatalogService, EngineCatalogAdapter>();
+        services.AddScoped<EngineAbstractions.ITransitionCatalogService, EngineCatalogAdapter>();
 
         // ── Messaging routing policy — reads MessagingOptions to decide which outbox
         // actions are published on the bus vs sent over HTTP. Tests that pass no

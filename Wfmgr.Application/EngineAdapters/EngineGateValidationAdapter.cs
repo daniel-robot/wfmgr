@@ -38,6 +38,10 @@ internal sealed class EngineGateValidationAdapter : EngineAbstractions.IGateVali
             UserId = context.UserId,
             Roles = context.Roles,
             Reason = context.Reason,
+            FormId = context.FormId is not null && Guid.TryParse(context.FormId, out var fid) ? fid : null,
+            WorkItemId = context.WorkItemId is not null && Guid.TryParse(context.WorkItemId, out var wid) ? wid : null,
+            ExternalEventPayload = context.ExternalEventPayload,
+            Metadata = context.Metadata,
         };
 
         var hostResult = await _inner.ValidateAsync(caseData, hostTransition, hostContext, ct);

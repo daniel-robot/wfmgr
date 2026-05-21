@@ -2,11 +2,13 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Wfmgr.Application.Abstractions.Persistence;
 using Wfmgr.Application.Abstractions.Persistence.Models;
+using Wfmgr.Application.EngineAdapters;
 using Wfmgr.Application.Workflows.V1.Definitions;
 using Wfmgr.Application.Workflows.V1.Gates;
 using Wfmgr.Application.Workflows.V1.WorkItems;
 using Wfmgr.Domain.Enums;
 using Wfmgr.Domain.Integrations;
+using EngineAbstractions = Wfmgr.Engine.Abstractions;
 
 namespace Wfmgr.Application.Workflows.V1.Compensation;
 
@@ -16,18 +18,18 @@ namespace Wfmgr.Application.Workflows.V1.Compensation;
 public sealed class WorkflowCompensationService : IWorkflowCompensationService
 {
     private readonly IWorkflowDataAccess _dataAccess;
-    private readonly ICaseTransitionService _transitionService;
+    private readonly EngineAbstractions.ITransitionEngine _engine;
     private readonly IWorkItemLifecycleService _workItems;
     private readonly ILogger<WorkflowCompensationService> _logger;
 
     public WorkflowCompensationService(
         IWorkflowDataAccess dataAccess,
-        ICaseTransitionService transitionService,
+        EngineAbstractions.ITransitionEngine engine,
         IWorkItemLifecycleService workItems,
         ILogger<WorkflowCompensationService> logger)
     {
         _dataAccess = dataAccess;
-        _transitionService = transitionService;
+        _engine = engine;
         _workItems = workItems;
         _logger = logger;
     }
@@ -65,12 +67,13 @@ public sealed class WorkflowCompensationService : IWorkflowCompensationService
         var previousStatus = caseData.CurrentStatus;
         var now = DateTimeOffset.UtcNow;
 
-        // ── 3. Apply status change via CaseTransitionService (when needed) ─────
+        // ── 3. Apply status change via engine (when needed) ────────────────────
         CaseStatus? newStatus = null;
         if (definition.TargetStatus.HasValue && definition.TargetStatus.Value != previousStatus)
         {
             var triggerName = $"Compensate:{definition.Code}";
-            var gateCtx = new GateValidationContext
+            var engineSubject = new CaseWorkflowSubject(caseData);
+            var gateCtx = new Wfmgr.Engine.Core.GateValidationContext
             {
                 UserId = context.UserId,
                 Roles = [],
@@ -79,12 +82,12 @@ public sealed class WorkflowCompensationService : IWorkflowCompensationService
                 Metadata = context.Metadata,
             };
 
-            var transitionResult = await _transitionService.ApplyTransitionAsync(
-                caseData,
+            var transitionResult = await _engine.ApplyTransitionAsync(
+                engineSubject,
                 triggerName,
                 gateCtx,
                 ct,
-                fallbackToStatus: definition.TargetStatus.Value);
+                fallbackToStatus: definition.TargetStatus.Value.ToString());
 
             if (!transitionResult.IsSuccess)
             {

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Wfmgr.Application.Abstractions.Persistence;
 using Wfmgr.Application.Abstractions.Persistence.Models;
+using Wfmgr.Application.EngineAdapters;
 using Wfmgr.Application.Workflows.V1.Dtos;
 using Wfmgr.Application.Workflows.V1.Gates;
 using Wfmgr.Application.Workflows.V1.Outbox;
@@ -11,6 +12,7 @@ using Wfmgr.Domain.Enums;
 using Wfmgr.Domain.Forms;
 using Wfmgr.Domain.Integrations;
 using Wfmgr.Domain.WorkItems;
+using EngineAbstractions = Wfmgr.Engine.Abstractions;
 
 namespace Wfmgr.Application.Workflows.V1;
 
@@ -19,35 +21,41 @@ public class CaseWorkflowService : ICaseWorkflowService
     private readonly IWorkflowDataAccess _dataAccess;
     private readonly IWorkflowProfileResolver _profileResolver;
     private readonly IWorkItemLifecycleService _workItemLifecycleService;
-    private readonly ICaseTransitionService _caseTransitionService;
+    private readonly EngineAbstractions.ITransitionEngine _engine;
     private readonly IOutboxRoutingPolicy _routing;
 
     public CaseWorkflowService(
         IWorkflowDataAccess dataAccess,
         IWorkflowProfileResolver profileResolver,
         IWorkItemLifecycleService workItemLifecycleService,
-        ICaseTransitionService caseTransitionService,
+        EngineAbstractions.ITransitionEngine engine,
         IOutboxRoutingPolicy routing)
     {
         _dataAccess = dataAccess;
         _profileResolver = profileResolver;
         _workItemLifecycleService = workItemLifecycleService;
-        _caseTransitionService = caseTransitionService;
+        _engine = engine;
         _routing = routing;
     }
 
-    // Adapter: thin wrapper that bridges old TransitionExecutionContext into the new
-    // ICaseTransitionService, preserving fallbackToStatus for trigger names not yet
-    // present in WorkflowTransitionCatalog.
+    // Adapter: thin wrapper that bridges old TransitionExecutionContext into the
+    // engine-level ITransitionEngine, preserving fallbackToStatus for trigger names
+    // not yet present in WorkflowTransitionCatalog.
     private async Task ApplyAsync(
         CaseData caseData,
         CaseStatus toStatus,
         TransitionExecutionContext ctx,
         CancellationToken ct)
     {
-        var gateCtx = GateValidationContext.FromTransitionContext(ctx);
-        var result = await _caseTransitionService.ApplyTransitionAsync(
-            caseData, ctx.TriggerName, gateCtx, ct, toStatus);
+        var engineSubject = new CaseWorkflowSubject(caseData);
+        var gateCtx = new Wfmgr.Engine.Core.GateValidationContext
+        {
+            UserId = ctx.TriggeredBy,
+            Roles = ctx.ActorRoles,
+            Reason = ctx.Reason,
+        };
+        var result = await _engine.ApplyTransitionAsync(
+            engineSubject, ctx.TriggerName, gateCtx, ct, toStatus.ToString());
         result.ThrowIfFailed();
     }
 

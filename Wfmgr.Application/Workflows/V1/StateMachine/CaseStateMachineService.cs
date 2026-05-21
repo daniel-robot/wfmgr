@@ -1,44 +1,45 @@
 using Wfmgr.Application.Abstractions.Persistence.Models;
-using Wfmgr.Application.Workflows.V1.Gates;
-using Wfmgr.Domain.Enums;
+using Wfmgr.Application.EngineAdapters;
+using EngineAbstractions = Wfmgr.Engine.Abstractions;
 
 namespace Wfmgr.Application.Workflows.V1.StateMachine;
 
 /// <summary>
 /// Adapter that bridges legacy callers using <see cref="ICaseStateMachineService"/>
-/// to the unified <see cref="ICaseTransitionService"/> pipeline.
-/// <para>
-/// All transition logic — catalog lookup, role check, gate validation
-/// (via <see cref="IGateValidationService"/>), audit, history, and side-effects —
-/// is owned by <see cref="ICaseTransitionService"/>. This service contributes
-/// nothing of its own and exists only so that existing callers (e.g.
-/// <c>CaseFormService</c>, <c>ExternalEventDispatcher</c>) continue to compile
-/// while new code is migrated to depend on <see cref="ICaseTransitionService"/>
-/// directly.
-/// </para>
+/// to the unified engine-level <see cref="EngineAbstractions.ITransitionEngine"/> pipeline.
 /// </summary>
 public class CaseStateMachineService : ICaseStateMachineService
 {
-    private readonly ICaseTransitionService _transitionService;
+    private readonly EngineAbstractions.ITransitionEngine _engine;
 
-    public CaseStateMachineService(ICaseTransitionService transitionService)
+    public CaseStateMachineService(EngineAbstractions.ITransitionEngine engine)
     {
-        _transitionService = transitionService;
+        _engine = engine;
     }
 
     public async Task ApplyTransitionAsync(
         IWorkflowSubject subject,
-        CaseStatus toStatus,
+        Domain.Enums.CaseStatus toStatus,
         TransitionExecutionContext context,
         CancellationToken ct)
     {
-        var gateContext = GateValidationContext.FromTransitionContext(context);
-        var result = await _transitionService.ApplyTransitionAsync(
-            subject,
+        if (subject is not CaseData caseData)
+            throw new NotSupportedException(
+                $"Only CaseData subjects are supported (got {subject.GetType().Name})");
+
+        var engineSubject = new CaseWorkflowSubject(caseData);
+        var gateCtx = new Wfmgr.Engine.Core.GateValidationContext
+        {
+            UserId = context.TriggeredBy,
+            Roles = context.ActorRoles,
+            Reason = context.Reason,
+        };
+        var result = await _engine.ApplyTransitionAsync(
+            engineSubject,
             context.TriggerName,
-            gateContext,
+            gateCtx,
             ct,
-            fallbackToStatus: toStatus);
+            fallbackToStatus: toStatus.ToString());
         result.ThrowIfFailed();
     }
 }

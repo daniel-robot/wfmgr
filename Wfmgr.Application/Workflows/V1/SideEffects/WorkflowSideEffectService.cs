@@ -2,18 +2,23 @@ using System.Collections.ObjectModel;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Wfmgr.Application.Abstractions.Persistence;
+using Wfmgr.Application.Abstractions.Persistence.Models;
+using Wfmgr.Application.EngineAdapters;
 using Wfmgr.Application.Workflows.V1.Definitions;
 using Wfmgr.Application.Workflows.V1.Outbox;
 using Wfmgr.Application.Workflows.V1.WorkItems;
 using Wfmgr.Domain.Integrations;
 using Wfmgr.Domain.WorkItems;
+using EngineAbstractions = Wfmgr.Engine.Abstractions;
+using EngineCore = Wfmgr.Engine.Core;
 
 namespace Wfmgr.Application.Workflows.V1.SideEffects;
 
 /// <summary>
-/// Default implementation of <see cref="IWorkflowSideEffectService"/>.
+/// Default implementation of <see cref="EngineAbstractions.ISideEffectService"/>.
+/// Implements the engine interface directly, eliminating the need for a separate adapter.
 /// </summary>
-public sealed class WorkflowSideEffectService : IWorkflowSideEffectService
+public sealed class WorkflowSideEffectService : EngineAbstractions.ISideEffectService
 {
     private readonly IWorkflowDataAccess _dataAccess;
     private readonly IWorkItemLifecycleService _workItems;
@@ -41,39 +46,42 @@ public sealed class WorkflowSideEffectService : IWorkflowSideEffectService
 
     /// <inheritdoc/>
     public async Task ExecuteAsync(
-        TransitionDefinition definition,
-        SideEffectContext context,
+        EngineCore.TransitionDefinition transition,
+        EngineCore.SideEffectContext context,
         CancellationToken ct = default)
     {
-        await CreateWorkItemsAsync(definition, context, ct);
-        await DispatchOutboxAsync(definition, context, ct);
-        await DispatchHostHandlersAsync(definition, context, ct);
+        await CreateWorkItemsAsync(transition, context, ct);
+        await DispatchOutboxAsync(transition, context, ct);
+        await DispatchHostHandlersAsync(transition, context, ct);
     }
 
     // ── Host-handler dispatch ────────────────────────────────────────
 
     private async Task DispatchHostHandlersAsync(
-        TransitionDefinition definition,
-        SideEffectContext context,
+        EngineCore.TransitionDefinition definition,
+        EngineCore.SideEffectContext context,
         CancellationToken ct)
     {
         if (_hostHandlers.Count == 0) return;
 
+        var hostDefinition = MapToHostDefinition(definition);
+        var hostContext = MapToHostContext(context);
+
         foreach (var action in definition.SuccessActions)
         {
             if (!_hostHandlers.TryGetValue(action, out var handler)) continue;
-            await handler.ExecuteAsync(definition, context, ct);
+            await handler.ExecuteAsync(hostDefinition, hostContext, ct);
             _logger.LogDebug(
                 "Side effect: host handler '{Action}' executed for case {CaseId} after transition {Code}",
-                action, context.CaseData.CaseId, definition.Code);
+                action, GetCaseId(context), definition.Code);
         }
     }
 
     // ── Work item creation ────────────────────────────────────────────────────
 
     private async Task CreateWorkItemsAsync(
-        TransitionDefinition definition,
-        SideEffectContext context,
+        EngineCore.TransitionDefinition definition,
+        EngineCore.SideEffectContext context,
         CancellationToken ct)
     {
         // Resolve profile policies lazily (at most once per slot per call).
@@ -83,7 +91,7 @@ public sealed class WorkflowSideEffectService : IWorkflowSideEffectService
         S4PlanReReviewPolicy? s4 = null;
         S5PlanDoubleCheckPolicy? s5 = null;
 
-        var caseData = context.CaseData;
+        var caseData = GetCaseData(context);
 
         foreach (var type in definition.WorkItemsToCreate)
         {
@@ -144,11 +152,11 @@ public sealed class WorkflowSideEffectService : IWorkflowSideEffectService
     // ── Outbox dispatch ───────────────────────────────────────────────────────
 
     private async Task DispatchOutboxAsync(
-        TransitionDefinition definition,
-        SideEffectContext context,
+        EngineCore.TransitionDefinition definition,
+        EngineCore.SideEffectContext context,
         CancellationToken ct)
     {
-        var caseData = context.CaseData;
+        var caseData = GetCaseData(context);
         S1ContouringStrategy? s1 = null;
 
         foreach (var action in definition.SuccessActions)
@@ -191,6 +199,60 @@ public sealed class WorkflowSideEffectService : IWorkflowSideEffectService
                 "Side effect: enqueued outbox '{Action}' to '{System}' for case {CaseId} after transition {Code}",
                 descriptor.Action, targetSystem, caseData.CaseId, definition.Code);
         }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private CaseData GetCaseData(EngineCore.SideEffectContext context) =>
+        context.Subject is CaseWorkflowSubject cws
+            ? cws.Data
+            : throw new NotSupportedException($"Expected CaseWorkflowSubject, got {context.Subject.GetType().Name}");
+
+    private static Guid GetCaseId(EngineCore.SideEffectContext context) =>
+        Guid.TryParse(context.Subject.SubjectId, out var id) ? id :
+            throw new InvalidOperationException($"Invalid subject id '{context.Subject.SubjectId}'");
+
+    private static SideEffectContext MapToHostContext(EngineCore.SideEffectContext ctx)
+    {
+        var caseData = ctx.Subject is CaseWorkflowSubject cws
+            ? cws.Data
+            : throw new NotSupportedException($"Expected CaseWorkflowSubject, got {ctx.Subject.GetType().Name}");
+
+        return new SideEffectContext
+        {
+            CaseData = caseData,
+            ValidationContext = new Workflows.V1.Gates.GateValidationContext
+            {
+                UserId = ctx.ValidationContext.UserId,
+                Roles = ctx.ValidationContext.Roles,
+                Reason = ctx.ValidationContext.Reason,
+            },
+            Now = ctx.Now,
+        };
+    }
+
+    private static TransitionDefinition MapToHostDefinition(EngineCore.TransitionDefinition d)
+    {
+        return new TransitionDefinition
+        {
+            Code = d.Code,
+            TriggerName = d.TriggerName,
+            TriggerType = Enum.TryParse<Domain.Enums.WorkflowTriggerType>(d.TriggerType, ignoreCase: true, out var tt)
+                ? tt
+                : Domain.Enums.WorkflowTriggerType.System,
+            FromStatuses = d.FromStatuses
+                .Select(s => Enum.TryParse<Domain.Enums.CaseStatus>(s, ignoreCase: true, out var st) ? st : Domain.Enums.CaseStatus.Submitted)
+                .ToArray(),
+            ToStatus = Enum.TryParse<Domain.Enums.CaseStatus>(d.ToStatus, ignoreCase: true, out var ts)
+                ? ts
+                : Domain.Enums.CaseStatus.Submitted,
+            RequiredRoles = d.RequiredRoles,
+            GateChecks = d.GateChecks,
+            SuccessActions = d.SuccessActions,
+            FailureActions = d.FailureActions,
+            WorkItemsToCreate = d.WorkItemsToCreate,
+            ConfigSlot = d.ConfigSlot,
+        };
     }
 
     // ── Static maps ───────────────────────────────────────────────────────────
