@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Wfmgr.Application;
+using Wfmgr.Application.Abstractions;
 using Wfmgr.Application.Workflows.V1.Config;
 using Wfmgr.Api.Auth;
 using Wfmgr.Api.Health;
@@ -16,6 +17,11 @@ const string CorsPolicyName = "FrontendCors";
 // ── Application & Infrastructure ─────────────────────────────────────────────
 builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// ── Actor (current-user) accessor — HTTP-backed implementation. ──────────────
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Wfmgr.Application.Abstractions.IActorAccessor,
+    Wfmgr.Api.Auth.HttpContextActorAccessor>();
 
 // ── JWT Settings ──────────────────────────────────────────────────────────────
 builder.Services.Configure<JwtSettings>(
@@ -55,11 +61,19 @@ builder.Services.AddAuthentication(options =>
 });
 
 // ── Authorization — Policy definitions ─────────────────────────────────────
+var workflowEngineOptions = builder.Configuration
+    .GetSection(WorkflowEngineOptions.SectionName)
+    .Get<WorkflowEngineOptions>() ?? new WorkflowEngineOptions();
+
 builder.Services.AddAuthorization(options =>
 {
-    // Workflow config admin — requires the "workflow-config.edit" permission claim.
-    options.AddPolicy(WorkflowConfigPolicies.Admin, policy =>
-        policy.RequireClaim("permission", "workflow-config.edit"));
+    // Workflow engine admin policy — the policy NAME is a stable engine constant
+    // (WorkflowEngineOptions.AdminPolicyName) so [Authorize] attributes can
+    // reference it; the requirement (claim type / value) is configurable.
+    options.AddPolicy(WorkflowEngineOptions.AdminPolicyName, policy =>
+        policy.RequireClaim(
+            workflowEngineOptions.AdminPermissionClaimType,
+            workflowEngineOptions.AdminPermissionClaimValue));
 });
 
 // ── CORS ─────────────────────────────────────────────────────────────────────

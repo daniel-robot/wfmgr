@@ -1,5 +1,4 @@
 using Wfmgr.Application.Workflows.V1.Definitions;
-using Wfmgr.Domain.Enums;
 
 namespace Wfmgr.Application.Workflows.V1.Definitions;
 
@@ -24,7 +23,7 @@ public interface IWorkflowTransitionCatalogService
     /// First transition matching a (trigger, fromStatus) pair — mirrors the previous
     /// <c>WorkflowTransitionCatalog.All.FirstOrDefault(...)</c> lookup pattern.
     /// </summary>
-    Task<TransitionDefinition?> FindByTriggerAsync(string triggerName, CaseStatus fromStatus, CancellationToken ct);
+    Task<TransitionDefinition?> FindByTriggerAsync(string triggerName, string fromStatus, CancellationToken ct);
 
     /// <summary>Invalidates the in-memory cache. Called after any mutation.</summary>
     void InvalidateCache();

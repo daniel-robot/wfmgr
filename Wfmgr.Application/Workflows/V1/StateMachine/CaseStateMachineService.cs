@@ -27,14 +27,14 @@ public class CaseStateMachineService : ICaseStateMachineService
     }
 
     public async Task ApplyTransitionAsync(
-        CaseData caseData,
+        IWorkflowSubject subject,
         CaseStatus toStatus,
         TransitionExecutionContext context,
         CancellationToken ct)
     {
         var gateContext = GateValidationContext.FromTransitionContext(context);
         var result = await _transitionService.ApplyTransitionAsync(
-            caseData,
+            subject,
             context.TriggerName,
             gateContext,
             ct,

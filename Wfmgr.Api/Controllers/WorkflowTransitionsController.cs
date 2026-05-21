@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Wfmgr.Api.Auth;
+using Wfmgr.Application.Abstractions;
 using Wfmgr.Application.Workflows.V1.Config;
 using Wfmgr.Application.Workflows.V1.Definitions;
 
@@ -16,10 +17,14 @@ namespace Wfmgr.Api.Controllers;
 public class WorkflowTransitionsController : ControllerBase
 {
     private readonly IWorkflowTransitionCatalogService _service;
+    private readonly IActorAccessor _actorAccessor;
 
-    public WorkflowTransitionsController(IWorkflowTransitionCatalogService service)
+    public WorkflowTransitionsController(
+        IWorkflowTransitionCatalogService service,
+        IActorAccessor actorAccessor)
     {
         _service = service;
+        _actorAccessor = actorAccessor;
     }
 
     [HttpGet]
@@ -153,5 +158,5 @@ public class WorkflowTransitionsController : ControllerBase
         return Ok(rows);
     }
 
-    private string? GetActorId() => ActorInfo.FromPrincipal(User).UserId;
+    private string? GetActorId() => _actorAccessor.Current.UserId;
 }

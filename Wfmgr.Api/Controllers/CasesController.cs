@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Wfmgr.Api.Auth;
+using Wfmgr.Application.Abstractions;
 using Wfmgr.Application.Workflows.V1;
 using Wfmgr.Application.Workflows.V1.Dtos;
 
@@ -13,11 +14,16 @@ public class CasesController : ControllerBase
 {
     private readonly ICaseWorkflowService _workflowService;
     private readonly ICaseQueryService _queryService;
+    private readonly IActorAccessor _actorAccessor;
 
-    public CasesController(ICaseWorkflowService workflowService, ICaseQueryService queryService)
+    public CasesController(
+        ICaseWorkflowService workflowService,
+        ICaseQueryService queryService,
+        IActorAccessor actorAccessor)
     {
         _workflowService = workflowService;
         _queryService = queryService;
+        _actorAccessor = actorAccessor;
     }
 
     [HttpGet]
@@ -116,7 +122,7 @@ public class CasesController : ControllerBase
     {
         try
         {
-            var actor = ActorInfo.FromPrincipal(User);
+            var actor = _actorAccessor.Current;
             await _workflowService.CompleteDailyImageScanAsync(caseId, request?.TriggeredBy, ct, actor.Roles);
             return NoContent();
         }
@@ -146,7 +152,7 @@ public class CasesController : ControllerBase
     {
         try
         {
-            var actor = ActorInfo.FromPrincipal(User);
+            var actor = _actorAccessor.Current;
             await _workflowService.CompleteManualContouringAsync(caseId, ct, actor.Roles);
             return NoContent();
         }
@@ -169,7 +175,7 @@ public class CasesController : ControllerBase
     [HttpPost("{caseId:guid}/actions/reject-plan-review")]
     public async Task<IActionResult> RejectPlanReview(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
     {
-        var actor = ActorInfo.FromPrincipal(User);
+        var actor = _actorAccessor.Current;
         await _workflowService.RejectPlanReviewAsync(caseId, request.Reason ?? "Manual rejection", request.TriggeredBy, ct, actor.Roles);
         return NoContent();
     }
@@ -177,7 +183,7 @@ public class CasesController : ControllerBase
     [HttpPost("{caseId:guid}/actions/reject-plan-rereview")]
     public async Task<IActionResult> RejectPlanReReview(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
     {
-        var actor = ActorInfo.FromPrincipal(User);
+        var actor = _actorAccessor.Current;
         await _workflowService.RejectPlanReReviewAsync(caseId, request.Reason ?? "Manual rejection", request.TriggeredBy, ct, actor.Roles);
         return NoContent();
     }
@@ -185,7 +191,7 @@ public class CasesController : ControllerBase
     [HttpPost("{caseId:guid}/actions/fail-qa")]
     public async Task<IActionResult> FailQa(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
     {
-        var actor = ActorInfo.FromPrincipal(User);
+        var actor = _actorAccessor.Current;
         await _workflowService.FailQaAsync(caseId, request.Reason ?? "Manual failure", request.TriggeredBy, ct, actor.Roles);
         return NoContent();
     }
@@ -193,7 +199,7 @@ public class CasesController : ControllerBase
     [HttpPost("{caseId:guid}/actions/cancel")]
     public async Task<IActionResult> CancelCase(Guid caseId, [FromBody] WorkflowActionRequest request, CancellationToken ct)
     {
-        var actor = ActorInfo.FromPrincipal(User);
+        var actor = _actorAccessor.Current;
         await _workflowService.CancelCaseAsync(caseId, request.Reason ?? "Manual cancellation", request.TriggeredBy, ct, actor.Roles);
         return NoContent();
     }

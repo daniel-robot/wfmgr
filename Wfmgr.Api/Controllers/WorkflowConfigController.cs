@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Wfmgr.Api.Auth;
+using Wfmgr.Application.Abstractions;
 using Wfmgr.Application.Workflows.V1.Config;
 
 namespace Wfmgr.Api.Controllers;
@@ -11,10 +12,14 @@ namespace Wfmgr.Api.Controllers;
 public class WorkflowConfigController : ControllerBase
 {
     private readonly IWorkflowConfigService _service;
+    private readonly IActorAccessor _actorAccessor;
 
-    public WorkflowConfigController(IWorkflowConfigService service)
+    public WorkflowConfigController(
+        IWorkflowConfigService service,
+        IActorAccessor actorAccessor)
     {
         _service = service;
+        _actorAccessor = actorAccessor;
     }
 
     [HttpGet("profiles")]
@@ -267,8 +272,7 @@ public class WorkflowConfigController : ControllerBase
 
     private string? GetActorId()
     {
-        var actor = ActorInfo.FromPrincipal(User);
-        return actor.UserId;
+        return _actorAccessor.Current.UserId;
     }
 
     private static List<string> ValidateProfile(string? name, int? version)

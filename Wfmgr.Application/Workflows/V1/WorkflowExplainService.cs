@@ -65,7 +65,7 @@ public sealed class WorkflowExplainService : IWorkflowExplainService
         }
 
         var fromStatus = caseData.CurrentStatus;
-        var definition = await _catalog.FindByTriggerAsync(request.TriggerName, fromStatus, ct);
+        var definition = await _catalog.FindByTriggerAsync(request.TriggerName, fromStatus.ToString(), ct);
 
         if (definition is null)
         {

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Wfmgr.Application.Abstractions;
 using Wfmgr.Application.Patients;
 using Wfmgr.Application.Workflows;
 using Wfmgr.Application.Workflows.V1.Compensation;
@@ -36,10 +37,12 @@ public static class DependencyInjection
         if (configuration is not null)
         {
             services.Configure<MessagingOptions>(configuration.GetSection(MessagingOptions.SectionName));
+            services.Configure<WorkflowEngineOptions>(configuration.GetSection(WorkflowEngineOptions.SectionName));
         }
         else
         {
             services.Configure<MessagingOptions>(_ => { });
+            services.Configure<WorkflowEngineOptions>(_ => { });
         }
         services.AddSingleton<IOutboxRoutingPolicy, OutboxRoutingPolicy>();
 

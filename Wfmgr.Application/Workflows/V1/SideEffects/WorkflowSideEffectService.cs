@@ -20,19 +20,23 @@ public sealed class WorkflowSideEffectService : IWorkflowSideEffectService
     private readonly IWorkflowProfileResolver _profileResolver;
     private readonly IOutboxRoutingPolicy _routing;
     private readonly ILogger<WorkflowSideEffectService> _logger;
+    private readonly IReadOnlyDictionary<string, ISideEffectHandler> _hostHandlers;
 
     public WorkflowSideEffectService(
         IWorkflowDataAccess dataAccess,
         IWorkItemLifecycleService workItems,
         IWorkflowProfileResolver profileResolver,
         IOutboxRoutingPolicy routing,
-        ILogger<WorkflowSideEffectService> logger)
+        ILogger<WorkflowSideEffectService> logger,
+        IEnumerable<ISideEffectHandler>? hostHandlers = null)
     {
         _dataAccess = dataAccess;
         _workItems = workItems;
         _profileResolver = profileResolver;
         _routing = routing;
         _logger = logger;
+        _hostHandlers = (hostHandlers ?? Array.Empty<ISideEffectHandler>())
+            .ToDictionary(h => h.Name, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <inheritdoc/>
@@ -43,6 +47,26 @@ public sealed class WorkflowSideEffectService : IWorkflowSideEffectService
     {
         await CreateWorkItemsAsync(definition, context, ct);
         await DispatchOutboxAsync(definition, context, ct);
+        await DispatchHostHandlersAsync(definition, context, ct);
+    }
+
+    // ── Host-handler dispatch ────────────────────────────────────────
+
+    private async Task DispatchHostHandlersAsync(
+        TransitionDefinition definition,
+        SideEffectContext context,
+        CancellationToken ct)
+    {
+        if (_hostHandlers.Count == 0) return;
+
+        foreach (var action in definition.SuccessActions)
+        {
+            if (!_hostHandlers.TryGetValue(action, out var handler)) continue;
+            await handler.ExecuteAsync(definition, context, ct);
+            _logger.LogDebug(
+                "Side effect: host handler '{Action}' executed for case {CaseId} after transition {Code}",
+                action, context.CaseData.CaseId, definition.Code);
+        }
     }
 
     // ── Work item creation ────────────────────────────────────────────────────

@@ -24,16 +24,19 @@ public sealed class WorkflowVocabularyCatalogService : IWorkflowVocabularyCatalo
 
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<WorkflowVocabularyCatalogService> _logger;
+    private readonly IConcurrencyTokenProvider _concurrencyTokens;
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private Dictionary<string, HashSet<string>>? _enabledByKind;
 
     public WorkflowVocabularyCatalogService(
         IServiceProvider serviceProvider,
-        ILogger<WorkflowVocabularyCatalogService> logger)
+        ILogger<WorkflowVocabularyCatalogService> logger,
+        IConcurrencyTokenProvider concurrencyTokens)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _concurrencyTokens = concurrencyTokens;
     }
 
     public async Task<IReadOnlyList<WorkflowVocabularyTermDto>> ListAllAsync(CancellationToken ct)
@@ -443,14 +446,8 @@ public sealed class WorkflowVocabularyCatalogService : IWorkflowVocabularyCatalo
         new(row.Id, row.Kind, row.Code, row.DisplayName, row.Description, row.SortOrder,
             row.IsSystem, row.IsEnabled, ComputeHash(row, xmin), row.CreatedAt, row.UpdatedAt);
 
-    private static uint GetXmin(WfmgrDbContext db, WorkflowVocabularyTermEntity entity)
-    {
-        var entry = db.Entry(entity);
-        var prop = entry.Metadata.FindProperty("Xmin");
-        if (prop is null) return 0u;
-        var value = entry.Property("Xmin").CurrentValue;
-        return value is uint u ? u : 0u;
-    }
+    private uint GetXmin(WfmgrDbContext db, WorkflowVocabularyTermEntity entity)
+        => _concurrencyTokens.GetToken(db, entity);
 
     private static string ComputeHash(WorkflowVocabularyTermEntity row, uint xmin)
     {

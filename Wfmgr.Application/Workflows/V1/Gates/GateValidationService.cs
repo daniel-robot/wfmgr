@@ -61,11 +61,12 @@ public sealed class GateValidationService : IGateValidationService
 
     public GateValidationService(
         IWorkflowDataAccess dataAccess,
-        IWorkflowProfileResolver profileResolver)
+        IWorkflowProfileResolver profileResolver,
+        IEnumerable<IGateEvaluator>? hostEvaluators = null)
     {
         _dataAccess = dataAccess;
         _profileResolver = profileResolver;
-        _checks = BuildCheckMap();
+        _checks = BuildCheckMap(hostEvaluators ?? Array.Empty<IGateEvaluator>());
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -104,7 +105,7 @@ public sealed class GateValidationService : IGateValidationService
 
     // ── Strategy map builder ──────────────────────────────────────────────────
 
-    private IReadOnlyDictionary<string, GateCheck> BuildCheckMap()
+    private IReadOnlyDictionary<string, GateCheck> BuildCheckMap(IEnumerable<IGateEvaluator> hostEvaluators)
     {
         var m = new Dictionary<string, GateCheck>(StringComparer.OrdinalIgnoreCase);
 
@@ -190,6 +191,13 @@ public sealed class GateValidationService : IGateValidationService
         m[GateCheckNames.PostTreatmentReviewFormValid] = PostTreatmentReviewFormValidAsync;
         m[GateCheckNames.NoBlockingTasks]              = NoBlockingTasksAsync;
         m[GateCheckNames.RequiredFormsComplete]        = PostTreatmentReviewFormValidAsync; // overlap
+
+        // ── Host-provided evaluators ──────────────────────────────────────────
+        // Registered last so they override any built-in check of the same name.
+        foreach (var evaluator in hostEvaluators)
+        {
+            m[evaluator.Name] = (d, ctx, ct) => evaluator.EvaluateAsync(d, ctx, ct);
+        }
 
         return new ReadOnlyDictionary<string, GateCheck>(m);
     }

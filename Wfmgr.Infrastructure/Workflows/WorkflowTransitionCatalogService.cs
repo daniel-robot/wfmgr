@@ -29,6 +29,7 @@ public sealed class WorkflowTransitionCatalogService : IWorkflowTransitionCatalo
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<WorkflowTransitionCatalogService> _logger;
+    private readonly IConcurrencyTokenProvider _concurrencyTokens;
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private IReadOnlyList<TransitionDefinition>? _cache;
@@ -36,10 +37,12 @@ public sealed class WorkflowTransitionCatalogService : IWorkflowTransitionCatalo
 
     public WorkflowTransitionCatalogService(
         IServiceProvider serviceProvider,
-        ILogger<WorkflowTransitionCatalogService> logger)
+        ILogger<WorkflowTransitionCatalogService> logger,
+        IConcurrencyTokenProvider concurrencyTokens)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _concurrencyTokens = concurrencyTokens;
     }
 
     public async Task<IReadOnlyList<TransitionDefinition>> GetAllAsync(CancellationToken ct)
@@ -53,12 +56,12 @@ public sealed class WorkflowTransitionCatalogService : IWorkflowTransitionCatalo
         return _byCode!.TryGetValue(code, out var def) ? def : null;
     }
 
-    public async Task<TransitionDefinition?> FindByTriggerAsync(string triggerName, CaseStatus fromStatus, CancellationToken ct)
+    public async Task<TransitionDefinition?> FindByTriggerAsync(string triggerName, string fromStatus, CancellationToken ct)
     {
         var all = await EnsureLoadedAsync(ct);
         return all.FirstOrDefault(t =>
             t.TriggerName.Equals(triggerName, StringComparison.OrdinalIgnoreCase)
-            && t.FromStatuses.Contains(fromStatus));
+            && t.FromStatuses.Any(s => s.ToString().Equals(fromStatus, StringComparison.OrdinalIgnoreCase)));
     }
 
     public void InvalidateCache()
@@ -282,7 +285,7 @@ public sealed class WorkflowTransitionCatalogService : IWorkflowTransitionCatalo
 
         var currentHash = ComputeHash(entity, GetXmin(db, entity));
         if (!string.IsNullOrWhiteSpace(request.ExpectedHash) &&
-            string.Equals(request.ExpectedHash, currentHash, StringComparison.Ordinal))
+            !string.Equals(request.ExpectedHash, currentHash, StringComparison.Ordinal))
         {
             return WorkflowTransitionMutationResult.ConflictResult(new WorkflowTransitionMutationConflictDto(
                 "Transition has been modified since last read.", currentHash));
@@ -438,14 +441,8 @@ public sealed class WorkflowTransitionCatalogService : IWorkflowTransitionCatalo
             row.CreatedAt, row.UpdatedAt);
     }
 
-    private static uint GetXmin(WfmgrDbContext db, WorkflowTransitionEntity entity)
-    {
-        var entry = db.Entry(entity);
-        var prop = entry.Metadata.FindProperty("Xmin");
-        if (prop is null) return 0u;
-        var value = entry.Property("Xmin").CurrentValue;
-        return value is uint u ? u : 0u;
-    }
+    private uint GetXmin(WfmgrDbContext db, WorkflowTransitionEntity entity)
+        => _concurrencyTokens.GetToken(db, entity);
 
     private static string ComputeHash(WorkflowTransitionEntity row, uint xmin)
     {

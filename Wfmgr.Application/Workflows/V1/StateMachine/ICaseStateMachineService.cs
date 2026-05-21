@@ -5,5 +5,5 @@ namespace Wfmgr.Application.Workflows.V1.StateMachine;
 
 public interface ICaseStateMachineService
 {
-    Task ApplyTransitionAsync(CaseData caseData, CaseStatus toStatus, TransitionExecutionContext context, CancellationToken ct);
+    Task ApplyTransitionAsync(IWorkflowSubject subject, CaseStatus toStatus, TransitionExecutionContext context, CancellationToken ct);
 }

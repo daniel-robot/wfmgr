@@ -1,3 +1,4 @@
+
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Wfmgr.Application.Abstractions.Persistence;
@@ -7,6 +8,7 @@ using Wfmgr.Application.Workflows.V1.Definitions;
 using Wfmgr.Application.Workflows.V1.Gates;
 using Wfmgr.Application.Workflows.V1.SideEffects;
 using Wfmgr.Domain.Enums;
+using Wfmgr.Application.Workflows.V1.StateMachine;
 
 namespace Wfmgr.Application.Workflows.V1;
 
@@ -27,8 +29,23 @@ namespace Wfmgr.Application.Workflows.V1;
 /// steps 2–3 and 7 are skipped — backward-compatible bridge for legacy trigger names.
 /// </para>
 /// </summary>
+
 public sealed class CaseTransitionService : ICaseTransitionService
 {
+
+
+    public async Task<TransitionExecutionResult> ApplyTransitionAsync(
+        IWorkflowSubject subject,
+        string triggerName,
+        GateValidationContext context,
+        CancellationToken ct = default,
+        CaseStatus? fallbackToStatus = null)
+    {
+        // For now, only CaseData is supported
+        if (subject is not CaseData caseData)
+            throw new NotSupportedException($"Only CaseData subjects are supported (got {subject.GetType().Name})");
+        return await ApplyTransitionAsync(caseData, triggerName, context, ct, fallbackToStatus);
+    }
     private readonly IWorkflowDataAccess _dataAccess;
     private readonly IGateValidationService _gateValidation;
     private readonly IWorkflowSideEffectService _sideEffects;
@@ -81,7 +98,7 @@ public sealed class CaseTransitionService : ICaseTransitionService
         var fromStatus = caseData.CurrentStatus;
 
         // ── 1. Look up transition definition in catalog ────────────────────────
-        var definition = await _catalog.FindByTriggerAsync(triggerName, fromStatus, ct);
+        var definition = await _catalog.FindByTriggerAsync(triggerName, fromStatus.ToString(), ct);
 
         CaseStatus toStatus;
         string? transitionCode = null;

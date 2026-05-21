@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Wfmgr.Api.Auth;
+using Wfmgr.Application.Abstractions;
 using Wfmgr.Application.Workflows.V1.Config;
 using Wfmgr.Application.Workflows.V1.Vocabulary;
 
@@ -17,10 +18,14 @@ namespace Wfmgr.Api.Controllers;
 public class WorkflowVocabularyController : ControllerBase
 {
     private readonly IWorkflowVocabularyCatalogService _service;
+    private readonly IActorAccessor _actorAccessor;
 
-    public WorkflowVocabularyController(IWorkflowVocabularyCatalogService service)
+    public WorkflowVocabularyController(
+        IWorkflowVocabularyCatalogService service,
+        IActorAccessor actorAccessor)
     {
         _service = service;
+        _actorAccessor = actorAccessor;
     }
 
     [HttpGet]
@@ -153,5 +158,5 @@ public class WorkflowVocabularyController : ControllerBase
         return Ok(rows);
     }
 
-    private string? GetActorId() => ActorInfo.FromPrincipal(User).UserId;
+    private string? GetActorId() => _actorAccessor.Current.UserId;
 }

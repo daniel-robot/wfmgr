@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowDataAccess, WorkflowDataAccess>();
         services.AddScoped<IWorkflowProfileResolver, WorkflowProfileResolver>();
         services.AddScoped<IWorkflowConfigService, WorkflowConfigService>();
+        services.AddSingleton<IConcurrencyTokenProvider, DefaultConcurrencyTokenProvider>();
         services.AddSingleton<IWorkflowTransitionCatalogService, WorkflowTransitionCatalogService>();
         services.AddSingleton<IWorkflowVocabularyCatalogService, WorkflowVocabularyCatalogService>();
         services.AddSingleton<ICaseStatusOverlayService, CaseStatusOverlayService>();

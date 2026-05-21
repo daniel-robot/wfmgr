@@ -1,3 +1,4 @@
+using Wfmgr.Application.Workflows.V1.StateMachine;
 using Wfmgr.Application.Abstractions.Persistence.Models;
 using Wfmgr.Application.Workflows.V1.Gates;
 using Wfmgr.Domain.Enums;
@@ -29,6 +30,15 @@ namespace Wfmgr.Application.Workflows.V1;
 /// </summary>
 public interface ICaseTransitionService
 {
+    /// <summary>
+    /// Applies the transition to a generic workflow subject.
+    /// </summary>
+    Task<TransitionExecutionResult> ApplyTransitionAsync(
+        IWorkflowSubject subject,
+        string triggerName,
+        GateValidationContext context,
+        CancellationToken ct = default,
+        CaseStatus? fallbackToStatus = null);
     /// <summary>
     /// Loads the case identified by <paramref name="caseId"/> then applies the transition
     /// named <paramref name="triggerName"/>.

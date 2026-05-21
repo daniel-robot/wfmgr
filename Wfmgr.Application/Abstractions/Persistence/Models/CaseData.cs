@@ -2,7 +2,7 @@ using Wfmgr.Domain.Enums;
 
 namespace Wfmgr.Application.Abstractions.Persistence.Models;
 
-public class CaseData
+public class CaseData : Wfmgr.Application.Workflows.V1.StateMachine.IWorkflowSubject
 {
     public Guid CaseId { get; set; }
     public string HospitalId { get; set; } = string.Empty;
