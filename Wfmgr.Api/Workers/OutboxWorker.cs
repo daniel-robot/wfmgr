@@ -252,6 +252,9 @@ public class OutboxWorker : BackgroundService
             _logger.LogError(compEx,
                 "Compensation for outbox message {MessageId} threw an exception.",
                 message.MessageId);
+            // TODO: Consider incrementing a metric or triggering an alert here.
+            // A compensation failure means this delivery cannot be auto-recovered
+            // and manual intervention is required. Logging alone may be missed.
         }
     }
 }
