@@ -16,7 +16,7 @@ public class WorkflowDataAccess : IWorkflowDataAccess
 
     public async Task<CaseData?> GetCaseByIdAsync(Guid caseId, CancellationToken ct)
     {
-        var entity = await _dbContext.Cases.FirstOrDefaultAsync(x => x.CaseId == caseId, ct);
+        var entity = await _dbContext.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.CaseId == caseId, ct);
         return entity is null ? null : Map(entity);
     }
 
@@ -160,7 +160,7 @@ public class WorkflowDataAccess : IWorkflowDataAccess
 
     public async Task<WorkItemData?> GetWorkItemByIdAsync(Guid workItemId, CancellationToken ct)
     {
-        var entity = await _dbContext.WorkItems.FirstOrDefaultAsync(x => x.WorkItemId == workItemId, ct);
+        var entity = await _dbContext.WorkItems.AsNoTracking().FirstOrDefaultAsync(x => x.WorkItemId == workItemId, ct);
         return entity is null ? null : Map(entity);
     }
 

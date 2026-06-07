@@ -12,6 +12,9 @@ public enum CompensationFailureReason
     /// <summary>The case was not found in the data store.</summary>
     CaseNotFound,
 
+    /// <summary>The engine rejected the compensation status transition (role, gate, or lookup failure).</summary>
+    TransitionFailed,
+
     /// <summary>A work item could not be created because a required dependency was missing.</summary>
     WorkItemCreationFailed,
 }
