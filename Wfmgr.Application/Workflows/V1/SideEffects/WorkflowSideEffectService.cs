@@ -23,6 +23,7 @@ public sealed class WorkflowSideEffectService : EngineAbstractions.ISideEffectSe
     private readonly IWorkflowDataAccess _dataAccess;
     private readonly IWorkItemLifecycleService _workItems;
     private readonly IWorkflowProfileResolver _profileResolver;
+    private readonly IOutboxRouteProvider _routeProvider;
     private readonly IOutboxRoutingPolicy _routing;
     private readonly ILogger<WorkflowSideEffectService> _logger;
     private readonly IReadOnlyDictionary<string, ISideEffectHandler> _hostHandlers;
@@ -31,6 +32,7 @@ public sealed class WorkflowSideEffectService : EngineAbstractions.ISideEffectSe
         IWorkflowDataAccess dataAccess,
         IWorkItemLifecycleService workItems,
         IWorkflowProfileResolver profileResolver,
+        IOutboxRouteProvider routeProvider,
         IOutboxRoutingPolicy routing,
         ILogger<WorkflowSideEffectService> logger,
         IEnumerable<ISideEffectHandler>? hostHandlers = null)
@@ -38,6 +40,7 @@ public sealed class WorkflowSideEffectService : EngineAbstractions.ISideEffectSe
         _dataAccess = dataAccess;
         _workItems = workItems;
         _profileResolver = profileResolver;
+        _routeProvider = routeProvider;
         _routing = routing;
         _logger = logger;
         _hostHandlers = (hostHandlers ?? Array.Empty<ISideEffectHandler>())
@@ -161,7 +164,8 @@ public sealed class WorkflowSideEffectService : EngineAbstractions.ISideEffectSe
 
         foreach (var action in definition.SuccessActions)
         {
-            if (!OutboxActionMap.TryGetValue(action, out var descriptor))
+            var descriptor = _routeProvider.TryGetRouteBySuccessAction(action);
+            if (descriptor is null)
                 continue;
 
             // For contouring actions, resolve the actual provider from S1 configuration.
@@ -256,36 +260,6 @@ public sealed class WorkflowSideEffectService : EngineAbstractions.ISideEffectSe
     }
 
     // ── Static maps ───────────────────────────────────────────────────────────
-
-    private sealed record OutboxDescriptor(string TargetSystem, string Action, string MessageType);
-
-    /// <summary>
-    /// Maps <see cref="TransitionDefinition.SuccessActions"/> string identifiers to outbox
-    /// integration descriptors.  Only actions that correspond to an external integration message
-    /// are listed; all others are silently ignored.
-    /// </summary>
-    private static readonly IReadOnlyDictionary<string, OutboxDescriptor> OutboxActionMap =
-        new ReadOnlyDictionary<string, OutboxDescriptor>(
-            new Dictionary<string, OutboxDescriptor>(StringComparer.OrdinalIgnoreCase)
-            {
-                // Contouring tool — target system resolved at runtime from S1 profile.
-                ["CreateOutboxSendImagesToContourTool"] = new("PvMed",   OutboxActions.SendImagesToContourTool,  typeof(Wfmgr.Contracts.Contouring.SendImagesToContourTool.V1).FullName!),
-                ["CreateOutboxRestartContouring"]       = new("PvMed",   OutboxActions.SendImagesToContourTool,  typeof(Wfmgr.Contracts.Contouring.SendImagesToContourTool.V1).FullName!),
-
-                // Monaco import.
-                ["SendToMonacoImport"]                  = new("Monaco",  OutboxActions.SendToMonacoImport,       typeof(Wfmgr.Contracts.Monaco.SendToMonacoImport.V1).FullName!),
-
-                // Prescription generation / retry.
-                ["CreateOutboxGeneratePrescription"]    = new("PvMed",   OutboxActions.GeneratePrescription,     typeof(Wfmgr.Contracts.Prescription.GeneratePrescription.V1).FullName!),
-                ["CreateOutboxPrescriptionSync"]        = new("PvMed",   OutboxActions.GeneratePrescription,     typeof(Wfmgr.Contracts.Prescription.GeneratePrescription.V1).FullName!),
-
-                // Schedule synchronisation.
-                ["StartScheduleWatch"]                  = new("MSQ",     OutboxActions.SyncSchedule,             typeof(Wfmgr.Contracts.Scheduling.SyncSchedule.V1).FullName!),
-
-                // Treatment progress polling.
-                ["CreateTreatmentMonitor"]              = new("Monaco",  OutboxActions.QueryTreatmentProgress,   typeof(Wfmgr.Contracts.Monaco.QueryTreatmentProgress.V1).FullName!),
-                ["UpdateProgress"]                      = new("Monaco",  OutboxActions.QueryTreatmentProgress,   typeof(Wfmgr.Contracts.Monaco.QueryTreatmentProgress.V1).FullName!),
-            });
 
     /// <summary>
     /// Default assigned roles for each work item type.  Profile-driven types may have their

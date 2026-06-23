@@ -5,6 +5,7 @@ using Wfmgr.Application.Abstractions.Persistence.Models;
 using Wfmgr.Application.EngineAdapters;
 using Wfmgr.Application.Workflows.V1.Definitions;
 using Wfmgr.Application.Workflows.V1.Gates;
+using Wfmgr.Application.Workflows.V1.Outbox;
 using Wfmgr.Application.Workflows.V1.WorkItems;
 using Wfmgr.Domain.Enums;
 using Wfmgr.Domain.Integrations;
@@ -20,17 +21,20 @@ public sealed class WorkflowCompensationService : IWorkflowCompensationService
     private readonly IWorkflowDataAccess _dataAccess;
     private readonly EngineAbstractions.ITransitionEngine _engine;
     private readonly IWorkItemLifecycleService _workItems;
+    private readonly IOutboxRouteProvider _routeProvider;
     private readonly ILogger<WorkflowCompensationService> _logger;
 
     public WorkflowCompensationService(
         IWorkflowDataAccess dataAccess,
         EngineAbstractions.ITransitionEngine engine,
         IWorkItemLifecycleService workItems,
+        IOutboxRouteProvider routeProvider,
         ILogger<WorkflowCompensationService> logger)
     {
         _dataAccess = dataAccess;
         _engine = engine;
         _workItems = workItems;
+        _routeProvider = routeProvider;
         _logger = logger;
     }
 
@@ -157,7 +161,7 @@ public sealed class WorkflowCompensationService : IWorkflowCompensationService
             });
 
             await _dataAccess.AddOutboxMessageAsync(BuildRetryOutboxMessage(
-                caseId, definition, context, retryPayload, nextRetry, now), ct);
+                caseId, definition, context, _routeProvider, retryPayload, nextRetry, now), ct);
 
             retryDispatched = true;
             _logger.LogInformation(
@@ -246,19 +250,14 @@ public sealed class WorkflowCompensationService : IWorkflowCompensationService
         Guid caseId,
         CompensationDefinition definition,
         CompensationContext context,
+        IOutboxRouteProvider routeProvider,
         string payloadJson,
         DateTimeOffset nextRetryAt,
         DateTimeOffset now)
     {
-        var (targetSystem, action) = definition.FailedStepCode switch
-        {
-            "IMG-002" or "IMG-003" => ("PvMed", OutboxActions.SendImagesToContourTool),
-            "CON-002" or "CON-003" or "CON-004" => ("PvMed", OutboxActions.SendImagesToContourTool),
-            "RX-002" or "RX-003" or "RX-006" or "RX-007" => ("PvMed", OutboxActions.GeneratePrescription),
-            "TRT-001" or "TRT-002" => ("MSQ", OutboxActions.SyncSchedule),
-            "TRT-012" => ("Monaco", OutboxActions.QueryTreatmentProgress),
-            _ => (context.SourceSystem ?? "System", OutboxActions.QueryContourStatus),
-        };
+        var route = routeProvider.GetRouteByStepCode(definition.FailedStepCode);
+        var targetSystem = route?.TargetSystem ?? context.SourceSystem ?? "System";
+        var action = route?.Action ?? OutboxActions.QueryContourStatus;
 
         return new OutboxMessageData
         {

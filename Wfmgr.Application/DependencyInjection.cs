@@ -64,6 +64,7 @@ public static class DependencyInjection
             services.Configure<WorkflowEngineOptions>(_ => { });
         }
         services.AddSingleton<IOutboxRoutingPolicy, OutboxRoutingPolicy>();
+        services.AddSingleton<IOutboxRouteProvider, OutboxRouteProvider>();
 
         return services;
     }
