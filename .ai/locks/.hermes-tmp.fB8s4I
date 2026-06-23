@@ -1,0 +1,8 @@
+# Locks — active file edits in progress
+
+quality-engineer: OutboxRouteProvider extraction (step-code + success-action routes)
+- OutboxRouteProvider.cs (created)
+- DependencyInjection.cs (modified)
+- WorkflowSideEffectService.cs (modified)
+- WorkflowCompensationService.cs (modified)
+- OutboxRouteProviderTests.cs (created)
