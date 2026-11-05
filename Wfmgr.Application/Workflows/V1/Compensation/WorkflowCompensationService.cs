@@ -76,6 +76,9 @@ public sealed class WorkflowCompensationService : IWorkflowCompensationService
             var gateCtx = new Wfmgr.Engine.Core.GateValidationContext
             {
                 UserId = context.UserId,
+                // System-triggered compensation: empty roles bypass user role checks
+                // in the engine pipeline. This is intentional — compensation must
+                // be able to roll back a failed step regardless of the caller's role.
                 Roles = [],
                 Reason = context.Reason,
                 ExternalEventPayload = context.ExternalEventPayload,
@@ -93,7 +96,7 @@ public sealed class WorkflowCompensationService : IWorkflowCompensationService
             {
                 // Transition service returned an unexpected hard error — surface it.
                 return CompensationResult.Failed(
-                    CompensationFailureReason.WorkItemCreationFailed,
+                    CompensationFailureReason.TransitionFailed,
                     $"Status transition to {definition.TargetStatus.Value} failed: " +
                     transitionResult.ToSummary());
             }
